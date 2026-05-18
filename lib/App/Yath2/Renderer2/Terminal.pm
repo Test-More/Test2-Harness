@@ -9,6 +9,35 @@ use IO::Handle ();
 
 use parent 'App::Yath2::Renderer2::Base';
 
+# Flat-namespaced option group owned by this renderer. The `terminal`
+# prefix is asserted as exclusively owned by this class via
+# App::Yath2::Renderer2::Registry. terminal-auto is a selector that
+# resolves to this same class and therefore shares the prefix without
+# triggering a conflict (assert_prefix is idempotent for the same
+# class).
+use Getopt::Yath;
+option_group {group => 'terminal', prefix => 'terminal', category => 'Terminal renderer options'} => sub {
+    option verbose => (
+        type        => 'Count',
+        description => 'Verbosity level for the terminal renderer (repeatable). 0 (default) = QVF: passing jobs print a single PASS line, failing jobs dump events. >=1 also prints a per-job start line.',
+        initialize  => 0,
+    );
+
+    option out => (
+        type        => 'Scalar',
+        description => 'Write terminal renderer output to PATH instead of STDOUT. Use "-" for STDOUT (the default).',
+        long_examples  => [' PATH'],
+        short_examples => [' PATH'],
+    );
+
+    option formatter => (
+        type        => 'Scalar',
+        description => 'Override the formatter selection. Accepts a short name (txt, tty) or "+Fully::Qualified::Class". Defaults to TerminalAuto which picks txt/tty based on whether the output is a TTY.',
+        long_examples  => [' txt', ' tty', ' +My::Formatter'],
+        short_examples => [' txt', ' tty', ' +My::Formatter'],
+    );
+};
+
 # One-liner accessors: these are the only per-call internal reads.
 sub _verbose   { $_[0]->settings->{verbose}   // 0 }
 sub _formatter { $_[0]->settings->{formatter} // croak "settings.formatter is required" }

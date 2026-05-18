@@ -29,7 +29,7 @@ use App::Yath2::Renderer2::JUnit;
         command_pid => $$,
         out_fh      => \*STDOUT,
     );
-    like(dies { $r_bad->start }, qr/junit_out/, 'start dies without junit_out');
+    like(dies { $r_bad->start }, qr/junit.*output|junit-out/i, 'start dies without junit output path');
 }
 
 # Empty junit_out also fails at start.
@@ -41,7 +41,7 @@ use App::Yath2::Renderer2::JUnit;
         out_fh      => \*STDOUT,
         settings    => {junit_out => ''},
     );
-    like(dies { $r_empty->start }, qr/junit_out/, 'start dies with empty junit_out');
+    like(dies { $r_empty->start }, qr/junit.*output|junit-out/i, 'start dies with empty junit output path');
 }
 
 # Build fixture: one pass + one fail job under run 1.

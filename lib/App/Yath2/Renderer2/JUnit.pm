@@ -8,6 +8,20 @@ use parent 'App::Yath2::Renderer2::Base';
 
 use Carp qw/croak/;
 
+# Flat-namespaced option group owned by this renderer. The `junit`
+# prefix is registered as exclusively owned by this class through
+# App::Yath2::Renderer2::Registry; a second renderer attempting to
+# claim the same prefix triggers a registration-time error.
+use Getopt::Yath;
+option_group {group => 'junit', prefix => 'junit', category => 'JUnit renderer options'} => sub {
+    option out => (
+        type        => 'Scalar',
+        description => 'Path to write the JUnit XML report to. Required when this renderer is active.',
+        long_examples  => [' PATH'],
+        short_examples => [' PATH'],
+    );
+};
+
 # Override init to set required criticality. JUnit is a file-producing
 # renderer — if it fails to write the XML, CI has no test results. The
 # required criticality means a failure here affects the command exit code.
@@ -18,16 +32,37 @@ sub init {
     return;
 }
 
-# start — validate that junit_out is configured before the loop begins.
+# start — validate that an output path is configured before the loop begins.
 # Fail early so the error message is clear rather than dying at finish.
 sub start {
     my $self = shift;
-    my $s    = $self->settings;
-    croak "JUnit renderer requires a non-empty 'junit_out' path in settings"
-        unless defined($s)
-        && defined($s->{junit_out})
-        && length($s->{junit_out});
+    croak "JUnit renderer requires a non-empty output path (set --junit-out PATH)"
+        unless length($self->_out_path // '');
     return;
+}
+
+# Resolve the output path from settings. Accepts either the new flat
+# `--junit-out` option (lands in $settings->{junit}{out} when settings
+# is a Settings object, or $settings->{junit_out} when passed as a
+# plain hashref keyed by the legacy name) or the legacy `junit_out`
+# hashref key for callers constructing the renderer directly from a
+# plain hashref.
+sub _out_path {
+    my $self = shift;
+    my $s    = $self->settings or return undef;
+
+    if (ref($s) eq 'HASH') {
+        return $s->{junit_out} if defined $s->{junit_out};
+        return undef unless ref($s->{junit}) eq 'HASH';
+        return $s->{junit}{out};
+    }
+
+    # Settings object form.
+    return undef unless $s->can('junit');
+    my $junit = $s->junit;
+    return $junit->{out} if ref($junit) eq 'HASH';
+    return $junit->out   if $junit && $junit->can('out');
+    return undef;
 }
 
 # JUnit doesn't emit anything per-producer during the run; everything
@@ -38,7 +73,7 @@ sub start {
 sub finish {
     my $self = shift;
     my $log  = $self->log;
-    my $out  = $self->settings->{junit_out};
+    my $out  = $self->_out_path;
 
     my @suites;
     for my $run_p ($log->run_producers->all) {

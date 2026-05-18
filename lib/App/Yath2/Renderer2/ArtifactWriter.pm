@@ -5,12 +5,16 @@ use warnings;
 our $VERSION = '2.000013';
 
 use Exporter qw/import/;
-our @EXPORT_OK = qw/write_artifact_atomic/;
+our @EXPORT_OK = qw/write_artifact_atomic update_meta_formatters/;
 
-use Fcntl qw/O_WRONLY O_CREAT O_EXCL/;
+use Carp qw/croak/;
+use Fcntl qw/O_WRONLY O_CREAT O_EXCL :flock/;
 use File::Spec ();
 use File::Basename qw/dirname basename/;
 use Errno qw/EEXIST/;
+
+use Test2::Harness2::Util qw/lock_file unlock_file/;
+use Test2::Harness2::Util::JSON qw/encode_json decode_json/;
 
 # Write $bytes to $target atomically via exclusive-create tempfile + link(2).
 #
@@ -87,6 +91,105 @@ sub write_artifact_atomic {
     die "link($tmp, $target): $link_err";
 }
 
+# update_meta_formatters($logdir, \%map) — merge \%map into the
+# meta.json's `formatters` hash, atomically.
+#
+# $logdir is the log's root directory (the directory that contains
+# meta.json). \%map is { formatter_name => version, ... } and is
+# merged into the existing { formatters => { ... } } block. Existing
+# entries with names not in \%map are preserved.
+#
+# Returns the merged hash that was written.
+#
+# Mechanism: flock-bracketed read-modify-write of meta.json, with the
+# new bytes published via the same exclusive-create-tempfile + rename
+# dance as write_artifact_atomic. Unlike that helper, the rename here
+# IS allowed to overwrite (meta.json is mutable; an existing file is
+# the expected case, not a race-loss).
+#
+# Returns nothing when $logdir has no meta.json — formatter-version
+# tracking is silently skipped for logs that predate the schema. The
+# caller does not need to check the log layout themselves.
+sub update_meta_formatters {
+    my ($logdir, $map) = @_;
+    croak "logdir is required"        unless defined $logdir && length $logdir;
+    croak "formatter map is required" unless ref($map) eq 'HASH';
+
+    my $meta_path = File::Spec->catfile($logdir, 'meta.json');
+    return unless -e $meta_path;
+
+    # Lock the existing meta.json for the read-modify-write window.
+    # Other writers (e.g. concurrent reformat passes) cooperatively
+    # serialise on this lock.
+    my $lock_fh = lock_file($meta_path, '<', LOCK_EX);
+
+    # Read current meta.
+    my $meta;
+    {
+        open(my $rfh, '<', $meta_path) or do {
+            unlock_file($lock_fh);
+            die "open $meta_path for read: $!";
+        };
+        local $/;
+        my $raw = <$rfh>;
+        close $rfh;
+        my $ok = eval { $meta = decode_json($raw); 1 };
+        unless ($ok) {
+            my $err = $@;
+            unlock_file($lock_fh);
+            die "decode meta.json at $meta_path: $err";
+        }
+    }
+
+    # Merge $map into $meta->{formatters}, preserving entries not in $map.
+    $meta->{formatters} //= {};
+    for my $name (keys %$map) {
+        $meta->{formatters}{$name} = $map->{$name};
+    }
+
+    # Serialise + atomic publish via tempfile + rename. Plain rename is
+    # allowed to overwrite the existing meta.json.
+    my $bytes = encode_json($meta);
+
+    my $dir  = dirname($meta_path);
+    my $name = basename($meta_path);
+    my $tmp  = File::Spec->catfile($dir, ".tmp.$name.$$." . time());
+
+    my $wfh;
+    unless (sysopen($wfh, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0644)) {
+        unlock_file($lock_fh);
+        die "create tempfile $tmp: $!";
+    }
+
+    my $written = print {$wfh} $bytes;
+    unless ($written) {
+        my $err = $!;
+        close $wfh;
+        unlink $tmp;
+        unlock_file($lock_fh);
+        die "write $tmp: $err";
+    }
+
+    eval { require IO::Handle; $wfh->sync };
+    unless (close $wfh) {
+        my $err = $!;
+        unlink $tmp;
+        unlock_file($lock_fh);
+        die "close $tmp: $err";
+    }
+
+    unless (rename($tmp, $meta_path)) {
+        my $err = $!;
+        unlink $tmp;
+        unlock_file($lock_fh);
+        die "rename $tmp -> $meta_path: $err";
+    }
+
+    unlock_file($lock_fh);
+
+    return $meta->{formatters};
+}
+
 1;
 
 __END__
@@ -157,6 +260,21 @@ Writes C<$bytes> to C<$target> atomically.
 Returns C<1> on successful publication. Returns C<0> when C<$target>
 already exists (existing-file-wins; no overwrite, no error). Dies on any
 unrecoverable I/O failure.
+
+=item update_meta_formatters($logdir, \%map)
+
+Merge C<\%map> (a C<< { formatter_name => version, ... } >> hash) into
+the C<formatters> block of C<meta.json> in C<$logdir>. Existing
+entries not mentioned in C<\%map> are preserved.
+
+The read-modify-write is bracketed by C<flock(LOCK_EX)> on C<meta.json>
+itself so concurrent reformat passes serialise cleanly, and the new
+bytes are published via C<tempfile + rename> so a partial file is never
+visible. Returns the merged C<formatters> hash that was written.
+
+Silently no-ops when C<$logdir> has no C<meta.json> — formatter-version
+tracking is skipped for logs that predate the schema. Callers do not
+need to probe the layout themselves.
 
 =back
 

@@ -7,7 +7,6 @@ our $VERSION = '2.000013';
 use Carp qw/croak/;
 use Config;
 use Errno ();
-use Fcntl qw/:flock O_WRONLY O_APPEND O_CREAT/;
 use File::Path qw/make_path/;
 use POSIX qw/:sys_wait_h setpgid/;
 use Time::HiRes qw/time/;
@@ -643,23 +642,16 @@ sub _remove_live_sentinel {
     return;
 }
 
-# Shared-writer LIVE append. Every collector that observes a producer
-# open/close calls this; flock(LOCK_EX) serializes concurrent writers.
-# No IPC routing -- the file is the bus. flock is required because bare
-# O_APPEND atomicity is insufficient under PerlIO buffering and across
-# network filesystems (NFS/SMB/Windows).
-# The appended line is a tiny wake-up signal; renderers re-scan the Log
-# on wake and do not parse LIVE for state.
-sub _live_append {
-    my ($self, $payload) = @_;
+# Bump LIVE's mtime so renderers' FileMonitor instances wake. The
+# file's content is irrelevant -- only the mtime matters. utime is
+# atomic w.r.t. readers; no flock needed.
+# utime(undef, undef, $path) sets atime/mtime to "now" via the OS
+# clock, preserving sub-second precision on Linux.
+sub _live_bump {
+    my $self = shift;
     my $path = $self->{+LOGDIR} . '/LIVE';
-    my $line = encode_json($payload) . "\n";
-    sysopen(my $fh, $path, O_WRONLY | O_APPEND | O_CREAT, 0644)
-        or die "open $path: $!";
-    flock($fh, LOCK_EX)  or die "flock $path: $!";
-    syswrite($fh, $line) or die "write $path: $!";
-    flock($fh, LOCK_UN);
-    close($fh);
+    return unless -e $path;
+    utime(undef, undef, $path);
     return;
 }
 
@@ -669,10 +661,7 @@ sub _live_append {
 sub _emit_collector_start {
     my ($self, $spec_hash) = @_;
 
-    my $type = $self->{+TYPE};
-    my $kind = lc($type);
-    my $id   = $type eq 'Run' ? $self->{+RUN_ID} : $self->{+ID};
-    $self->_live_append({k => 'producer', kind => $kind, id => $id, state => 'open', ts => time});
+    $self->_live_bump;
 
     my $target = $self->_lifecycle_ipc_target;
     return unless defined $target;
@@ -704,9 +693,7 @@ sub _emit_collector_end {
     my ($self, $child_exit) = @_;
 
     my $type = $self->{+TYPE};
-    my $kind = lc($type);
-    my $id   = $type eq 'Run' ? $self->{+RUN_ID} : $self->{+ID};
-    $self->_live_append({k => 'producer', kind => $kind, id => $id, state => 'close', ts => time});
+    $self->_live_bump;
 
     # Write the .sealed marker for every producer except the top-level
     # harness collector, which is the lifecycle root and is never sealed

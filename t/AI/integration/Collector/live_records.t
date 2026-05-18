@@ -1,14 +1,10 @@
 use Test2::V0;
 use File::Temp qw/tempdir/;
-use Test2::Harness2::Util::JSON qw/decode_json/;
+use Time::HiRes qw/sleep stat/;
 
-# Unit-style integration test: verify that _emit_collector_start and
-# _emit_collector_end append LIVE producer records unconditionally,
-# regardless of whether an IPC lifecycle target is present.
-#
-# Strategy: construct Collector instances directly (no fork), install a
-# fake IPC client that records sends, call the emission methods, then
-# read the LIVE file and assert the appended records are correct.
+# Integration test: verify that _emit_collector_start and _emit_collector_end
+# bump LIVE's mtime (via _live_bump) regardless of whether an IPC lifecycle
+# target is present. The file content stays as the original "1\n" sentinel.
 
 use Test2::Harness2::Collector;
 
@@ -42,22 +38,21 @@ sub install_fake_client {
     return \@sent;
 }
 
-sub read_live_records {
+sub seed_live {
     my ($dir) = @_;
-    my $path = "$dir/LIVE";
-    return () unless -f $path;
-    open my $fh, '<', $path or die "open $path: $!";
-    my @lines = <$fh>;
+    open my $fh, '>', "$dir/LIVE" or die "open $dir/LIVE: $!";
+    print $fh "1\n";
     close $fh;
-    chomp @lines;
-    return map { decode_json($_) } grep { length $_ } @lines;
+    return (stat "$dir/LIVE")[9];
 }
 
 # ─── Job collector ───────────────────────────────────────────────────────────
 
-subtest 'job collector emits producer open/close records to LIVE' => sub {
-    my $dir = tempdir(CLEANUP => 1);
-    my $c   = Test2::Harness2::Collector->new(
+subtest 'job collector bumps LIVE mtime on start and end' => sub {
+    my $dir   = tempdir(CLEANUP => 1);
+    my $mtime = seed_live($dir);
+
+    my $c = Test2::Harness2::Collector->new(
         ipcm_info   => {},
         ipc_harness => 'harness',
         ipc_run     => 'run-r0',
@@ -73,100 +68,32 @@ subtest 'job collector emits producer open/close records to LIVE' => sub {
     );
     install_fake_client($c);
 
+    sleep 0.05;
     $c->_emit_collector_start({});
+    my $after_start = (stat "$dir/LIVE")[9];
+    ok($after_start > $mtime, 'mtime bumped after _emit_collector_start');
+
+    sleep 0.05;
     $c->_emit_collector_end(0);
+    my $after_end = (stat "$dir/LIVE")[9];
+    ok($after_end > $after_start, 'mtime bumped again after _emit_collector_end');
 
-    my @recs = read_live_records($dir);
-    is(scalar @recs, 2, 'two LIVE records written (open + close)');
-
-    my ($open, $close) = @recs;
-
-    is($open->{k},     'producer', 'open record: k=producer');
-    is($open->{kind},  'job',      'open record: kind=job');
-    is($open->{id},    5,          'open record: id=job id');
-    is($open->{state}, 'open',     'open record: state=open');
-    ok(defined $open->{ts}, 'open record: ts present');
-
-    is($close->{k},     'producer', 'close record: k=producer');
-    is($close->{kind},  'job',      'close record: kind=job');
-    is($close->{id},    5,          'close record: id=job id');
-    is($close->{state}, 'close',    'close record: state=close');
-    ok(defined $close->{ts}, 'close record: ts present');
-};
-
-# ─── Run collector ───────────────────────────────────────────────────────────
-
-subtest 'run collector emits producer open/close records to LIVE' => sub {
-    my $dir = tempdir(CLEANUP => 1);
-    my $c   = Test2::Harness2::Collector->new(
-        ipcm_info   => {},
-        ipc_harness => 'harness',
-        ipc_parent  => 'harness',
-        ipc_run     => undef,
-        type        => 'Run',
-        id          => 3,
-        run_id      => 3,
-        logdir      => $dir,
-        launch      => ['perl', '-e', 1],
-        child_pid   => 8888,
-    );
-    install_fake_client($c);
-
-    $c->_emit_collector_start({});
-    $c->_emit_collector_end(undef);
-
-    my @recs = read_live_records($dir);
-    is(scalar @recs, 2, 'two LIVE records written');
-
-    is($recs[0]->{kind},  'run',  'open record: kind=run');
-    is($recs[0]->{id},    3,      'open record: id=run_id');
-    is($recs[0]->{state}, 'open', 'open record: state=open');
-
-    is($recs[1]->{kind},  'run',   'close record: kind=run');
-    is($recs[1]->{id},    3,       'close record: id=run_id');
-    is($recs[1]->{state}, 'close', 'close record: state=close');
-};
-
-# ─── Service collector ───────────────────────────────────────────────────────
-
-subtest 'service collector emits producer open/close records to LIVE' => sub {
-    my $dir = tempdir(CLEANUP => 1);
-    my $c   = Test2::Harness2::Collector->new(
-        ipcm_info   => {},
-        ipc_harness => 'harness',
-        ipc_parent  => 'harness',
-        ipc_run     => undef,
-        type        => 'Service',
-        id          => 'svc-db',
-        logdir      => $dir,
-        launch      => ['perl', '-e', 1],
-        child_pid   => 7777,
-    );
-    install_fake_client($c);
-
-    $c->_emit_collector_start({});
-    $c->_emit_collector_end(undef);
-
-    my @recs = read_live_records($dir);
-    is(scalar @recs, 2, 'two LIVE records written');
-
-    is($recs[0]->{kind},  'service', 'open record: kind=service');
-    is($recs[0]->{id},    'svc-db',  'open record: id=service name');
-    is($recs[0]->{state}, 'open',    'open record: state=open');
-
-    is($recs[1]->{kind},  'service', 'close record: kind=service');
-    is($recs[1]->{id},    'svc-db',  'close record: id=service name');
-    is($recs[1]->{state}, 'close',   'close record: state=close');
+    # Content still unchanged.
+    open my $fh, '<', "$dir/LIVE" or die;
+    my $content = do { local $/; <$fh> };
+    close $fh;
+    is($content, "1\n", 'LIVE content still the original sentinel');
 };
 
 # ─── Top-level harness collector (no IPC target) ─────────────────────────────
 
-subtest 'top-level harness collector emits LIVE records even with no IPC target' => sub {
-    # The harness-level collector has ipc_parent=undef and ipc_run=undef,
-    # so _lifecycle_ipc_target returns undef and IPC emission is skipped.
-    # The LIVE append must still happen unconditionally.
-    my $dir = tempdir(CLEANUP => 1);
-    my $c   = Test2::Harness2::Collector->new(
+subtest 'top-level harness collector bumps LIVE mtime even without IPC target' => sub {
+    # ipc_parent=undef means _lifecycle_ipc_target returns undef and IPC
+    # emission is skipped, but _live_bump must still fire unconditionally.
+    my $dir   = tempdir(CLEANUP => 1);
+    my $mtime = seed_live($dir);
+
+    my $c = Test2::Harness2::Collector->new(
         ipcm_info   => {},
         ipc_harness => 'harness',
         ipc_parent  => undef,
@@ -179,64 +106,15 @@ subtest 'top-level harness collector emits LIVE records even with no IPC target'
     );
     # No fake client installed -- _send_to returns early because target=undef.
 
+    sleep 0.05;
     $c->_emit_collector_start({});
+    my $after_start = (stat "$dir/LIVE")[9];
+    ok($after_start > $mtime, 'mtime bumped on start even with no IPC target');
+
+    sleep 0.05;
     $c->_emit_collector_end(undef);
-
-    my @recs = read_live_records($dir);
-    is(scalar @recs,      2,         'two LIVE records even without IPC target');
-    is($recs[0]->{state}, 'open',    'first record is open');
-    is($recs[1]->{state}, 'close',   'second record is close');
-    is($recs[0]->{kind},  'service', 'kind=service for harness service collector');
-    is($recs[0]->{id},    'harness', 'id=service name');
-};
-
-# ─── LIVE records accumulate across multiple emit calls ───────────────────────
-
-subtest 'LIVE records from multiple emit calls accumulate in one file' => sub {
-    my $dir = tempdir(CLEANUP => 1);
-
-    my $mk_job = sub {
-        my ($id) = @_;
-        my $c = Test2::Harness2::Collector->new(
-            ipcm_info   => {},
-            ipc_harness => 'harness',
-            ipc_run     => 'run-r0',
-            ipc_parent  => 'run-r0',
-            type        => 'Job',
-            id          => $id,
-            run_id      => 0,
-            job_try     => 0,
-            logdir      => $dir,
-            launch      => ['perl', '-e', 1],
-            child_pid   => 1000 + $id,
-            spec        => {file => "job$id.t"},
-        );
-        install_fake_client($c);
-        return $c;
-    };
-
-    my $c1 = $mk_job->(1);
-    my $c2 = $mk_job->(2);
-
-    $c1->_emit_collector_start({});
-    $c2->_emit_collector_start({});
-    $c1->_emit_collector_end(0);
-    $c2->_emit_collector_end(0);
-
-    my @recs = read_live_records($dir);
-    is(scalar @recs, 4, 'four LIVE records: two opens + two closes');
-
-    my @opens  = grep { $_->{state} eq 'open' } @recs;
-    my @closes = grep { $_->{state} eq 'close' } @recs;
-    is(scalar @opens,  2, 'two open records');
-    is(scalar @closes, 2, 'two close records');
-
-    my %open_ids  = map { $_->{id} => 1 } @opens;
-    my %close_ids = map { $_->{id} => 1 } @closes;
-    ok($open_ids{1},  'job 1 open present');
-    ok($open_ids{2},  'job 2 open present');
-    ok($close_ids{1}, 'job 1 close present');
-    ok($close_ids{2}, 'job 2 close present');
+    my $after_end = (stat "$dir/LIVE")[9];
+    ok($after_end > $after_start, 'mtime bumped on end even with no IPC target');
 };
 
 done_testing;

@@ -23,6 +23,7 @@ use App::Yath2::TestFile();
 use Test2::Harness2::Util qw/mod2file tinysleep/;
 use App::Yath2::Log();
 use App::Yath2::Renderer::Driver();
+use App::Yath2::Options::Concluder();
 use App::Yath2::Util::IPC qw/publish_ipc_file unlink_ipc_file/;
 use Scope::Guard ();
 
@@ -37,6 +38,7 @@ include_options(
     'App::Yath2::Options::Preload',
     'App::Yath2::Options::Reloader',
     'App::Yath2::Options::Renderer',
+    'App::Yath2::Options::Concluder',
     'App::Yath2::Options::Resource',
     'App::Yath2::Options::Run',
     'App::Yath2::Options::Runner',
@@ -118,10 +120,44 @@ sub run {
     my $log_pass   = $renderer_exit == 0;
     my $final_pass = ($ipc_pass && $log_pass) ? 1 : 0;
 
+    # Run concluders against the live log dir before we archive +
+    # clean up. The Log abstraction handles partial-but-quiet logs the
+    # same way it handles sealed ones: producers without .sealed marker
+    # files report state 'partial' (live mode) or 'sealed' (when read
+    # from a non-live directory). Concluders run sequentially in this
+    # process, with ResetTerm pinned last by init_concluders.
+    $self->_dispatch_concluders($logdir);
+
     $self->_write_archive($logdir);
     $self->_cleanup_workdir($workdir);
 
     return $final_pass ? 0 : 1;
+}
+
+# Build the active concluder set from --concluder / --no-concluder
+# flags and run them sequentially. Failures from individual concluders
+# are reported as warnings; they do not propagate or affect the
+# run's exit code. The dispatcher pins ResetTerm last.
+sub _dispatch_concluders {
+    my ($self, $logdir) = @_;
+
+    my $log;
+    my $ok = eval {
+        $log = App::Yath2::Log->new(dir => $logdir);
+        1;
+    };
+    unless ($ok) {
+        warn "Concluder dispatch: could not open log '$logdir': $@";
+        return;
+    }
+
+    my $concluders = App::Yath2::Options::Concluder->init_concluders(
+        $self->{+SETTINGS},
+        log => $log,
+    );
+    App::Yath2::Options::Concluder->dispatch_concluders($concluders);
+
+    return;
 }
 
 # Resolve format/compression settings, write the run's archive to its
@@ -486,8 +522,8 @@ sub _update_pass_from_run_data {
     my $results = ref($rd->{results}) eq 'HASH' ? $rd->{results} : {};
     for my $jid (keys %$results) {
         my $jr = $results->{$jid};
-        next unless ref($jr) eq 'HASH';
-        next unless defined $jr->{completed_at};
+        next                   unless ref($jr) eq 'HASH';
+        next                   unless defined $jr->{completed_at};
         $state->{ipc_pass} = 0 unless $jr->{pass};
     }
 

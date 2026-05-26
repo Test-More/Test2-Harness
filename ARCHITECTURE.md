@@ -93,18 +93,30 @@ already time-ordered.
 
 ### 2.3 Databases
 
-- The default backend is SQLite via `DBD::SQLite` used directly.
+- The row layer is **`DBIx::QuickORM`**. The schema is a QuickORM `orm`
+  that builds itself from the live database via `autofill` (introspection);
+  `autotype` inflates/deflates JSON, UUID, and DateTime columns
+  automatically, and `autorow` generates a row class per table under
+  `Test2::Harness2::Schema::Row::` (a hand-written
+  `Test2::Harness2::Schema::Row::<Table>` is loaded if present).
+  `DBIx::Class` is **not** used.
+- The default backend is SQLite via `DBD::SQLite`.
 - Non-default flavors (Postgres, MySQL, MariaDB, Percona) are
   driver-loaded on demand; their `DBD::*` modules are Suggests /
   Recommends in `dist.ini`, never hard requires.
-- Row code is hand-written SQL on `DBI`. `SQL::Abstract` is fine where
-  it helps. **`DBIx::Class` is not used.**
+- The schema module (`Test2::Harness2::Schema`) bakes in **no credentials**
+  and no database. The caller attaches a database with a `connect`
+  callback at runtime, then asks for the connection; autofill runs lazily
+  on first connect. UUID values are still generated in Perl
+  (`Test2::Util::UUID`, v7 — see §2.2); the QuickORM UUID type only
+  converts stored values to and from their canonical form.
+- Table creation lives at `share/schema/<flavor>.sql`. All flavors move
+  together: every DDL change touches every flavor file in the same
+  commit. Autofill introspects the database **after** that DDL has been
+  applied; QuickORM never creates tables.
 - `DBIx::QuickDB` is used for ephemeral test databases and for spinning
   up non-default flavors on the fly. It is **not** used for the default
   SQLite path.
-- The schema lives at `share/schema/<flavor>.sql`. All flavors move
-  together: every DDL change touches every flavor file in the same
-  commit.
 
 ### 2.4 No `IPC::Manager`
 
@@ -206,3 +218,36 @@ entries move into the relevant numbered section above and are removed
 from this list.
 
 *(Empty.)*
+
+## 7. Addenda
+
+In-place record of decisions that superseded earlier committed
+architecture. The numbered sections above are kept current; these entries
+preserve what changed and why.
+
+### 7.1 Row layer: `DBIx::QuickORM` supersedes hand-written SQL (2026-05-26)
+
+§2.3 originally specified the row layer as **hand-written SQL on `DBI`**
+(optionally aided by `SQL::Abstract`), with an explicit "`DBIx::Class` is
+not used" rule and hand-maintained row code. That has been superseded:
+the row layer is now **`DBIx::QuickORM`**, and §2.3 has been rewritten to
+match.
+
+Reasoning:
+
+- A single declarative source handles inflate/deflate for JSON, UUID, and
+  DateTime (`autotype`) instead of repeating that logic across
+  hand-written row classes.
+- `autofill` introspects the live database, so there are no hand-written
+  row classes to keep in sync with the DDL. `share/schema/<flavor>.sql`
+  remains the table-creation source of truth; QuickORM only reads what it
+  produced.
+- The schema carries no credentials: a `connect` callback is attached at
+  runtime, matching how the harness builds its own database handles.
+- `DBIx::QuickORM` is maintained in-house, so the harness's needs can
+  drive it directly.
+
+Unchanged by this decision: §2.2 (UUIDs generated in Perl with
+`Test2::Util::UUID`, v7), the SQLite-via-`DBD::SQLite` default, non-default
+`DBD::*` drivers as Suggests / Recommends, and `DBIx::QuickDB` for
+ephemeral test databases only.

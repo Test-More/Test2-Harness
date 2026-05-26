@@ -269,11 +269,15 @@ must internalise before writing any code (all are documented in
 - **`parent` for inheritance, not `base`.**
 - **`Test2::Util::UUID` for UUIDs** (v7; generated in Perl, not in
   the database).
-- **No `DBIx::Class`** for the harness's row layer. SQL via DBI
-  (optionally aided by `SQL::Abstract`).
-- **`DBD::SQLite` directly for the default backend.** `DBIx::QuickDB`
-  is for ephemeral test setups and non-default flavors; never for
-  the default SQLite path.
+- **`DBIx::QuickORM` for the harness's row layer** (not `DBIx::Class`).
+  The schema (`Test2::Harness2::Schema`) is a QuickORM `orm` built from
+  the live database via `autofill`; `autotype` handles JSON / UUID /
+  DateTime; `autorow` generates row classes. No credentials are baked
+  in — a `connect` callback is attached at runtime.
+- **`DBD::SQLite` for the default backend.** `share/schema/<flavor>.sql`
+  is the table-creation source (all flavors move together); autofill
+  introspects after the DDL is applied. `DBIx::QuickDB` is for ephemeral
+  test setups and non-default flavors; never for the default SQLite path.
 - **No `IPC::Manager`.** Earlier iterations relied on it; the new
   architecture does not. Cross-process state goes through the
   harness database; transient bytes between processes go through

@@ -6,7 +6,9 @@ our $VERSION = '2.000000';
 use Carp qw/croak/;
 use DBI;
 use Scalar::Util qw/blessed/;
+use Time::HiRes qw/time/;
 use Test2::Harness2::Util qw/share_dir/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 # Import the QuickORM DSL helpers. 'connect' is renamed to 'qorm_connect' so
 # it does not collide with the Object::HashBase 'connect' slot accessor below.
@@ -21,8 +23,8 @@ use Object::HashBase qw{
     <credentials
     <connect
     <ephemeral
-    -orm
-    -connection
+    +orm
+    +connection
 };
 
 =pod
@@ -122,6 +124,21 @@ and caching it on first call. The connection triggers a lazy C<autofill>
 introspection of the live database; the DDL must already be applied
 (via C<initialize>) before this is called.
 
+=item $run_uuid = $h->queue_run(%params)
+
+Insert a run row and one job row per test file in a single transaction,
+returning the new run UUID. Required params: C<runner_uuid>, C<files>
+(arrayref of test-file paths). Optional: C<user_id>, C<project_id>,
+C<version_id>. Each path is looked up in C<test_file> and inserted if absent,
+so repeated paths reuse the same row (single-writer; not safe against a
+concurrent insert of the same path).
+
+=item $h->finalize_run($run_uuid)
+
+Remove the on-disk event files for every artifact belonging to the run and
+null their C<local_path>. Call this after the collector has finished
+capturing the run's data.
+
 =back
 
 =cut
@@ -183,6 +200,57 @@ sub connection ($self) {
     }));
 
     return $self->{+CONNECTION} = $orm->connection;
+}
+
+sub queue_run ($self, %params) {
+    my $files = $params{files} or croak "queue_run requires 'files'";
+    croak "queue_run requires 'runner_uuid'" unless $params{runner_uuid};
+
+    my $con      = $self->connection;
+    my $run_uuid = gen_uuid();
+
+    $con->txn(sub {
+        $con->handle('run')->insert({
+            run_uuid    => $run_uuid,
+            runner_uuid => $params{runner_uuid},
+            user_id     => $params{user_id},
+            project_id  => $params{project_id},
+            version_id  => $params{version_id},
+            started     => time,
+        });
+
+        for my $file (@$files) {
+            my $tf = $con->handle('test_file', where => { test_file => $file })->one
+                  // $con->handle('test_file')->insert({ test_file => $file });
+
+            $con->handle('job')->insert({
+                job_uuid     => gen_uuid(),
+                run_uuid     => $run_uuid,
+                runner_uuid  => $params{runner_uuid},
+                test_file_id => $tf->field('test_file_id'),
+            });
+        }
+    });
+
+    return $run_uuid;
+}
+
+sub finalize_run ($self, $run_uuid) {
+    my $con = $self->connection;
+
+    # Fetch and update inside one transaction: QuickORM rejects updates to
+    # rows that were fetched outside the current transaction stack.
+    $con->txn(sub {
+        my @artifacts = $con->handle('artifact', where => {run_uuid => $run_uuid})->all;
+        for my $art (@artifacts) {
+            my $path = $art->field('local_path') or next;
+            warn "finalize_run: unlink $path failed: $!\n"
+                if -e $path && !unlink($path);
+            $art->update({local_path => undef});
+        }
+    });
+
+    return;
 }
 
 1;

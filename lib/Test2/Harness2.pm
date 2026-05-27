@@ -5,10 +5,14 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 use DBI;
+use POSIX      ();
+use File::Spec ();
 use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 use Test2::Harness2::Util qw/share_dir/;
 use Test2::Util::UUID qw/gen_uuid/;
+
+use Test2::Harness2::Collector;
 
 # Import the QuickORM DSL helpers. 'connect' is renamed to 'qorm_connect' so
 # it does not collide with the Object::HashBase 'connect' slot accessor below.
@@ -139,6 +143,21 @@ Remove the on-disk event files for every artifact belonging to the run and
 null their C<local_path>. Call this after the collector has finished
 capturing the run's data.
 
+=item $runner_uuid = $h->start_runner(%params)
+
+Insert the runner and service rows (sharing one UUID), then fork a process
+that becomes a collector wrapping the runner service loop. The collector owns
+its own collector row and a runner-level events artifact; its forked child
+runs the L<Test2::Harness2::Runner> service. Returns the new runner UUID.
+Optional param: C<workdir> (passed through to the runner for per-test event
+files).
+
+=item $h->set_runner_mode($runner_uuid, $mode)
+
+Update the runner's service-row C<mode> (C<run> / C<stop> / C<kill>). The
+runner observes this each tick: C<stop> drains outstanding work then exits,
+C<kill> terminates running tests then exits.
+
 =back
 
 =cut
@@ -187,19 +206,30 @@ sub connect_cb ($self) {
 }
 
 sub connection ($self) {
-    return $self->{+CONNECTION} if $self->{+CONNECTION};
+    return $self->{+CONNECTION}
+        if $self->{+CONNECTION} && $self->{+CONNECTION}->pid == $$;
 
     my $orm  = $self->{+ORM} //= qorm(orm => 'harness');
     my $cb   = $self->connect_cb;
     my $path = $self->{+DB_PATH} // ':memory:';
 
+    # The ORM is a process-global singleton; its db may already be set by a
+    # connection made earlier in this process (or before a fork). Setting it
+    # twice croaks, so only attach when it has not been attached yet.
+    my $has_db = eval { $orm->db; 1 };
     $orm->db(db(sub {
         db_name $path;
         dialect 'SQLite';
         qorm_connect($cb);
-    }));
+    })) unless $has_db;
 
-    return $self->{+CONNECTION} = $orm->connection;
+    # A DBI handle must not be shared across a fork. When the ORM's cached
+    # connection belongs to another process (we forked since it was built),
+    # reconnect to get a fresh handle bound to this process.
+    my $con = $orm->connection;
+    $con = $orm->reconnect if $con->pid != $$;
+
+    return $self->{+CONNECTION} = $con;
 }
 
 sub queue_run ($self, %params) {
@@ -220,8 +250,7 @@ sub queue_run ($self, %params) {
         });
 
         for my $file (@$files) {
-            my $tf = $con->handle('test_file', where => { test_file => $file })->one
-                  // $con->handle('test_file')->insert({ test_file => $file });
+            my $tf = $con->handle('test_file', where => {test_file => $file})->one // $con->handle('test_file')->insert({test_file => $file});
 
             $con->handle('job')->insert({
                 job_uuid     => gen_uuid(),
@@ -250,6 +279,84 @@ sub finalize_run ($self, $run_uuid) {
         }
     });
 
+    return;
+}
+
+sub start_runner ($self, %params) {
+    # Required lazily to avoid a use-time cycle: Runner uses Test2::Harness2.
+    require Test2::Harness2::Runner;
+
+    my $con         = $self->connection;
+    my $runner_uuid = gen_uuid();
+
+    $con->txn(sub {
+        $con->handle('runner')->insert({runner_uuid => $runner_uuid});
+        $con->handle('service')->insert({
+            service_uuid => $runner_uuid,
+            runner_uuid  => $runner_uuid,
+            name         => 'runner',
+            mode         => 'run',
+            started      => time,
+        });
+    });
+
+    my $db_path = $self->{+DB_PATH};
+    my $workdir = $params{workdir};
+
+    my $pid = fork // die "fork: $!";
+    if ($pid == 0) {
+        my $exit = 255;
+        my $ok   = eval {
+            # Collector-parent process: owns the collector row + runner artifact.
+            my $pcon   = Test2::Harness2->new(db_path => $db_path)->connection;
+            my $events = File::Spec->catfile(File::Spec->tmpdir, "yath-runner-$runner_uuid.jsonl.zst");
+
+            my $crow = $pcon->handle('collector')->insert({
+                service_uuid => $runner_uuid,
+                runner_uuid  => $runner_uuid,
+                mode         => 'run',
+            });
+            my $arow = $pcon->handle('artifact')->insert({
+                artifact_uuid => gen_uuid(),
+                service_uuid  => $runner_uuid,
+                name          => 'events',
+                type          => 'jsonl.zst',
+                local_path    => $events,
+            });
+            my $artifact_uuid = $arow->field('artifact_uuid');
+
+            $exit = Test2::Harness2::Collector->start(
+                is_test       => 0,
+                events_file   => $events,
+                collector_row => $crow,
+                artifact_row  => $arow,
+                run_sub       => sub ($guard) {
+                    Test2::Harness2::Runner->new(
+                        db_path     => $db_path,
+                        runner_uuid => $runner_uuid,
+                        ($workdir ? (workdir => $workdir) : ()),
+                    )->run;
+                },
+            );
+
+            # Events data is now in the artifact blob; remove the on-disk file.
+            unlink($events) if -e $events;
+            my $finished = $pcon->handle('artifact')->by_id($artifact_uuid);
+            $finished->update({local_path => undef}) if $finished;
+
+            1;
+        };
+        warn "runner collector child failed: $@\n" unless $ok;
+        POSIX::_exit($ok ? ($exit ? $exit : 0) : 255);
+    }
+
+    return $runner_uuid;
+}
+
+sub set_runner_mode ($self, $runner_uuid, $mode) {
+    my $svc = $self->connection->handle('service')->by_id($runner_uuid)
+        or croak "no service row for runner $runner_uuid";
+    $svc->update({mode => $mode});
     return;
 }
 

@@ -3,11 +3,15 @@ use v5.38;
 
 our $VERSION = '2.000000';
 
+use Carp        qw/croak/;
+use File::Spec  ();
+
 use Importer Importer => 'import';
 
 our @EXPORT_OK = qw{
     apply_encoding
     hub_truth
+    share_dir
 };
 
 =pod
@@ -21,15 +25,17 @@ Test2::Harness2::Util - Leaf utility functions shared across the harness.
 =head1 DESCRIPTION
 
 A small bag of standalone helpers with no harness-specific state. Grows as
-shared logic is identified; today it carries the encoding helper and the
-facet-hub accessor the stream formatter needs.
+shared logic is identified; today it carries the encoding helper, the
+facet-hub accessor the stream formatter needs, and the C<share_dir> path
+resolver.
 
 =head1 SYNOPSIS
 
-    use Test2::Harness2::Util qw/hub_truth apply_encoding/;
+    use Test2::Harness2::Util qw/hub_truth apply_encoding share_dir/;
 
     apply_encoding(\*STDOUT, 'utf-8');
     my $hub = hub_truth($facet_data);
+    my $dir = share_dir();
 
 =head1 EXPORTS
 
@@ -70,6 +76,26 @@ sub hub_truth ($f) {
     return $f->{hubs}->[0] if $f->{hubs} && @{$f->{hubs}};
     return $f->{trace}     if $f->{trace};
     return {};
+}
+
+=over 4
+
+=item $path = share_dir()
+
+Absolute path to the distribution's C<share/> directory, resolved relative to
+this module's installed location. Croaks if the module is not found in C<%INC>.
+
+=back
+
+=cut
+
+sub share_dir () {
+    my $self_file = $INC{'Test2/Harness2/Util.pm'} or croak "Util.pm not in %INC";
+    my ($vol, $dir) = File::Spec->splitpath(File::Spec->rel2abs($self_file));
+    my @parts = File::Spec->splitdir($dir);
+    pop @parts while @parts && $parts[-1] eq '';
+    splice(@parts, -3);    # drop Harness2, Test2, lib
+    return File::Spec->catdir(@parts, 'share');
 }
 
 1;

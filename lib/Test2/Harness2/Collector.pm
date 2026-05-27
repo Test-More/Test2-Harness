@@ -54,6 +54,8 @@ use Object::HashBase qw{
     <watch_parent_pid
     <buffering
     <flush_interval
+    <collector_row
+    <artifact_row
     -child_pid
     -out_pipe
     -err_pipe
@@ -203,6 +205,18 @@ Maximum time buffered records are held before a forced flush, so raw output
 is not hidden during long pauses between structured events. Default C<0.25>;
 C<0> disables the periodic flush. Ignored when C<buffering> is false.
 
+=item collector_row => $row_object
+
+Optional duck-typed row object supplied by the launching process. Only
+C<< ->update(\%changes) >> is called on it. When absent the collector does no
+row lifecycle writes.
+
+=item artifact_row => $row_object
+
+Optional duck-typed row object for the artifact record. Only
+C<< ->update(\%changes) >> is called on it (to store the raw events-file
+bytes). When absent the collector does no artifact row writes.
+
 =back
 
 =head1 PUBLIC METHODS
@@ -298,6 +312,7 @@ sub run_collector ($self) {
     $err_w->close;
 
     $self->{+CHILD_PID}     = $child;
+    $self->_record_collector_child($child);
     $self->{+FORK_STAMP}    = time;
     $self->{+OUT_PIPE}      = $out_r;
     $self->{+ERR_PIPE}      = $err_r;
@@ -1180,6 +1195,21 @@ ride on the single exit event rather than separate events.
 
 Assemble the C<harness_process_exit> facet hash described above.
 
+=item $self->_record_collector_child($child_pid)
+
+Stamp the optional collector row with this collector's pid, the forked child
+pid, start time, and run mode.
+
+=item $self->_record_collector_stopped
+
+Stamp the optional collector row's stop time and the collector's own clean
+exit status (the child's status rides the exit event).
+
+=item $self->_record_artifact_data
+
+Slurp the events file into the optional artifact row's data blob once the
+child is done; the on-disk file stays until finalize_run removes it.
+
 =back
 
 =cut
@@ -1190,8 +1220,38 @@ sub _finalize ($self) {
     );
     $self->_dispatch_event($event);
 
-    my $writer = $self->{+EVENTS_WRITER} or return;
-    warn "events file close failed: $@\n" unless eval { $writer->close; 1 };
+    if (my $writer = $self->{+EVENTS_WRITER}) {
+        warn "events file close failed: $@\n" unless eval { $writer->close; 1 };
+    }
+
+    $self->_record_artifact_data;
+    $self->_record_collector_stopped;
+    return;
+}
+
+sub _record_collector_child ($self, $child_pid) {
+    my $row = $self->{+COLLECTOR_ROW} or return;
+    $row->update({pid => $$, child_pid => $child_pid, started => time, mode => 'run'});
+    return;
+}
+
+sub _record_collector_stopped ($self) {
+    my $row = $self->{+COLLECTOR_ROW} or return;
+    $row->update({stopped => time, error_code => 0, signal => 0});
+    return;
+}
+
+sub _record_artifact_data ($self) {
+    my $row  = $self->{+ARTIFACT_ROW} or return;
+    my $file = $self->{+EVENTS_FILE};
+    return unless $file && -e $file;
+
+    my $bytes = do {
+        open my $fh, '<:raw', $file or do { warn "open $file: $!\n"; return };
+        local $/;
+        <$fh>;
+    };
+    $row->update({data => $bytes});
     return;
 }
 

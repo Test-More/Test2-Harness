@@ -54,4 +54,13 @@ subtest ephemeral_sqlite => sub {
     ok(!exists $spec->{db_path}, 'no db_path in ephemeral spec');
 };
 
+subtest connect_spec_rejects_credentials => sub {
+    my $h = Test2::Harness2->new(connect => sub { die "unused" });
+    like(
+        dies { $h->connect_spec },
+        qr/cannot cross a fork/,
+        'connect_spec croaks for credentials/connect-based harnesses',
+    );
+};
+
 done_testing;

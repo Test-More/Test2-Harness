@@ -432,6 +432,11 @@ sub connection ($self) {
     # The ORM is a process-global singleton; its db may already be set by a
     # connection made earlier in this process (or before a fork). Setting it
     # twice croaks, so only attach when it has not been attached yet.
+    # This means the first connection() call in a process fixes the dialect and
+    # db_name for that process's lifetime. The harness topology is one flavor
+    # per process (each forked child reconnects in its own process via
+    # connect_spec), so this is sufficient; mixing two different flavors in a
+    # single process is not supported.
     my $flavor       = $self->_flavor_obj_resolved($cb);
     my $dialect_name = $flavor->dialect;
     my $has_db       = eval { $orm->db; 1 };

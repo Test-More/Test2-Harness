@@ -55,8 +55,9 @@ the schema.
 At minimum one of C<db_path>, C<dsn>, C<credentials>/C<connect>, or
 C<ephemeral> must be supplied. The default backend is SQLite (via
 C<db_path>). A C<dsn>/C<flavor>/C<username>/C<password> set enables other
-database engines. The C<ephemeral> slot is reserved for future wiring via
-L<DBIx::QuickDB>.
+database engines. Pass C<ephemeral =E<gt> 1> to provision an ephemeral SQLite
+database via L<DBIx::QuickDB>, or C<ephemeral =E<gt> 'postgresql'> (or any
+other supported flavor name) to spin up a full server of that flavor.
 
 =head1 SYNOPSIS
 
@@ -88,10 +89,10 @@ Alias for C<credentials>. Whichever name is passed, both accessors are set.
 
 =item ephemeral
 
-Reserved for future ephemeral database support via L<DBIx::QuickDB>. Setting
-this slot currently only influences flavor resolution (C<ephemeral =E<gt> 1>
-resolves to C<sqlite>; a string name resolves the named flavor). Full
-ephemeral wiring is added in a subsequent task.
+Enable ephemeral database provisioning via L<DBIx::QuickDB>. Pass C<1> to
+get an ephemeral SQLite database in a temporary directory. Pass a flavor name
+(e.g. C<'postgresql'>) to spin up a server of that flavor. The provisioned
+database is torn down when the harness object is garbage-collected.
 
 =item flavor
 
@@ -136,10 +137,37 @@ sub init ($self) {
 
 =over 4
 
+=item $db = $h->quickdb
+
+Return (building and caching on first call) the ephemeral L<DBIx::QuickDB>
+instance for this harness. Returns C<undef> when C<ephemeral> was not set.
+The instance is cached for the lifetime of the harness object; QuickDB tears
+down its server when the object is garbage-collected, so the harness object
+must stay alive as long as the database is in use.
+
+C<ephemeral =E<gt> 1> provisions a SQLite database in a temporary directory.
+C<ephemeral =E<gt> 'postgresql'> (or any other supported flavor name) spins up
+a server of that flavor. In both cases, C<initialize> applies the DDL and
+C<connection> connects through the live QuickDB handle.
+
+=cut
+
+sub quickdb ($self) {
+    return $self->{+QUICKDB} if $self->{+QUICKDB};
+    return undef unless $self->{+EPHEMERAL};
+
+    require DBIx::QuickDB;
+    my $flavor = $self->{+FLAVOR_OBJ};
+    return $self->{+QUICKDB} = DBIx::QuickDB->build_db(
+        harness => {driver => $flavor->quickdb_driver},
+    );
+}
+
 =item $h->initialize
 
 Apply the DDL for the resolved flavor to a fresh database. For SQLite,
-creates the file at C<db_path> and applies C<share/schema/sqlite.sql>. Safe
+creates the file at C<db_path> and applies C<share/schema/sqlite.sql>. For
+ephemeral databases, applies the DDL to the QuickDB-provisioned instance. Safe
 to call only once; the DDL uses C<CREATE TABLE> without C<IF NOT EXISTS>.
 Requires a resolved flavor (MySQL-family connections must supply an explicit
 C<flavor> parameter).
@@ -169,15 +197,25 @@ sub initialize ($self) {
 =item $cb = $h->connect_cb
 
 Return a coderef that produces a fresh DBI handle on each call. When
-C<credentials> was provided, the coderef delegates to it (either invoking it
-directly if it is a coderef, or calling C<connect> on the object). When only
-C<db_path> is set, builds a SQLite connect coderef with WAL journal mode and a
-generous busy timeout. When C<dsn> is set, builds a connect coderef using the
-DSN, C<username>, and C<password>.
+C<ephemeral> is set, the coderef opens a connection through the cached
+L<DBIx::QuickDB> instance. When C<credentials> was provided, the coderef
+delegates to it (either invoking it directly if it is a coderef, or calling
+C<connect> on the object). When only C<db_path> is set, builds a SQLite connect
+coderef with WAL journal mode and a generous busy timeout. When C<dsn> is set,
+builds a connect coderef using the DSN, C<username>, and C<password>.
 
 =cut
 
 sub connect_cb ($self) {
+    if (my $db = $self->quickdb) {
+        my $flavor = $self->{+FLAVOR_OBJ};
+        return sub {
+            my $dbh = $db->connect('quickdb', AutoCommit => 1, RaiseError => 1, PrintError => 0);
+            $flavor->post_connect($dbh);
+            return $dbh;
+        };
+    }
+
     if (my $creds = $self->{+CREDENTIALS}) {
         return $creds if ref($creds) eq 'CODE';
         return sub { $creds->connect }
@@ -217,10 +255,11 @@ sub connect_cb ($self) {
 
 Return a plain hashref of constructor arguments sufficient to rebuild an
 equivalent C<Test2::Harness2> object in another process. For SQLite, returns
-C<< { flavor =E<gt> 'sqlite', db_path =E<gt> $path } >>. For DSN-based
-connections, returns C<flavor>, C<dsn>, C<username>, and C<password>. A live
-QuickDB object is never carried across a fork; only its DSN crosses the
-boundary.
+C<< { flavor =E<gt> 'sqlite', db_path =E<gt> $path } >>. For ephemeral
+databases, returns C<flavor>, C<dsn>, C<username>, and C<password> from the
+live QuickDB instance so forked children can reconnect over the wire — the
+QuickDB object itself is never carried across a fork. For DSN-based
+connections, returns C<flavor>, C<dsn>, C<username>, and C<password>.
 
 =cut
 
@@ -232,6 +271,15 @@ sub connect_spec ($self) {
 
     return {flavor => 'sqlite', db_path => $self->{+DB_PATH}}
         if $self->{+DB_PATH};
+
+    if (my $db = $self->quickdb) {
+        return {
+            flavor   => $flavor->name,
+            dsn      => $db->connect_string('quickdb'),
+            username => $db->username,
+            password => $db->password,
+        };
+    }
 
     return {
         flavor   => $flavor->name,
@@ -344,7 +392,7 @@ sub connection ($self) {
 
     my $orm  = $self->{+ORM} //= qorm(orm => 'harness');
     my $cb   = $self->connect_cb;
-    my $path = $self->{+DB_PATH} // ':memory:';
+    my $path = $self->{+DB_PATH} // ($self->{+EPHEMERAL} ? 'quickdb' : ':memory:');
 
     # The ORM is a process-global singleton; its db may already be set by a
     # connection made earlier in this process (or before a fork). Setting it
@@ -423,6 +471,13 @@ sub finalize_run ($self, $run_uuid) {
 sub start_runner ($self, %params) {
     # Required lazily to avoid a use-time cycle: Runner uses Test2::Harness2.
     require Test2::Harness2::Runner;
+
+    # Temporary guard: start_runner forks children that reconnect via db_path,
+    # which does not work for ephemeral harnesses (no stable path to share).
+    # This guard will be removed once start_runner is migrated to propagate
+    # connect_spec instead of db_path directly.
+    croak "start_runner does not yet support ephemeral harnesses; use a db_path-based harness"
+        if $self->{+EPHEMERAL};
 
     my $con         = $self->connection;
     my $runner_uuid = gen_uuid();

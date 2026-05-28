@@ -38,4 +38,20 @@ subtest mysql_family_unresolved_defers => sub {
     is($h->flavor_obj, undef, 'mysql-family flavor deferred to connect-time probe');
 };
 
+subtest ephemeral_sqlite => sub {
+    my $h = Test2::Harness2->new(ephemeral => 1);
+    is($h->flavor_obj->name, 'sqlite', 'ephemeral => 1 is sqlite');
+    ok(lives { $h->initialize }, 'initialize on ephemeral sqlite')
+        or note($@);
+    my $con = $h->connection;
+    ok($con, 'got a connection');
+    ok($con->handle('run'), 'run handle exists (DDL applied)');
+
+    my $spec = $h->connect_spec;
+    is($spec->{flavor}, 'sqlite', 'ephemeral connect_spec has sqlite flavor');
+    like($spec->{dsn}, qr{^dbi:SQLite:dbname=}, 'ephemeral connect_spec has quickdb dsn');
+    is($spec->{username}, '', 'username is empty string (not undef)');
+    ok(!exists $spec->{db_path}, 'no db_path in ephemeral spec');
+};
+
 done_testing;

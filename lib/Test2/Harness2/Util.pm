@@ -5,7 +5,7 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 use File::Spec ();
-use DateTime ();
+use DateTime   ();
 
 use Importer Importer => 'import';
 

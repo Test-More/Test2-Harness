@@ -312,7 +312,7 @@ sub run_collector ($self) {
     $out_w->close;
     $err_w->close;
 
-    $self->{+CHILD_PID}     = $child;
+    $self->{+CHILD_PID} = $child;
     $self->_record_collector_child($child);
     $self->{+FORK_STAMP}    = time;
     $self->{+OUT_PIPE}      = $out_r;
@@ -364,7 +364,7 @@ sub _coerce_parser ($self, $thing) {
 
     if (!defined $thing) {
         my $class =
-              $self->{+IS_TEST}
+            $self->{+IS_TEST}
             ? 'Test2::Harness2::Collector::Parser::TAPParser'
             : 'Test2::Harness2::Collector::Parser::IOParser';
         $self->_require_class($class);
@@ -1266,9 +1266,9 @@ sub _exit_facet ($self) {
         dmp   => $px->{dmp} ? 1 : 0,
         all   => $px->{all},
         stamp => $self->{+REAP_STAMP} // time,
-        ($self->{+ORPHANED}      ? (orphaned      => 1)                  : ()),
+        ($self->{+ORPHANED}      ? (orphaned      => 1)                   : ()),
         ($self->{+TIMED_OUT}     ? (timed_out     => $self->{+TIMED_OUT}) : ()),
-        ($self->{+PARENT_EXITED} ? (parent_exited => 1)                  : ()),
+        ($self->{+PARENT_EXITED} ? (parent_exited => 1)                   : ()),
     );
 
     if (my $end = $self->{+END_TIMES}) {

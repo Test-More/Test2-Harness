@@ -12,6 +12,7 @@ use Test2::Harness2::Util qw/now_dt share_dir/;
 use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness2::Collector;
+use Test2::Harness2::DB::Flavor;
 
 # Import the QuickORM DSL helpers. 'connect' is renamed to 'qorm_connect' so
 # it does not collide with the Object::HashBase 'connect' slot accessor below.
@@ -26,6 +27,12 @@ use Object::HashBase qw{
     <credentials
     <connect
     <ephemeral
+    <flavor
+    <dsn
+    <username
+    <password
+    <flavor_obj
+    +quickdb
     +orm
     +connection
 };
@@ -41,13 +48,15 @@ Test2::Harness2 - Top-level harness object: DB bootstrap and connection factory.
 =head1 DESCRIPTION
 
 C<Test2::Harness2> is the entry-point object for the harness database. It
-bootstraps a SQLite database from the bundled DDL, then provides a
+bootstraps a database from the bundled DDL, then provides a
 L<DBIx::QuickORM::Connection> through which the rest of the harness accesses
 the schema.
 
-Either C<db_path> (for SQLite) or C<credentials> / C<connect> (for a
-pre-existing database handle supplier) must be supplied. Ephemeral databases
-are not yet supported.
+At minimum one of C<db_path>, C<dsn>, C<credentials>/C<connect>, or
+C<ephemeral> must be supplied. The default backend is SQLite (via
+C<db_path>). A C<dsn>/C<flavor>/C<username>/C<password> set enables other
+database engines. The C<ephemeral> slot is reserved for future wiring via
+L<DBIx::QuickDB>.
 
 =head1 SYNOPSIS
 
@@ -79,7 +88,28 @@ Alias for C<credentials>. Whichever name is passed, both accessors are set.
 
 =item ephemeral
 
-Reserved for future use. Setting this flag currently croaks.
+Reserved for future ephemeral database support via L<DBIx::QuickDB>. Setting
+this slot currently only influences flavor resolution (C<ephemeral =E<gt> 1>
+resolves to C<sqlite>; a string name resolves the named flavor). Full
+ephemeral wiring is added in a subsequent task.
+
+=item flavor
+
+Symbolic name of the database engine: C<sqlite>, C<postgresql>, C<mysql>,
+C<mariadb>, or C<percona>. When set, it overrides DSN inference.
+
+=item dsn
+
+A DBI connection string (e.g. C<dbi:Pg:dbname=yath>). Used together with
+C<username> and C<password> when connecting to a non-SQLite database.
+
+=item username
+
+Database username for DSN-based connections.
+
+=item password
+
+Database password for DSN-based connections.
 
 =back
 
@@ -89,11 +119,13 @@ sub init ($self) {
     $self->{+CONNECT}     //= $self->{+CREDENTIALS};
     $self->{+CREDENTIALS} //= $self->{+CONNECT};
 
-    croak "either db_path, credentials/connect, or ephemeral is required"
-        unless $self->{+DB_PATH} || $self->{+CREDENTIALS} || $self->{+EPHEMERAL};
+    croak "one of db_path, dsn, credentials/connect, or ephemeral is required"
+        unless $self->{+DB_PATH}
+        || $self->{+DSN}
+        || $self->{+CREDENTIALS}
+        || $self->{+EPHEMERAL};
 
-    croak "ephemeral databases are not supported yet"
-        if $self->{+EPHEMERAL};
+    $self->{+FLAVOR_OBJ} = $self->_resolve_flavor;
 
     return;
 }
@@ -106,11 +138,33 @@ sub init ($self) {
 
 =item $h->initialize
 
-Create the SQLite file at C<db_path> and apply the DDL from
-C<share/schema/sqlite.sql>. Safe to call only once on a fresh path; the DDL
-uses C<CREATE TABLE> without C<IF NOT EXISTS>, so calling it twice against the
-same file will error. Does nothing with custom credentials — callers that
-supply their own database manage their own schema.
+Apply the DDL for the resolved flavor to a fresh database. For SQLite,
+creates the file at C<db_path> and applies C<share/schema/sqlite.sql>. Safe
+to call only once; the DDL uses C<CREATE TABLE> without C<IF NOT EXISTS>.
+Requires a resolved flavor (MySQL-family connections must supply an explicit
+C<flavor> parameter).
+
+=cut
+
+sub initialize ($self) {
+    my $flavor = $self->{+FLAVOR_OBJ}
+        or croak "initialize requires a resolved flavor (mysql-family needs an explicit flavor)";
+
+    my $dbh = $self->connect_cb->();
+
+    my $sql_file = $flavor->ddl_path;
+    my $sql      = do {
+        open my $fh, '<', $sql_file or croak "open $sql_file: $!";
+        local $/;
+        <$fh>;
+    };
+    $dbh->do($_) for grep { /\S/ } split /;\s*\n/, $sql;
+    $dbh->disconnect;
+
+    return;
+}
+
+=pod
 
 =item $cb = $h->connect_cb
 
@@ -118,7 +172,76 @@ Return a coderef that produces a fresh DBI handle on each call. When
 C<credentials> was provided, the coderef delegates to it (either invoking it
 directly if it is a coderef, or calling C<connect> on the object). When only
 C<db_path> is set, builds a SQLite connect coderef with WAL journal mode and a
-generous busy timeout.
+generous busy timeout. When C<dsn> is set, builds a connect coderef using the
+DSN, C<username>, and C<password>.
+
+=cut
+
+sub connect_cb ($self) {
+    if (my $creds = $self->{+CREDENTIALS}) {
+        return $creds if ref($creds) eq 'CODE';
+        return sub { $creds->connect }
+            if blessed($creds) && $creds->can('connect');
+        croak "credentials must be a coderef or a Credentials consumer";
+    }
+
+    if (my $dsn = $self->{+DSN}) {
+        my $user   = $self->{+USERNAME};
+        my $pass   = $self->{+PASSWORD};
+        my $flavor = $self->{+FLAVOR_OBJ};
+        return sub {
+            my $dbh = DBI->connect(
+                $dsn, $user, $pass,
+                {RaiseError => 1, PrintError => 0, AutoCommit => 1},
+            );
+            $flavor->post_connect($dbh) if $flavor;
+            return $dbh;
+        };
+    }
+
+    my $path   = $self->{+DB_PATH};
+    my $flavor = $self->{+FLAVOR_OBJ};
+    return sub {
+        my $dbh = DBI->connect(
+            "dbi:SQLite:dbname=$path", '', '',
+            {RaiseError => 1, PrintError => 0, AutoCommit => 1},
+        );
+        $flavor->post_connect($dbh);
+        return $dbh;
+    };
+}
+
+=pod
+
+=item $spec = $h->connect_spec
+
+Return a plain hashref of constructor arguments sufficient to rebuild an
+equivalent C<Test2::Harness2> object in another process. For SQLite, returns
+C<< { flavor =E<gt> 'sqlite', db_path =E<gt> $path } >>. For DSN-based
+connections, returns C<flavor>, C<dsn>, C<username>, and C<password>. A live
+QuickDB object is never carried across a fork; only its DSN crosses the
+boundary.
+
+=cut
+
+sub connect_spec ($self) {
+    croak "connect_spec is not supported for credentials/connect-based harnesses (the handle supplier cannot cross a fork)"
+        if $self->{+CREDENTIALS};
+
+    my $flavor = $self->{+FLAVOR_OBJ} // $self->_flavor_obj_resolved($self->connect_cb);
+
+    return {flavor => 'sqlite', db_path => $self->{+DB_PATH}}
+        if $self->{+DB_PATH};
+
+    return {
+        flavor   => $flavor->name,
+        dsn      => $self->{+DSN},
+        username => $self->{+USERNAME},
+        password => $self->{+PASSWORD},
+    };
+}
+
+=pod
 
 =item $con = $h->connection
 
@@ -157,49 +280,62 @@ runner for per-test event files).
 
 =back
 
+=head1 PRIVATE METHODS
+
+=over 4
+
+=item $flavor = $h->_resolve_flavor
+
+Determine the flavor for this harness instance. Explicit C<flavor> wins, then
+unambiguous DSN inference, then C<db_path> (sqlite), then ephemeral name.
+MySQL-family DSNs return C<undef> here and are probed at connection time.
+
 =cut
 
-sub initialize ($self) {
-    my $path = $self->{+DB_PATH}
-        or croak "initialize requires db_path (custom credentials manage their own schema)";
+sub _resolve_flavor ($self) {
+    my $F = 'Test2::Harness2::DB::Flavor';
 
-    my $dbh = DBI->connect(
-        "dbi:SQLite:dbname=$path", '', '',
-        {RaiseError => 1, PrintError => 0, AutoCommit => 1},
-    );
-    $dbh->do('PRAGMA foreign_keys = ON');
+    return $F->by_name($self->{+FLAVOR}) if $self->{+FLAVOR};
 
-    my $sql_file = share_dir() . '/schema/sqlite.sql';
-    my $sql      = do {
-        open my $fh, '<', $sql_file or croak "open $sql_file: $!";
-        local $/;
-        <$fh>;
-    };
-    $dbh->do($_) for grep { /\S/ } split /;\s*\n/, $sql;
-    $dbh->disconnect;
-
-    return;
-}
-
-sub connect_cb ($self) {
-    if (my $creds = $self->{+CREDENTIALS}) {
-        return $creds if ref($creds) eq 'CODE';
-        return sub { $creds->connect }
-            if blessed($creds) && $creds->can('connect');
-        croak "credentials must be a coderef or a Credentials consumer";
+    if (my $dsn = $self->{+DSN}) {
+        my $f = $F->infer_from_dsn($dsn);
+        return $f if $f;
+        return;
     }
 
-    my $path = $self->{+DB_PATH};
-    return sub {
-        my $dbh = DBI->connect(
-            "dbi:SQLite:dbname=$path", '', '',
-            {RaiseError => 1, PrintError => 0, AutoCommit => 1},
-        );
-        $dbh->do('PRAGMA foreign_keys = ON');
-        $dbh->do('PRAGMA journal_mode = WAL');
-        $dbh->do('PRAGMA busy_timeout = 60000');
-        return $dbh;
-    };
+    return $F->by_name('sqlite') if $self->{+DB_PATH};
+
+    if (my $eph = $self->{+EPHEMERAL}) {
+        return $F->by_name($eph) if $eph ne '1' && $eph ne '';
+        return $F->by_name('sqlite');
+    }
+
+    return $F->by_name('sqlite');
+}
+
+=pod
+
+=item $flavor = $h->_flavor_obj_resolved($cb)
+
+Return the resolved flavor, probing a live handle for MySQL-family DSNs that
+could not be told apart from the DSN string alone. Croaks if the probe is
+inconclusive. Caches the result in C<flavor_obj> for subsequent calls.
+
+=back
+
+=cut
+
+sub _flavor_obj_resolved ($self, $cb) {
+    return $self->{+FLAVOR_OBJ} if $self->{+FLAVOR_OBJ};
+
+    my $dbh    = $cb->();
+    my $flavor = Test2::Harness2::DB::Flavor->detect_from_dbh($dbh);
+    $dbh->disconnect;
+
+    croak "could not determine MySQL-family flavor from the server; pass an explicit flavor (mysql, mariadb, or percona)"
+        unless $flavor;
+
+    return $self->{+FLAVOR_OBJ} = $flavor;
 }
 
 sub connection ($self) {
@@ -213,10 +349,12 @@ sub connection ($self) {
     # The ORM is a process-global singleton; its db may already be set by a
     # connection made earlier in this process (or before a fork). Setting it
     # twice croaks, so only attach when it has not been attached yet.
-    my $has_db = eval { $orm->db; 1 };
+    my $flavor       = $self->_flavor_obj_resolved($cb);
+    my $dialect_name = $flavor->dialect;
+    my $has_db       = eval { $orm->db; 1 };
     $orm->db(db(sub {
         db_name $path;
-        dialect 'SQLite';
+        dialect $dialect_name;
         qorm_connect($cb);
     })) unless $has_db;
 

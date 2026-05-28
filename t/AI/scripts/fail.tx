@@ -1,0 +1,4 @@
+use Test2::V0;
+ok(1, "passing assertion");
+ok(0, "failing assertion");
+done_testing;

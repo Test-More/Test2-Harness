@@ -251,8 +251,7 @@ sub queue_run ($self, %params) {
         });
 
         for my $file (@$files) {
-            my $tf = $con->handle('test_file', where => {project_id => $project_id, test_file => $file})->one
-                  // $con->handle('test_file')->insert({project_id => $project_id, test_file => $file});
+            my $tf = $con->find_or_insert(test_file => {project_id => $project_id, test_file => $file});
 
             $con->handle('job')->insert({
                 job_uuid     => gen_uuid(),

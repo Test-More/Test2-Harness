@@ -20,7 +20,10 @@
 -- the harness passes DateTime objects through Test2::Harness2::Util::now_dt.
 -- Sub-second resolution is only needed for individual test events, which are
 -- captured in events.jsonl.zst artifacts (lossless), not in these row stamps.
--- Booleans are INTEGER (0/1, NULL = undecided).
+-- Booleans are BOOLEAN (3-state: NULL = undecided / not yet known, 0 = false,
+-- 1 = true). A CHECK constraint enforces the 3-state semantic; PG gets this
+-- for free from its native BOOLEAN type, MySQL/MariaDB rely on the CHECK
+-- (BOOLEAN there is TINYINT(1)).
 --
 -- Column ordering convention: SQLite's row format is variable-width and
 -- doesn't care, but PostgreSQL (and to a lesser extent MySQL) pad columns
@@ -72,7 +75,7 @@ CREATE TABLE run (
     account_id      INTEGER REFERENCES account(account_id),
     project_id      INTEGER REFERENCES project(project_id),
     version_id      INTEGER REFERENCES version(version_id),
-    passed          INTEGER,
+    passed          BOOLEAN CHECK(passed IN (0, 1)),
     started         DATETIME,
     stopped         DATETIME,
     run_uuid_string TEXT GENERATED ALWAYS AS (
@@ -103,22 +106,22 @@ CREATE TABLE job (
     run_uuid     BLOB NOT NULL REFERENCES run(run_uuid),
     runner_uuid  BLOB REFERENCES runner(runner_uuid),
     test_file_id INTEGER NOT NULL REFERENCES test_file(test_file_id),
-    passed       INTEGER
+    passed       BOOLEAN CHECK(passed IN (0, 1))
 );
 
 CREATE TABLE try (
     try_uuid     BLOB PRIMARY KEY,
     job_uuid     BLOB NOT NULL REFERENCES job(job_uuid),
     ord          INTEGER NOT NULL,
-    passed       INTEGER,
-    should_retry INTEGER,
+    passed       BOOLEAN CHECK(passed IN (0, 1)),
+    should_retry BOOLEAN CHECK(should_retry IN (0, 1)),
     UNIQUE(job_uuid, ord)
 );
 
 CREATE TABLE subtest (
     subtest_uuid BLOB PRIMARY KEY,
     try_uuid     BLOB NOT NULL REFERENCES try(try_uuid),
-    passed       INTEGER,
+    passed       BOOLEAN CHECK(passed IN (0, 1)),
     name         TEXT
 );
 

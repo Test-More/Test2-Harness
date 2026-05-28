@@ -31,9 +31,18 @@
 -- descending and then variable-length last:
 --   1. 8-byte fixed  (future BIGINT)
 --   2. UUIDs         (BLOB(16) here / BINARY(16) on MySQL / native uuid on PG)
---   3. 4-byte fixed  (INTEGER PKs, FKs, counters, booleans-as-int)
---   4. Variable      (TEXT, DATETIME, BLOB data)
+--   3. 4-byte fixed  (INTEGER PKs, FKs, counters)
+--   4. 1-byte fixed  (BOOLEAN)
+--   5. Variable      (TEXT, DATETIME, BLOB data)
 -- Generated columns (run.run_uuid_string) go in the variable group.
+--
+-- Caveat: this is the common-practice "size descending" heuristic, which
+-- is adequate for all supported flavors but is not strictly optimal for
+-- PostgreSQL — there, the optimal rule is alignment-descending (uuid is
+-- 1-byte char-aligned in PG, varlena is 4-byte aligned), so a strict PG
+-- pass would move uuids past varlena. The savings are minor and the
+-- size-descending rule is more readable across flavors; revisit if a
+-- table grows enough rows for the padding to matter in production.
 
 -- ---- common ----
 -- 'account' (not 'user') because USER is reserved in PostgreSQL, MySQL,

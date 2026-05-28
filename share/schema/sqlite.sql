@@ -75,12 +75,12 @@ CREATE TABLE test_file (
 
 -- ---- logged ----
 CREATE TABLE runner (
-    runner_uuid BLOB PRIMARY KEY
+    runner_uuid BLOB(16) PRIMARY KEY
 );
 
 CREATE TABLE run (
-    run_uuid        BLOB PRIMARY KEY,
-    runner_uuid     BLOB REFERENCES runner(runner_uuid),
+    run_uuid        BLOB(16) PRIMARY KEY,
+    runner_uuid     BLOB(16) REFERENCES runner(runner_uuid),
     account_id      INTEGER REFERENCES account(account_id),
     project_id      INTEGER REFERENCES project(project_id),
     version_id      INTEGER REFERENCES version(version_id),
@@ -100,9 +100,9 @@ CREATE TABLE run (
 CREATE INDEX run_uuid_string_idx ON run(run_uuid_string);
 
 CREATE TABLE service (
-    service_uuid BLOB PRIMARY KEY,
-    runner_uuid  BLOB NOT NULL REFERENCES runner(runner_uuid),
-    run_uuid     BLOB REFERENCES run(run_uuid),
+    service_uuid BLOB(16) PRIMARY KEY,
+    runner_uuid  BLOB(16) NOT NULL REFERENCES runner(runner_uuid),
+    run_uuid     BLOB(16) REFERENCES run(run_uuid),
     mode         TEXT CHECK(mode IN ('run','restart','stop','kill')),
     name         TEXT NOT NULL,
     started      DATETIME,
@@ -111,16 +111,16 @@ CREATE TABLE service (
 );
 
 CREATE TABLE job (
-    job_uuid     BLOB PRIMARY KEY,
-    run_uuid     BLOB NOT NULL REFERENCES run(run_uuid),
-    runner_uuid  BLOB REFERENCES runner(runner_uuid),
+    job_uuid     BLOB(16) PRIMARY KEY,
+    run_uuid     BLOB(16) NOT NULL REFERENCES run(run_uuid),
+    runner_uuid  BLOB(16) REFERENCES runner(runner_uuid),
     test_file_id INTEGER NOT NULL REFERENCES test_file(test_file_id),
     passed       BOOLEAN CHECK(passed IN (0, 1))
 );
 
 CREATE TABLE try (
-    try_uuid     BLOB PRIMARY KEY,
-    job_uuid     BLOB NOT NULL REFERENCES job(job_uuid),
+    try_uuid     BLOB(16) PRIMARY KEY,
+    job_uuid     BLOB(16) NOT NULL REFERENCES job(job_uuid),
     ord          INTEGER NOT NULL,
     passed       BOOLEAN CHECK(passed IN (0, 1)),
     should_retry BOOLEAN CHECK(should_retry IN (0, 1)),
@@ -128,8 +128,8 @@ CREATE TABLE try (
 );
 
 CREATE TABLE subtest (
-    subtest_uuid BLOB PRIMARY KEY,
-    try_uuid     BLOB NOT NULL REFERENCES try(try_uuid),
+    subtest_uuid BLOB(16) PRIMARY KEY,
+    try_uuid     BLOB(16) NOT NULL REFERENCES try(try_uuid),
     passed       BOOLEAN CHECK(passed IN (0, 1)),
     name         TEXT
 );
@@ -137,10 +137,10 @@ CREATE TABLE subtest (
 -- run_uuid is denormalized here (derivable via service/try -> run) so
 -- finalize_run can collect a run's artifacts without a join.
 CREATE TABLE artifact (
-    artifact_uuid BLOB PRIMARY KEY,
-    run_uuid      BLOB REFERENCES run(run_uuid),
-    service_uuid  BLOB REFERENCES service(service_uuid),
-    try_uuid      BLOB REFERENCES try(try_uuid),
+    artifact_uuid BLOB(16) PRIMARY KEY,
+    run_uuid      BLOB(16) REFERENCES run(run_uuid),
+    service_uuid  BLOB(16) REFERENCES service(service_uuid),
+    try_uuid      BLOB(16) REFERENCES try(try_uuid),
     type          TEXT,
     name          TEXT,
     local_path    TEXT,
@@ -154,9 +154,9 @@ CREATE INDEX artifact_type_name_idx ON artifact(type, name);
 -- ---- local state ----
 CREATE TABLE collector (
     collector_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    service_uuid BLOB NOT NULL REFERENCES service(service_uuid),
-    runner_uuid  BLOB REFERENCES runner(runner_uuid),
-    try_uuid     BLOB REFERENCES try(try_uuid),
+    service_uuid BLOB(16) NOT NULL REFERENCES service(service_uuid),
+    runner_uuid  BLOB(16) REFERENCES runner(runner_uuid),
+    try_uuid     BLOB(16) REFERENCES try(try_uuid),
     pid          INTEGER,
     child_pid    INTEGER,
     exit_code    INTEGER,
@@ -168,7 +168,7 @@ CREATE TABLE collector (
 );
 
 CREATE TABLE socket (
-    service_uuid BLOB PRIMARY KEY REFERENCES service(service_uuid),
+    service_uuid BLOB(16) PRIMARY KEY REFERENCES service(service_uuid),
     type         TEXT CHECK(type IN ('INET','UNIX')),
     route        TEXT
 );

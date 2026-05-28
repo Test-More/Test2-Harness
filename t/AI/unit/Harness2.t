@@ -2,7 +2,6 @@ use v5.38;
 use Test2::V0;
 use Test2::Util::UUID qw/gen_uuid/;
 use File::Temp qw/tempdir/;
-use DBI;
 use Test2::Harness2;
 
 my $dir  = tempdir(CLEANUP => 1);
@@ -38,16 +37,7 @@ ok($run_uuid, "queue_run returned a run uuid");
 
 my $run = $con->handle('run')->by_id($run_uuid);
 is($run->field('runner_uuid'), $runner_uuid, "run linked to runner");
-
-# run_uuid_string is a STORED GENERATED column maintained by SQLite, not
-# exposed via the ORM (PRAGMA table_info hides generated columns). Verify
-# via raw DBI that it carries the canonical lowercase form for humans.
-my $dbh = DBI->connect("dbi:SQLite:dbname=$path", '', '', {RaiseError => 1});
-my ($stored_str) = $dbh->selectrow_array(
-    "SELECT run_uuid_string FROM run WHERE run_uuid_string = ?",
-    undef, lc($run_uuid),
-);
-is($stored_str, lc($run_uuid),
+is($run->field('run_uuid_string'), lc($run_uuid),
     "generated run_uuid_string holds the canonical lowercase form (indexed for human lookup)");
 
 my @jobs = $con->handle('job', where => { run_uuid => $run_uuid })->all;

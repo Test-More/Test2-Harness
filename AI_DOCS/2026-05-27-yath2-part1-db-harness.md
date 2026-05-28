@@ -222,11 +222,11 @@ UUIDs are still generated in Perl with `Test2::Util::UUID::gen_uuid`;
 The `run` table additionally carries `run_uuid_string`, a `STORED GENERATED`
 column expressing the canonical lowercase form of `run_uuid`. SQLite maintains
 it automatically on insert/update; the column is indexed (`run_uuid_string_idx`).
-It is intentionally **not** exposed through the ORM — `PRAGMA table_info`
-hides generated columns from autofill, so QuickORM never reads or writes it.
-The column exists purely for humans inspecting the database directly (sqlite
-CLI, ad-hoc queries) and is the only uuid form they should ever need to type
-or paste manually.
+It exists for humans inspecting the database directly (sqlite CLI, ad-hoc
+queries) and is the only uuid form they should ever need to type or paste
+manually. The ORM can read it (`$run->field('run_uuid_string')`) but writes
+are rejected by SQLite (generated columns are read-only by definition), so
+the column is safe from accidental application writes regardless.
 
 ### Flavor-file deviation (to be recorded as an ARCHITECTURE.md addendum)
 

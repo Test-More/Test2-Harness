@@ -261,7 +261,7 @@ sub _launch_job ($self, $job) {
             # relative paths to absolute so exec'd tests work even when cwd
             # changes between now and exec time.
             my @inc_flags = map { ('-I', abs_path($_) // $_) }
-                            grep { !ref($_) } @INC;
+                grep { !ref($_) } @INC;
 
             $exit = Test2::Harness2::Collector->start(
                 is_test       => 1,

@@ -620,8 +620,7 @@ C<top_level_subtests>.
 =cut
 
 sub _subtest_process_parent ($self, $f, $closer) {
-    my $name = $f->{assert}->{details}
-        // "unnamed subtest ($f->{trace}->{frame}->[1] line $f->{trace}->{frame}->[2])";
+    my $name = $f->{assert}->{details} // "unnamed subtest ($f->{trace}->{frame}->[1] line $f->{trace}->{frame}->[2])";
 
     my $subauditor = blessed($self)->new(nested => $self->{+NESTED} + 1);
 
@@ -780,7 +779,7 @@ sub _record_verdict ($self) {
     my $try = $self->{+TRY_ROW} or return;
     $try->update({passed => $self->pass ? 1 : 0});
 
-    my $con = $self->{+CON} or return;
+    my $con      = $self->{+CON} or return;
     my @subtests = @{$self->{+TOP_LEVEL_SUBTESTS} // []};
     return unless @subtests;
 

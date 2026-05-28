@@ -199,7 +199,48 @@ Subsections will be numbered `4.1`, `4.2`, … in the order they are
 designed. Numbering is stable once assigned; if a subsystem is
 removed, its number is retired, not reused.
 
-*(No subsystems are committed to this document yet.)*
+### 4.1 Harness control and runner (Part 1)
+
+**Responsibility / location.** `Test2::Harness2` (`lib/Test2/Harness2.pm`)
+is the public entry point for producing results: it bootstraps the SQLite
+database from `share/schema/sqlite.sql`, hands out a `DBIx::QuickORM`
+connection, starts runners, queues runs, and cleans up. `Test2::Harness2::Runner`
+(`lib/Test2/Harness2/Runner.pm`) is the long-lived process that executes a
+run's jobs; it consumes `Test2::Harness2::Role::Service`
+(`lib/Test2/Harness2/Role/Service.pm`) for its tick loop and uses
+`Test2::Harness2::Scheduler` (`lib/Test2/Harness2/Scheduler.pm`) to pick the
+next job and decide retries. The `App::Yath2` side
+(`lib/App/Yath2.pm`, `lib/App/Yath2/Command/test.pm`,
+`lib/App/Yath/Script/V2.pm`) is the user interface that drives this API.
+
+**Contract.** `Test2::Harness2->new(db_path => ... | connect => ...)` then
+`->initialize` (load DDL), `->connection`, `->start_runner(%opt)` →
+`runner_uuid`, `->queue_run(runner_uuid => ..., files => [...])` → `run_uuid`,
+`->set_runner_mode($runner_uuid, 'run'|'stop'|'kill')`, and
+`->finalize_run($run_uuid)`. Cross-process state lives entirely in the harness
+database; there is no socket/IPC layer (see §2.4). The runner is wrapped by a
+`Test2::Harness2::Collector`: only the collector process holds the `collector`
+row, while the runner process owns its `runner` + `service` rows (sharing one
+UUID). Each test job runs under its own collector with
+`Test2::Harness2::Collector::Auditor::Test` wired in as the collector's
+`processor`; the auditor writes the `try` verdict, the scheduler resolves
+`job.passed`, and the runner sets `run.passed` / `run.stopped`.
+
+**Invariants.** Tests run one at a time per runner in Part 1
+(fork + exec + waitpid). Every forked process opens its **own** DBI handle —
+handles are never shared across a fork (`Test2::Harness2::connection` is
+pid-aware and reconnects when it detects a fork). The runner observes its
+`service.mode` each tick: `stop` drains outstanding work then exits, `kill`
+terminates running collectors then exits.
+
+**Failure modes.** A test that dies, times out, or whose collector fails
+becomes a non-zero collector exit; the runner reaps it and the scheduler
+resolves the job from its try rows (an unset verdict counts as not-passed),
+rather than hanging the runner. Forked children are eval-guarded so they
+always terminate via `POSIX::_exit` rather than unwinding into the parent.
+
+*(Later subsystems — preloads, resource scheduling, renderers, non-default DB
+flavors — will be numbered 4.2, 4.3, … as they are designed.)*
 
 ## 5. Cross-cutting concerns
 
@@ -251,3 +292,21 @@ Unchanged by this decision: §2.2 (UUIDs generated in Perl with
 `Test2::Util::UUID`, v7), the SQLite-via-`DBD::SQLite` default, non-default
 `DBD::*` drivers as Suggests / Recommends, and `DBIx::QuickDB` for
 ephemeral test databases only.
+
+### 7.2 Part 1 ships SQLite DDL only (2026-05-27)
+
+§2.3 requires that all flavors move together: every DDL change touches every
+flavor file in the same commit. Part 1 of the rewrite ships **only**
+`share/schema/sqlite.sql`; the PostgreSQL / MySQL / MariaDB / Percona flavor
+files are deliberately deferred, matching the Part 1 scope of "only SQLite for
+now."
+
+Reasoning: Part 1 exercises only the default SQLite path end to end. Writing
+and maintaining four additional DDL files before any code drives them would be
+speculative. When a non-default flavor is implemented, its
+`share/schema/<flavor>.sql` file is added and the "move together" rule applies
+from that point forward.
+
+Note for the future flavor author: `user` is a reserved word in PostgreSQL and
+MySQL/MariaDB and will need quoting or renaming in those flavor files (the
+SQLite DDL carries a comment to that effect).

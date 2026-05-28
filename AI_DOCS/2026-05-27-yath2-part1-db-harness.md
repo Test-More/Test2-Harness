@@ -197,6 +197,24 @@ The SQLite file is opened with WAL journaling, a `busy_timeout`, and
 `PRAGMA foreign_keys = ON` so the several concurrent writer processes
 (command, runner, collectors) coexist.
 
+### UUID storage
+
+UUID columns are stored as `BLOB` (16 bytes) on flavors without a native uuid
+type (SQLite, MySQL, MariaDB); PostgreSQL gets its native `uuid` type. v7
+UUIDs are still generated in Perl with `Test2::Util::UUID::gen_uuid`;
+`DBIx::QuickORM`'s UUID autotype detects binary affinity (sql_type
+`BLOB`/`BINARY`/`BYTEA`) and packs the canonical hyphenated string to/from a
+16-byte blob, so all application code continues to see the canonical string.
+
+The `run` table additionally carries `run_uuid_string`, a `STORED GENERATED`
+column expressing the canonical lowercase form of `run_uuid`. SQLite maintains
+it automatically on insert/update; the column is indexed (`run_uuid_string_idx`).
+It is intentionally **not** exposed through the ORM — `PRAGMA table_info`
+hides generated columns from autofill, so QuickORM never reads or writes it.
+The column exists purely for humans inspecting the database directly (sqlite
+CLI, ad-hoc queries) and is the only uuid form they should ever need to type
+or paste manually.
+
 ### Flavor-file deviation (to be recorded as an ARCHITECTURE.md addendum)
 
 AGENTS.md / ARCHITECTURE.md §2.3 require that "all flavors move together" —

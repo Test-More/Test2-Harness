@@ -12,7 +12,13 @@ my $con = $h->connection;
 
 my $runner_uuid = gen_uuid();
 $con->handle('runner')->insert({runner_uuid => $runner_uuid});
-my $run_uuid = $h->queue_run(runner_uuid => $runner_uuid, files => ['t/AI/scripts/pass.tx']);
+my $project = $con->handle('project')->insert({name => 'sched-test'});
+my $project_id = $project->field('project_id');
+my $run_uuid = $h->queue_run(
+    runner_uuid => $runner_uuid,
+    project_id  => $project_id,
+    files       => ['t/AI/scripts/pass.tx'],
+);
 
 my $sched = Test2::Harness2::Scheduler->new(con => $con, runner_uuid => $runner_uuid);
 
@@ -31,7 +37,7 @@ ok(!$sched->next_job,               "no more pending jobs once resolved");
 ok($sched->run_complete($run_uuid), "run reports complete when all jobs resolved");
 
 # --- default (retry_limit 0): a failing try that asks to retry still resolves ---
-my $run2 = $h->queue_run(runner_uuid => $runner_uuid, files => ['t/AI/scripts/retry.tx']);
+my $run2 = $h->queue_run(runner_uuid => $runner_uuid, project_id => $project_id, files => ['t/AI/scripts/retry.tx']);
 my $job2 = $sched->next_job;
 ok($job2, "got the second run's job");
 my $t2 = $sched->start_try($job2);
@@ -43,7 +49,7 @@ is(
 );
 
 # --- retry_limit 1: should_retry triggers a second try, then resolves ---
-my $run3    = $h->queue_run(runner_uuid => $runner_uuid, files => ['t/AI/scripts/retry2.tx']);
+my $run3    = $h->queue_run(runner_uuid => $runner_uuid, project_id => $project_id, files => ['t/AI/scripts/retry2.tx']);
 my $sched_r = Test2::Harness2::Scheduler->new(con => $con, runner_uuid => $runner_uuid, retry_limit => 1);
 # run1 + run2 jobs are already resolved, so run3's job is the only pending one.
 my $job3 = $sched_r->next_job;

@@ -73,7 +73,17 @@ sub run ($self) {
     my $con = $h->connection;
 
     my $runner_uuid = $h->start_runner;
-    my $run_uuid    = $h->queue_run(runner_uuid => $runner_uuid, files => \@files);
+
+    # Part 1: every run belongs to a project. Use a "default" project, created
+    # on first use; later commands will let the user name it explicitly.
+    my $project = $con->handle('project', where => {name => 'default'})->one
+               // $con->handle('project')->insert({name => 'default'});
+
+    my $run_uuid = $h->queue_run(
+        runner_uuid => $runner_uuid,
+        project_id  => $project->field('project_id'),
+        files       => \@files,
+    );
 
     $h->set_runner_mode($runner_uuid, 'stop');
 

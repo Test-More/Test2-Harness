@@ -16,7 +16,14 @@ my $con = $h->connection;
 my $runner_uuid = $h->start_runner(workdir => "$dir/work");
 ok($runner_uuid, "start_runner returned a runner uuid");
 
-my $run_uuid = $h->queue_run(runner_uuid => $runner_uuid, files => [$pass]);
+my $project    = $con->handle('project')->insert({name => 'smoke'});
+my $project_id = $project->field('project_id');
+
+my $run_uuid = $h->queue_run(
+    runner_uuid => $runner_uuid,
+    project_id  => $project_id,
+    files       => [$pass],
+);
 $h->set_runner_mode($runner_uuid, 'stop');
 
 # Wait for the run to stop (bounded so a hang fails instead of blocking forever).

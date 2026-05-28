@@ -28,8 +28,9 @@ CREATE TABLE version (
 
 CREATE TABLE test_file (
     test_file_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id   INTEGER NOT NULL REFERENCES project(project_id),
     test_file    TEXT NOT NULL,
-    UNIQUE(test_file)
+    UNIQUE(project_id, test_file)
 );
 
 -- ---- logged ----

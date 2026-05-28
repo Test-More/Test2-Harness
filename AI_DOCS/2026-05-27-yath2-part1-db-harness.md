@@ -186,7 +186,9 @@ has exactly one of `runner_uuid` / `try_uuid`; `artifact` has exactly one of
 `service_uuid` / `try_uuid` and is indexed on `type`, `name`, and
 `type`+`name`; `service` is `unique(name, runner_uuid, run_uuid)`; `try` is
 `unique(job_uuid, ord)`; `version` is `unique(project_id, version)`;
-`account.email` and `project.name` are unique. The original `user` table was
+`test_file` is `unique(project_id, test_file)` (every test file is scoped to a
+project); `account.email` and `project.name` are unique. The original `user`
+table was
 renamed to `account` and `collector.signal` to `exit_signal` because both
 clash with reserved words in PostgreSQL/MySQL/MariaDB; `error_code` was
 renamed to `exit_code` to pair with `exit_signal`.

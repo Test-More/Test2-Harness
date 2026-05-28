@@ -131,11 +131,11 @@ introspection of the live database; the DDL must already be applied
 =item $run_uuid = $h->queue_run(%params)
 
 Insert a run row and one job row per test file in a single transaction,
-returning the new run UUID. Required params: C<runner_uuid>, C<files>
-(arrayref of test-file paths). Optional: C<account_id>, C<project_id>,
-C<version_id>. Each path is looked up in C<test_file> and inserted if absent,
-so repeated paths reuse the same row (single-writer; not safe against a
-concurrent insert of the same path).
+returning the new run UUID. Required params: C<runner_uuid>, C<project_id>,
+C<files> (arrayref of test-file paths). Optional: C<account_id>, C<version_id>.
+Each C<(project_id, test_file)> pair is looked up in C<test_file> and inserted
+if absent, so repeated paths within a project reuse the same row
+(single-writer; not safe against a concurrent insert of the same pair).
 
 =item $h->finalize_run($run_uuid)
 
@@ -235,22 +235,25 @@ sub connection ($self) {
 sub queue_run ($self, %params) {
     my $files = $params{files} or croak "queue_run requires 'files'";
     croak "queue_run requires 'runner_uuid'" unless $params{runner_uuid};
+    croak "queue_run requires 'project_id'"  unless $params{project_id};
 
-    my $con      = $self->connection;
-    my $run_uuid = gen_uuid();
+    my $con        = $self->connection;
+    my $run_uuid   = gen_uuid();
+    my $project_id = $params{project_id};
 
     $con->txn(sub {
         $con->handle('run')->insert({
             run_uuid    => $run_uuid,
             runner_uuid => $params{runner_uuid},
             account_id  => $params{account_id},
-            project_id  => $params{project_id},
+            project_id  => $project_id,
             version_id  => $params{version_id},
             started     => time,
         });
 
         for my $file (@$files) {
-            my $tf = $con->handle('test_file', where => {test_file => $file})->one // $con->handle('test_file')->insert({test_file => $file});
+            my $tf = $con->handle('test_file', where => {project_id => $project_id, test_file => $file})->one
+                  // $con->handle('test_file')->insert({project_id => $project_id, test_file => $file});
 
             $con->handle('job')->insert({
                 job_uuid     => gen_uuid(),

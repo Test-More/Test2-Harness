@@ -369,8 +369,6 @@ Return the resolved flavor, probing a live handle for MySQL-family DSNs that
 could not be told apart from the DSN string alone. Croaks if the probe is
 inconclusive. Caches the result in C<flavor_obj> for subsequent calls.
 
-=back
-
 =cut
 
 sub _flavor_obj_resolved ($self, $cb) {
@@ -386,13 +384,50 @@ sub _flavor_obj_resolved ($self, $cb) {
     return $self->{+FLAVOR_OBJ} = $flavor;
 }
 
+=pod
+
+=item $name = $h->_orm_db_name
+
+Return the database/catalog name that the QuickORM dialect uses during autofill
+to filter C<information_schema> rows. For SQLite (C<db_path>), this is the file
+path. For ephemeral QuickDB instances, it is C<'quickdb'> (the name QuickDB
+always provisions). For DSN-based harnesses — including forked children rebuilt
+from a C<connect_spec> — it is the database name embedded in the DSN
+(C<dbname=...> or C<database=...>). Falls back to C<':memory:'> when none of
+the above apply (e.g. a plain credentials harness with no DSN).
+
+This is the fix for the DSN propagation bug: without it, a child rebuilt from
+C<connect_spec> for a non-sqlite flavor would get C<':memory:'> as its ORM
+C<db_name>, which matches nothing in C<information_schema>, so autofill would
+find no tables and C<handle('run')> would fail.
+
+=back
+
+=cut
+
+# The ORM db_name is the database/catalog name the dialect introspects against
+# during autofill. For a DSN-based harness (e.g. a forked child rebuilt from
+# connect_spec) it must be the database named in the DSN, not ':memory:' --
+# PostgreSQL/MySQL autofill filter information_schema by this name.
+sub _orm_db_name ($self) {
+    return $self->{+DB_PATH} if defined $self->{+DB_PATH};
+
+    if (my $dsn = $self->{+DSN}) {
+        return $1 if $dsn =~ /\b(?:dbname|database)=([^;]+)/i;
+    }
+
+    return 'quickdb' if $self->{+EPHEMERAL};
+
+    return ':memory:';
+}
+
 sub connection ($self) {
     return $self->{+CONNECTION}
         if $self->{+CONNECTION} && $self->{+CONNECTION}->pid == $$;
 
     my $orm  = $self->{+ORM} //= qorm(orm => 'harness');
     my $cb   = $self->connect_cb;
-    my $path = $self->{+DB_PATH} // ($self->{+EPHEMERAL} ? 'quickdb' : ':memory:');
+    my $path = $self->_orm_db_name;
 
     # The ORM is a process-global singleton; its db may already be set by a
     # connection made earlier in this process (or before a fork). Setting it
@@ -472,13 +507,6 @@ sub start_runner ($self, %params) {
     # Required lazily to avoid a use-time cycle: Runner uses Test2::Harness2.
     require Test2::Harness2::Runner;
 
-    # Temporary guard: start_runner forks children that reconnect via db_path,
-    # which does not work for ephemeral harnesses (no stable path to share).
-    # This guard will be removed once start_runner is migrated to propagate
-    # connect_spec instead of db_path directly.
-    croak "start_runner does not yet support ephemeral harnesses; use a db_path-based harness"
-        if $self->{+EPHEMERAL};
-
     my $con         = $self->connection;
     my $runner_uuid = gen_uuid();
     my $service;
@@ -494,7 +522,7 @@ sub start_runner ($self, %params) {
         });
     });
 
-    my $db_path = $self->{+DB_PATH};
+    my $spec    = $self->connect_spec;
     my $workdir = $params{workdir};
 
     my $pid = fork // die "fork: $!";
@@ -502,7 +530,7 @@ sub start_runner ($self, %params) {
         my $exit = 255;
         my $ok   = eval {
             # Collector-parent process: owns the collector row + runner artifact.
-            my $pcon   = Test2::Harness2->new(db_path => $db_path)->connection;
+            my $pcon   = Test2::Harness2->new(%$spec)->connection;
             my $events = File::Spec->catfile(File::Spec->tmpdir, "yath-runner-$runner_uuid.jsonl.zst");
 
             my $crow = $pcon->handle('collector')->insert({
@@ -526,8 +554,8 @@ sub start_runner ($self, %params) {
                 artifact_row  => $arow,
                 run_sub       => sub ($guard) {
                     Test2::Harness2::Runner->new(
-                        db_path     => $db_path,
-                        runner_uuid => $runner_uuid,
+                        connect_spec => $spec,
+                        runner_uuid  => $runner_uuid,
                         ($workdir ? (workdir => $workdir) : ()),
                     )->run;
                 },

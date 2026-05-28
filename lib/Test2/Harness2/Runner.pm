@@ -18,7 +18,7 @@ use Test2::Harness2::Collector;
 use Test2::Harness2::Collector::Auditor::Test;
 
 use Object::HashBase qw{
-    <db_path
+    <connect_spec
     <runner_uuid
     <service_uuid
     <workdir
@@ -60,18 +60,22 @@ and stops.
     use Test2::Harness2::Runner;
 
     Test2::Harness2::Runner->new(
-        db_path     => $path,
-        runner_uuid => $runner_uuid,
+        connect_spec => {flavor => 'sqlite', db_path => $path},
+        runner_uuid  => $runner_uuid,
     )->run;
 
 =head1 ATTRIBUTES
 
 =over 4
 
-=item db_path
+=item connect_spec
 
-Required. Path to the harness SQLite database. Each process opens its own
-connection from this path.
+Required. A plain hashref of constructor arguments for C<Test2::Harness2>,
+as returned by C<< Test2::Harness2->connect_spec >>. Each forked process
+rebuilds its own C<Test2::Harness2> connection from this spec so no DBI
+handle is shared across a fork. For SQLite harnesses this will be
+C<< { flavor => 'sqlite', db_path => $path } >>; for ephemeral or DSN-based
+harnesses it carries the live C<dsn>, C<username>, and C<password>.
 
 =item runner_uuid
 
@@ -93,8 +97,8 @@ up on exit.
 =cut
 
 sub init ($self) {
-    croak "'db_path' is required"     unless $self->{+DB_PATH};
-    croak "'runner_uuid' is required" unless $self->{+RUNNER_UUID};
+    croak "'connect_spec' is required" unless $self->{+CONNECT_SPEC};
+    croak "'runner_uuid' is required"  unless $self->{+RUNNER_UUID};
     $self->{+SERVICE_UUID} //= $self->{+RUNNER_UUID};
     $self->{+WORKDIR}      //= tempdir(CLEANUP => 1);
     make_path($self->{+WORKDIR}) unless -d $self->{+WORKDIR};
@@ -126,7 +130,7 @@ process's connection.
 =cut
 
 sub harness ($self) {
-    return $self->{+HARNESS} //= Test2::Harness2->new(db_path => $self->{+DB_PATH});
+    return $self->{+HARNESS} //= Test2::Harness2->new(%{$self->{+CONNECT_SPEC}});
 }
 
 sub con ($self) { return $self->harness->connection }
@@ -251,7 +255,7 @@ sub _launch_job ($self, $job) {
         my $exit = 255;
         my $ok   = eval {
             # Test-collector parent process: its own fresh connection + rows.
-            my $ccon    = Test2::Harness2->new(db_path => $self->{+DB_PATH})->connection;
+            my $ccon    = Test2::Harness2->new(%{$self->{+CONNECT_SPEC}})->connection;
             my $ctry    = $ccon->handle('try')->by_id($try_uuid);
             my $ccrow   = $ccon->handle('collector')->by_id($collector_id);
             my $carow   = $ccon->handle('artifact')->by_id($artifact_uuid);

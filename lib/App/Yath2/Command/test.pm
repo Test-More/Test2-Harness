@@ -3,7 +3,9 @@ use v5.38;
 
 our $VERSION = '2.000000';
 
-use parent 'App::Yath2::Command';
+use Object::HashBase qw{ <argv };
+use Role::Tiny::With;
+with 'App::Yath2::Role::Command';
 
 use Time::HiRes ();
 use Test2::Util::UUID qw/gen_uuid/;

@@ -163,8 +163,10 @@ Key decisions baked into the topology:
   loads. Provides `do_begin(%params)` and `do_runtime()` (returns the exit
   code), wiring the `yath` script to `App::Yath2`.
 - `lib/App/Yath2.pm` — discovers and dispatches the requested command.
-- `lib/App/Yath2/Command.pm` — command base class: `name`, `run`, `summary`,
-  `description`.
+- `lib/App/Yath2/Role/Command.pm` — Role::Tiny role consumed by every
+  command. `requires 'run'`; provides default `name` / `summary` /
+  `description` class-method getters. Commands hold their own `argv` slot
+  via `Object::HashBase`.
 - `lib/App/Yath2/Command/test.pm` — the Part 1 `yath test` command. Takes a
   bare list of test files, drives Test2::Harness2 through the full flow above,
   prints per-job pass/fail, returns the exit code.

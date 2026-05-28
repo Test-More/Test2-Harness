@@ -10,6 +10,7 @@ use File::Spec ();
 use File::Path qw/make_path/;
 use File::Temp qw/tempdir/;
 use Test2::Util::UUID qw/gen_uuid/;
+use Cwd qw/abs_path/;
 
 use Test2::Harness2;
 use Test2::Harness2::Scheduler;
@@ -256,10 +257,16 @@ sub _launch_job ($self, $job) {
             my $carow   = $ccon->handle('artifact')->by_id($artifact_uuid);
             my $auditor = Test2::Harness2::Collector::Auditor::Test->new(try_row => $ctry, con => $ccon);
 
+            # Build -I flags from the process's @INC, converting any
+            # relative paths to absolute so exec'd tests work even when cwd
+            # changes between now and exec time.
+            my @inc_flags = map { ('-I', abs_path($_) // $_) }
+                            grep { !ref($_) } @INC;
+
             $exit = Test2::Harness2::Collector->start(
                 is_test       => 1,
                 events_file   => $events,
-                exec_command  => [$^X, '-Ilib', $file],
+                exec_command  => [$^X, @inc_flags, $file],
                 processor     => $auditor,
                 collector_row => $ccrow,
                 artifact_row  => $carow,

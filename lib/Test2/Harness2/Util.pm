@@ -89,13 +89,33 @@ this module's installed location. Croaks if the module is not found in C<%INC>.
 
 =cut
 
+my $SHARE_DIR = do {
+    # Resolve once at module load time, while cwd is still valid.  Calling
+    # rel2abs lazily on the first share_dir() call gives the wrong answer when
+    # the caller has chdir'd since loading this module.
+    my $self_file = $INC{'Test2/Harness2/Util.pm'};
+    if ($self_file) {
+        my ($vol, $dir) = File::Spec->splitpath(File::Spec->rel2abs($self_file));
+        my @parts = File::Spec->splitdir($dir);
+        pop @parts while @parts && $parts[-1] eq '';
+        splice(@parts, -3);    # drop Harness2, Test2, lib
+        File::Spec->catdir(@parts, 'share');
+    }
+    else {
+        undef;
+    }
+};
+
 sub share_dir () {
+    return $SHARE_DIR if $SHARE_DIR;
+    # Fallback: module was not in %INC when loaded (should not happen in
+    # normal use; here for safety so callers get an intelligible croak).
     my $self_file = $INC{'Test2/Harness2/Util.pm'} or croak "Util.pm not in %INC";
     my ($vol, $dir) = File::Spec->splitpath(File::Spec->rel2abs($self_file));
     my @parts = File::Spec->splitdir($dir);
     pop @parts while @parts && $parts[-1] eq '';
     splice(@parts, -3);    # drop Harness2, Test2, lib
-    return File::Spec->catdir(@parts, 'share');
+    return $SHARE_DIR = File::Spec->catdir(@parts, 'share');
 }
 
 1;

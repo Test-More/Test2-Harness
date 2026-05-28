@@ -76,10 +76,12 @@ sub run ($self) {
 
     my $runner_uuid = $h->start_runner;
 
-    # Part 1: every run belongs to a project. Use a "default" project, created
-    # on first use; later commands will let the user name it explicitly.
-    my $project = $con->handle('project', where => {name => 'default'})->one
-               // $con->handle('project')->insert({name => 'default'});
+    # Part 1: every run belongs to a project. Use a "default" project, found
+    # or inserted atomically; later commands will let the user name it.
+    # ($con->txn returns the Transaction object, not the sub's return value,
+    # so capture the row via a closure variable.)
+    my $project;
+    $con->txn(sub { $project = $con->find_or_insert(project => {name => 'default'}) });
 
     my $run_uuid = $h->queue_run(
         runner_uuid => $runner_uuid,

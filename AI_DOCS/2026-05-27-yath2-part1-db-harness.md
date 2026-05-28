@@ -31,10 +31,9 @@ later pass; the Part 1 happy path is unaffected:
 - **`App::Yath2::Command::test` poll loop has no timeout.** If a runner died
   before stamping `run.stopped`, the command would block forever. Follow-up:
   add a bounded deadline (the runner smoke test already uses one).
-- **`collector.error_code`/`signal` are recorded as the collector process's own
-  status (always 0 on a clean pipeline), not the collected child's status — the
-  child's exit rides the `harness_process_exit` event. The column names invite
-  a future misread; revisit when collector-row consumers are written.
+- **`collector.exit_code`/`exit_signal` record the collector process's own
+  status** (always 0 on a clean pipeline), not the collected child's status —
+  the child's exit rides the `harness_process_exit` event.
 - **Single-process re-runs against different db_paths** are not supported: the
   QuickORM ORM is a process-global singleton and `connection` only attaches the
   db once per process. Nothing in Part 1 does this (each `yath test` is its own
@@ -152,8 +151,8 @@ Key decisions baked into the topology:
   schema and passes them in. The Collector itself only calls generic
   `->update` / `->field` / `->save` on them:
   - after the fork, set `collector_row` `child_pid`;
-  - at finalize, set `collector_row` `stopped`, `error_code`, `signal`, and
-    read the events file's bytes into `artifact_row.data`.
+  - at finalize, set `collector_row` `stopped`, `exit_code`, `exit_signal`,
+    and read the events file's bytes into `artifact_row.data`.
   Both attributes are optional; when absent the collector behaves exactly as
   today, so the existing collector tests stay green. This keeps QuickORM /
   schema knowledge out of the generic collector.
@@ -178,7 +177,7 @@ category:
 - **Local state** (never synced; may reference other categories, never
   referenced by them): `collector`, `socket`.
 - **Common** (natural keys, not UUIDs; may be referenced; must not reference
-  local-state or logged tables): `user`, `project`, `version`, `test_file`.
+  local-state or logged tables): `account`, `project`, `version`, `test_file`.
 - **Logged** (UUID-identified historic record of a run; may reference common
   tables): `runner`, `service`, `run`, `job`, `try`, `subtest`, `artifact`.
 
@@ -186,8 +185,11 @@ Column definitions follow the `next` file exactly, including: `collector`
 has exactly one of `runner_uuid` / `try_uuid`; `artifact` has exactly one of
 `service_uuid` / `try_uuid` and is indexed on `type`, `name`, and
 `type`+`name`; `service` is `unique(name, runner_uuid, run_uuid)`; `try` is
-`unique(job_uuid, ord)`; `version` is `unique(project_id, version)`; `user.email`
-and `project.name` are unique.
+`unique(job_uuid, ord)`; `version` is `unique(project_id, version)`;
+`account.email` and `project.name` are unique. The original `user` table was
+renamed to `account` and `collector.signal` to `exit_signal` because both
+clash with reserved words in PostgreSQL/MySQL/MariaDB; `error_code` was
+renamed to `exit_code` to pair with `exit_signal`.
 
 The SQLite file is opened with WAL journaling, a `busy_timeout`, and
 `PRAGMA foreign_keys = ON` so the several concurrent writer processes

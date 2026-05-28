@@ -24,12 +24,12 @@ ok(lives { $con->handle('run') }, "run table handle available");
 # Normalise upfront so comparisons against ->field() values work.
 my $runner_uuid = lc(gen_uuid());
 $con->handle('runner')->insert({ runner_uuid => $runner_uuid });
-my $user    = $con->handle('user')->insert({ email => 'me@example.com' });
+my $account = $con->handle('account')->insert({ email => 'me@example.com' });
 my $project = $con->handle('project')->insert({ name => 'proj' });
 
 my $run_uuid = $h->queue_run(
     runner_uuid => $runner_uuid,
-    user_id     => $user->field('user_id'),
+    account_id  => $account->field('account_id'),
     project_id  => $project->field('project_id'),
     files       => ['t/AI/scripts/pass.tx', 't/AI/scripts/fail.tx'],
 );

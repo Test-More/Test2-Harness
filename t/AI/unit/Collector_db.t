@@ -28,7 +28,7 @@ my $exit = Test2::Harness2::Collector->start(
 is($exit, 0, "collector finished cleanly");
 ok(defined $crow->field('child_pid'), "collector recorded child_pid on its row");
 ok(defined $crow->field('stopped'),   "collector recorded stopped time");
-is($crow->field('error_code'), 0,     "collector recorded its own exit code 0");
+is($crow->field('exit_code'), 0,      "collector recorded its own exit code 0");
 ok(defined $arow->field('data'),      "collector populated artifact data blob from events file");
 ok(length($arow->field('data')) > 0,  "events data is non-empty");
 

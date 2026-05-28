@@ -307,6 +307,14 @@ speculative. When a non-default flavor is implemented, its
 `share/schema/<flavor>.sql` file is added and the "move together" rule applies
 from that point forward.
 
-Note for the future flavor author: `user` is a reserved word in PostgreSQL and
-MySQL/MariaDB and will need quoting or renaming in those flavor files (the
-SQLite DDL carries a comment to that effect).
+Reserved-word audit (done up front to keep the SQLite DDL portable):
+- `user` table renamed to `account` (USER is reserved in PostgreSQL, MySQL,
+  MariaDB, and the SQL standard).
+- `collector.signal` renamed to `exit_signal` (SIGNAL is reserved in
+  MySQL/MariaDB as the SIGNAL statement).
+- `collector.error_code` renamed to `exit_code` for naming consistency with
+  `exit_signal`.
+
+When a new table or column is added in any flavor file, audit the name against
+the reserved-word lists for every supported flavor and prefer an unreserved
+alternative over a quoted-identifier workaround.

@@ -1237,7 +1237,7 @@ sub _record_collector_child ($self, $child_pid) {
 
 sub _record_collector_stopped ($self) {
     my $row = $self->{+COLLECTOR_ROW} or return;
-    $row->update({stopped => time, error_code => 0, signal => 0});
+    $row->update({stopped => time, exit_code => 0, exit_signal => 0});
     return;
 }
 

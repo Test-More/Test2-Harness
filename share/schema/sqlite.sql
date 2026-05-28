@@ -1,15 +1,15 @@
 -- Test2::Harness2 SQLite schema.
--- Categories: local-state (collector, socket), common (user, project,
+-- Categories: local-state (collector, socket), common (account, project,
 -- version, test_file), logged (runner, service, run, job, try, subtest,
 -- artifact). UUID columns are TEXT (v7 generated in Perl). hi-res
 -- timestamps are REAL. booleans are INTEGER (0/1, NULL = undecided).
 
 -- ---- common ----
--- NOTE: 'user' is a reserved word in PostgreSQL/MySQL; quote or rename it
--- when the other flavor files are written.
-CREATE TABLE user (
-    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email   TEXT NOT NULL COLLATE NOCASE,
+-- 'account' (not 'user') because USER is reserved in PostgreSQL, MySQL,
+-- and MariaDB.
+CREATE TABLE account (
+    account_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email      TEXT NOT NULL COLLATE NOCASE,
     UNIQUE(email)
 );
 
@@ -40,7 +40,7 @@ CREATE TABLE runner (
 CREATE TABLE run (
     run_uuid    TEXT PRIMARY KEY,
     runner_uuid TEXT REFERENCES runner(runner_uuid),
-    user_id     INTEGER REFERENCES user(user_id),
+    account_id  INTEGER REFERENCES account(account_id),
     project_id  INTEGER REFERENCES project(project_id),
     version_id  INTEGER REFERENCES version(version_id),
     started     REAL,
@@ -111,8 +111,8 @@ CREATE TABLE collector (
     started      REAL,
     stopped      REAL,
     mode         TEXT CHECK(mode IN ('run','kill')),
-    error_code   INTEGER,
-    signal       INTEGER,
+    exit_code    INTEGER,
+    exit_signal  INTEGER,
     CHECK ((runner_uuid IS NULL) <> (try_uuid IS NULL))
 );
 

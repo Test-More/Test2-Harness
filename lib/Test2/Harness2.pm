@@ -132,7 +132,7 @@ introspection of the live database; the DDL must already be applied
 
 Insert a run row and one job row per test file in a single transaction,
 returning the new run UUID. Required params: C<runner_uuid>, C<files>
-(arrayref of test-file paths). Optional: C<user_id>, C<project_id>,
+(arrayref of test-file paths). Optional: C<account_id>, C<project_id>,
 C<version_id>. Each path is looked up in C<test_file> and inserted if absent,
 so repeated paths reuse the same row (single-writer; not safe against a
 concurrent insert of the same path).
@@ -243,7 +243,7 @@ sub queue_run ($self, %params) {
         $con->handle('run')->insert({
             run_uuid    => $run_uuid,
             runner_uuid => $params{runner_uuid},
-            user_id     => $params{user_id},
+            account_id  => $params{account_id},
             project_id  => $params{project_id},
             version_id  => $params{version_id},
             started     => time,

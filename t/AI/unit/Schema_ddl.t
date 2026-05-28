@@ -16,7 +16,7 @@ for my $stmt (grep { /\S/ } split /;\s*\n/, $sql) {
 }
 
 my %have = map { $_->[0] => 1 } @{ $dbh->selectall_arrayref("SELECT name FROM sqlite_master WHERE type='table'") };
-my @want = qw/collector socket user project version test_file runner service run job try subtest artifact/;
+my @want = qw/collector socket account project version test_file runner service run job try subtest artifact/;
 ok($have{$_}, "table $_ created") for @want;
 
 # Smoke a couple of inserts honoring fk + uniqueness.

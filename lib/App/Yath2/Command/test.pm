@@ -74,7 +74,7 @@ sub run ($self) {
     $h->initialize;
     my $con = $h->connection;
 
-    my $runner_uuid = $h->start_runner;
+    my $service = $h->start_runner;
 
     # Part 1: every run belongs to a project. Use a "default" project, found
     # or inserted atomically; later commands will let the user name it.
@@ -83,25 +83,25 @@ sub run ($self) {
     my $project;
     $con->txn(sub { $project = $con->find_or_insert(project => {name => 'default'}) });
 
-    my $run_uuid = $h->queue_run(
-        runner_uuid => $runner_uuid,
+    my $run = $h->queue_run(
+        runner_uuid => $service->field('runner_uuid'),
         project_id  => $project->field('project_id'),
         files       => \@files,
     );
 
-    $h->set_runner_mode($runner_uuid, 'stop');
+    $service->update({mode => 'stop'});
 
     # Part 1: poll until the run stops. No timeout yet -- a runner that dies
     # before setting run.stopped would hang here; a deadline comes later.
-    my $run;
     while (1) {
-        $run = $con->handle('run')->by_id($run_uuid);
-        last if $run && defined $run->field('stopped');
+        $run->refresh;
+        last if defined $run->field('stopped');
         Time::HiRes::sleep(1);
     }
 
-    my $exit = 0;
-    my @jobs = $con->handle('job', where => {run_uuid => $run_uuid})->all;
+    my $run_uuid = $run->field('run_uuid');
+    my $exit     = 0;
+    my @jobs     = $con->handle('job', where => {run_uuid => $run_uuid})->all;
     for my $job (@jobs) {
         my $file   = $con->handle('test_file')->by_id($job->field('test_file_id'))->field('test_file');
         my $passed = $job->field('passed');

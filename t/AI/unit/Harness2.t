@@ -27,15 +27,15 @@ $con->handle('runner')->insert({ runner_uuid => $runner_uuid });
 my $account = $con->handle('account')->insert({ email => 'me@example.com' });
 my $project = $con->handle('project')->insert({ name => 'proj' });
 
-my $run_uuid = $h->queue_run(
+my $run = $h->queue_run(
     runner_uuid => $runner_uuid,
     account_id  => $account->field('account_id'),
     project_id  => $project->field('project_id'),
     files       => ['t/AI/scripts/pass.tx', 't/AI/scripts/fail.tx'],
 );
-ok($run_uuid, "queue_run returned a run uuid");
+ok($run, "queue_run returned a run row");
+my $run_uuid = $run->field('run_uuid');
 
-my $run = $con->handle('run')->by_id($run_uuid);
 is($run->field('runner_uuid'), $runner_uuid, "run linked to runner");
 is($run->field('run_uuid_string'), lc($run_uuid),
     "generated run_uuid_string holds the canonical lowercase form (indexed for human lookup)");

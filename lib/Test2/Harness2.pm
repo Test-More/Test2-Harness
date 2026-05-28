@@ -127,14 +127,16 @@ and caching it on first call. The connection triggers a lazy C<autofill>
 introspection of the live database; the DDL must already be applied
 (via C<initialize>) before this is called.
 
-=item $run_uuid = $h->queue_run(%params)
+=item $run = $h->queue_run(%params)
 
 Insert a run row and one job row per test file in a single transaction,
-returning the new run UUID. Required params: C<runner_uuid>, C<project_id>,
+returning the new run row. Required params: C<runner_uuid>, C<project_id>,
 C<files> (arrayref of test-file paths). Optional: C<account_id>, C<version_id>.
 Each C<(project_id, test_file)> pair is looked up in C<test_file> and inserted
 if absent, so repeated paths within a project reuse the same row
 (single-writer; not safe against a concurrent insert of the same pair).
+Call C<< $run->refresh >> to observe later updates (e.g. the runner stamping
+C<stopped> / C<passed>).
 
 =item $h->finalize_run($run_uuid)
 
@@ -142,20 +144,16 @@ Remove the on-disk event files for every artifact belonging to the run and
 null their C<local_path>. Call this after the collector has finished
 capturing the run's data.
 
-=item $runner_uuid = $h->start_runner(%params)
+=item $service = $h->start_runner(%params)
 
 Insert the runner and service rows (sharing one UUID), then fork a process
 that becomes a collector wrapping the runner service loop. The collector owns
 its own collector row and a runner-level events artifact; its forked child
-runs the L<Test2::Harness2::Runner> service. Returns the new runner UUID.
-Optional param: C<workdir> (passed through to the runner for per-test event
-files).
-
-=item $h->set_runner_mode($runner_uuid, $mode)
-
-Update the runner's service-row C<mode> (C<run> / C<stop> / C<kill>). The
-runner observes this each tick: C<stop> drains outstanding work then exits,
-C<kill> terminates running tests then exits.
+runs the L<Test2::Harness2::Runner> service. Returns the new service row;
+update its C<mode> column (C<run> / C<stop> / C<kill>) to control the running
+service. C<stop> drains outstanding work then exits, C<kill> terminates
+running tests then exits. Optional param: C<workdir> (passed through to the
+runner for per-test event files).
 
 =back
 
@@ -239,9 +237,10 @@ sub queue_run ($self, %params) {
     my $con        = $self->connection;
     my $run_uuid   = gen_uuid();
     my $project_id = $params{project_id};
+    my $run;
 
     $con->txn(sub {
-        $con->handle('run')->insert({
+        $run = $con->handle('run')->insert({
             run_uuid    => $run_uuid,
             runner_uuid => $params{runner_uuid},
             account_id  => $params{account_id},
@@ -262,7 +261,7 @@ sub queue_run ($self, %params) {
         }
     });
 
-    return $run_uuid;
+    return $run;
 }
 
 sub finalize_run ($self, $run_uuid) {
@@ -289,10 +288,11 @@ sub start_runner ($self, %params) {
 
     my $con         = $self->connection;
     my $runner_uuid = gen_uuid();
+    my $service;
 
     $con->txn(sub {
         $con->handle('runner')->insert({runner_uuid => $runner_uuid});
-        $con->handle('service')->insert({
+        $service = $con->handle('service')->insert({
             service_uuid => $runner_uuid,
             runner_uuid  => $runner_uuid,
             name         => 'runner',
@@ -351,14 +351,7 @@ sub start_runner ($self, %params) {
         POSIX::_exit($ok ? ($exit ? $exit : 0) : 255);
     }
 
-    return $runner_uuid;
-}
-
-sub set_runner_mode ($self, $runner_uuid, $mode) {
-    my $svc = $self->connection->handle('service')->by_id($runner_uuid)
-        or croak "no service row for runner $runner_uuid";
-    $svc->update({mode => $mode});
-    return;
+    return $service;
 }
 
 1;

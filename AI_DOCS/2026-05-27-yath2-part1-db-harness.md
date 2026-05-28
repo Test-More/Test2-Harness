@@ -15,6 +15,31 @@ Deferred (explicitly out of scope for Part 1): argument processing beyond a
 bare file list, inline test directives, renderers (we only print test name +
 pass/fail), non-SQLite database flavors, runner tagging / shared run queues.
 
+## Known limitations / follow-ups (as built)
+
+These surfaced during implementation review and are deliberately left for a
+later pass; the Part 1 happy path is unaffected:
+
+- **No parent-death watchdog on the runner-collector.** The `Collector`
+  supports `watch_parent_pid`, but `start_runner` does not yet pass the
+  command's pid into the runner-collector. On the normal path the command sets
+  the runner to `stop` immediately after queueing, so the runner drains its run
+  and self-terminates even if the command later dies. A command killed in the
+  brief window before `set_runner_mode(..., 'stop')` would leave a runner in
+  `run` mode. Follow-up: wire `watch_parent_pid => <command pid>` into the
+  runner-collector.
+- **`App::Yath2::Command::test` poll loop has no timeout.** If a runner died
+  before stamping `run.stopped`, the command would block forever. Follow-up:
+  add a bounded deadline (the runner smoke test already uses one).
+- **`collector.error_code`/`signal` are recorded as the collector process's own
+  status (always 0 on a clean pipeline), not the collected child's status — the
+  child's exit rides the `harness_process_exit` event. The column names invite
+  a future misread; revisit when collector-row consumers are written.
+- **Single-process re-runs against different db_paths** are not supported: the
+  QuickORM ORM is a process-global singleton and `connection` only attaches the
+  db once per process. Nothing in Part 1 does this (each `yath test` is its own
+  process with one db_path); revisit if in-process multi-run is ever needed.
+
 ## Foundational constraints (from ARCHITECTURE.md / AGENTS.md)
 
 - `Object::HashBase` for objects, `Role::Tiny` for roles, `parent` for

@@ -97,7 +97,7 @@ sub run ($self) {
     while (1) {
         $run = $con->handle('run')->by_id($run_uuid);
         last if $run && defined $run->field('stopped');
-        Time::HiRes::sleep(0.1);
+        Time::HiRes::sleep(1);
     }
 
     my $exit = 0;

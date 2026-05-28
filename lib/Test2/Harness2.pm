@@ -8,8 +8,7 @@ use DBI;
 use POSIX      ();
 use File::Spec ();
 use Scalar::Util qw/blessed/;
-use Time::HiRes qw/time/;
-use Test2::Harness2::Util qw/share_dir/;
+use Test2::Harness2::Util qw/now_dt share_dir/;
 use Test2::Util::UUID qw/gen_uuid/;
 
 use Test2::Harness2::Collector;
@@ -248,7 +247,7 @@ sub queue_run ($self, %params) {
             account_id  => $params{account_id},
             project_id  => $project_id,
             version_id  => $params{version_id},
-            started     => time,
+            started     => now_dt(),
         });
 
         for my $file (@$files) {
@@ -299,7 +298,7 @@ sub start_runner ($self, %params) {
             runner_uuid  => $runner_uuid,
             name         => 'runner',
             mode         => 'run',
-            started      => time,
+            started      => now_dt(),
         });
     });
 

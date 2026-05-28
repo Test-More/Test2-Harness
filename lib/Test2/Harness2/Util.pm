@@ -5,12 +5,14 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 use File::Spec ();
+use DateTime ();
 
 use Importer Importer => 'import';
 
 our @EXPORT_OK = qw{
     apply_encoding
     hub_truth
+    now_dt
     share_dir
 };
 
@@ -117,6 +119,22 @@ sub share_dir () {
     splice(@parts, -3);    # drop Harness2, Test2, lib
     return $SHARE_DIR = File::Spec->catdir(@parts, 'share');
 }
+
+=pod
+
+=over 4
+
+=item $dt = now_dt()
+
+Current UTC time as a L<DateTime> object at second precision. Pass directly
+to QuickORM DATETIME columns; the DateTime autotype + dialect formatter
+serialize it to SQLite's ISO-8601 form on insert.
+
+=back
+
+=cut
+
+sub now_dt () { DateTime->now(time_zone => 'UTC') }
 
 1;
 

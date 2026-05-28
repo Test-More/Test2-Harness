@@ -14,16 +14,22 @@
 -- maintained by SQLite (never touched by the app) and is the only uuid
 -- column humans are expected to look up directly, so it is indexed.
 --
--- hi-res timestamps are REAL. booleans are INTEGER (0/1, NULL = undecided).
+-- Timestamps are DATETIME (second precision) stored as ISO-8601 TEXT, e.g.
+-- "2026-05-28 03:07:11". DBIx::QuickORM's DateTime autotype activates on the
+-- DATETIME sql_type and formats DateTime objects via DateTime::Format::SQLite;
+-- the harness passes DateTime objects through Test2::Harness2::Util::now_dt.
+-- Sub-second resolution is only needed for individual test events, which are
+-- captured in events.jsonl.zst artifacts (lossless), not in these row stamps.
+-- Booleans are INTEGER (0/1, NULL = undecided).
 --
 -- Column ordering convention: SQLite's row format is variable-width and
 -- doesn't care, but PostgreSQL (and to a lesser extent MySQL) pad columns
 -- to alignment boundaries, so per-table columns are ordered by fixed-width
 -- descending and then variable-length last:
---   1. 8-byte fixed  (REAL timestamps; future BIGINT / TIMESTAMP)
+--   1. 8-byte fixed  (future BIGINT)
 --   2. UUIDs         (BLOB(16) here / BINARY(16) on MySQL / native uuid on PG)
 --   3. 4-byte fixed  (INTEGER PKs, FKs, counters, booleans-as-int)
---   4. Variable      (TEXT, BLOB data)
+--   4. Variable      (TEXT, DATETIME, BLOB data)
 -- Generated columns (run.run_uuid_string) go in the variable group.
 
 -- ---- common ----
@@ -61,14 +67,14 @@ CREATE TABLE runner (
 );
 
 CREATE TABLE run (
-    started         REAL,
-    stopped         REAL,
     run_uuid        BLOB PRIMARY KEY,
     runner_uuid     BLOB REFERENCES runner(runner_uuid),
     account_id      INTEGER REFERENCES account(account_id),
     project_id      INTEGER REFERENCES project(project_id),
     version_id      INTEGER REFERENCES version(version_id),
     passed          INTEGER,
+    started         DATETIME,
+    stopped         DATETIME,
     run_uuid_string TEXT GENERATED ALWAYS AS (
         lower(
             substr(hex(run_uuid),  1,  8) || '-' ||
@@ -82,13 +88,13 @@ CREATE TABLE run (
 CREATE INDEX run_uuid_string_idx ON run(run_uuid_string);
 
 CREATE TABLE service (
-    started      REAL,
-    stopped      REAL,
     service_uuid BLOB PRIMARY KEY,
     runner_uuid  BLOB NOT NULL REFERENCES runner(runner_uuid),
     run_uuid     BLOB REFERENCES run(run_uuid),
     mode         TEXT CHECK(mode IN ('run','restart','stop','kill')),
     name         TEXT NOT NULL,
+    started      DATETIME,
+    stopped      DATETIME,
     UNIQUE(name, runner_uuid, run_uuid)
 );
 
@@ -135,8 +141,6 @@ CREATE INDEX artifact_type_name_idx ON artifact(type, name);
 
 -- ---- local state ----
 CREATE TABLE collector (
-    started      REAL,
-    stopped      REAL,
     collector_id INTEGER PRIMARY KEY AUTOINCREMENT,
     service_uuid BLOB NOT NULL REFERENCES service(service_uuid),
     runner_uuid  BLOB REFERENCES runner(runner_uuid),
@@ -146,6 +150,8 @@ CREATE TABLE collector (
     exit_code    INTEGER,
     exit_signal  INTEGER,
     mode         TEXT CHECK(mode IN ('run','kill')),
+    started      DATETIME,
+    stopped      DATETIME,
     CHECK ((runner_uuid IS NULL) <> (try_uuid IS NULL))
 );
 

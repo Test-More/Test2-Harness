@@ -12,6 +12,7 @@ use Time::HiRes qw/sleep time/;
 use Atomic::Pipe;
 use Scope::Guard ();
 
+use Test2::Harness2::Util qw/now_dt/;
 use Test2::Harness2::Util::IPC qw/
     swap_io
     parse_exit
@@ -1231,13 +1232,13 @@ sub _finalize ($self) {
 
 sub _record_collector_child ($self, $child_pid) {
     my $row = $self->{+COLLECTOR_ROW} or return;
-    $row->update({pid => $$, child_pid => $child_pid, started => time, mode => 'run'});
+    $row->update({pid => $$, child_pid => $child_pid, started => now_dt(), mode => 'run'});
     return;
 }
 
 sub _record_collector_stopped ($self) {
     my $row = $self->{+COLLECTOR_ROW} or return;
-    $row->update({stopped => time, exit_code => 0, exit_signal => 0});
+    $row->update({stopped => now_dt(), exit_code => 0, exit_signal => 0});
     return;
 }
 

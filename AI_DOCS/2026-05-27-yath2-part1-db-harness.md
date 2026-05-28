@@ -197,6 +197,19 @@ The SQLite file is opened with WAL journaling, a `busy_timeout`, and
 `PRAGMA foreign_keys = ON` so the several concurrent writer processes
 (command, runner, collectors) coexist.
 
+### Timestamps
+
+Row-level timestamps (`run.started`/`stopped`, `service.started`/`stopped`,
+`collector.started`/`stopped`) use the `DATETIME` SQL type, stored as ISO-8601
+TEXT, e.g. `"2026-05-28 03:07:11"`. `DBIx::QuickORM`'s DateTime autotype
+activates on the `DATETIME` sql_type, wraps reads as a lazy `DateTime` mask,
+and formats DateTime objects via the dialect formatter (SQLite uses
+`DateTime::Format::SQLite`). The harness writes `DateTime` objects produced
+by `Test2::Harness2::Util::now_dt`. Second precision is sufficient at the row
+level; sub-second resolution lives only in per-event `harness_process_exit`
+stamps, which are captured in the `events.jsonl.zst` artifact (lossless), not
+in these row columns.
+
 ### UUID storage
 
 UUID columns are stored as `BLOB` (16 bytes) on flavors without a native uuid

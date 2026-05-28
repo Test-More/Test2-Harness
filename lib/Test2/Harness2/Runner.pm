@@ -5,11 +5,11 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 use POSIX qw/:sys_wait_h/;
-use Time::HiRes qw/time/;
 use File::Spec ();
 use File::Path qw/make_path/;
 use File::Temp qw/tempdir/;
 use Test2::Util::UUID qw/gen_uuid/;
+use Test2::Harness2::Util qw/now_dt/;
 use Cwd qw/abs_path/;
 
 use Test2::Harness2;
@@ -322,7 +322,7 @@ sub _settle_runs ($self) {
         my @jobs   = $con->handle('job', where => {run_uuid => $run_uuid})->all;
         my $passed = 1;
         $passed &&= $_->field('passed') ? 1 : 0 for @jobs;
-        $run->update({passed => $passed, stopped => time});
+        $run->update({passed => $passed, stopped => now_dt()});
     }
     return;
 }

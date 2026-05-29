@@ -1,4 +1,4 @@
-package Test2::Harness2::Collector::Auditor::Test;
+package Test2::Harness2::Collector::Auditor;
 use v5.38;
 
 our $VERSION = '2.000000';
@@ -44,7 +44,7 @@ with 'Test2::Harness2::Collector::Role::Processor';
 
 =head1 NAME
 
-Test2::Harness2::Collector::Auditor::Test - Collector processor that audits a
+Test2::Harness2::Collector::Auditor - Collector processor that audits a
 test job's event stream and decides pass/fail.
 
 =head1 DESCRIPTION
@@ -90,9 +90,9 @@ are attached as error facets to the process-exit event.
 
 =head1 SYNOPSIS
 
-    use Test2::Harness2::Collector::Auditor::Test;
+    use Test2::Harness2::Collector::Auditor;
 
-    my $auditor = Test2::Harness2::Collector::Auditor::Test->new;
+    my $auditor = Test2::Harness2::Collector::Auditor->new;
     my @out     = $auditor->process_event($event);   # 1+ events
     my $verdict = $auditor->final_state;             # after the run
 

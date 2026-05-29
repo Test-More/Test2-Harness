@@ -15,7 +15,7 @@ that on the `collector-redirect` branch and recorded the direction change in
 - `Collector::Role::Recorder` + base `Collector::Recorder` — the pipeline
   sink. Writes every event to one `jsonl.zst` file; `finalize` closes and
   touches an optional `touchfile`.
-- `Collector::Auditor::Test` — the processor for test jobs. Passes events
+- `Collector::Auditor` — the processor for test jobs. Passes events
   through, tracks the verdict, injects `harness_state_transition` events
   (starting / failing / diagnosing / completed) and a `harness_final_state`
   event on the process-exit event.

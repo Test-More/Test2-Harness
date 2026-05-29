@@ -5,7 +5,7 @@ use File::Temp qw/tempdir/;
 use POSIX ();
 
 use Test2::Harness2::Collector qw/collect spawn_collector/;
-use Test2::Harness2::Collector::Auditor::Test;
+use Test2::Harness2::Collector::Auditor;
 use Test2::Harness2::Collector::Recorder;
 use Test2::Harness2::Collector::Recorder::Test;
 use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
@@ -77,7 +77,7 @@ subtest full_test_pipeline_pass => sub {
 
     my $info = collect(
         is_test   => 1,
-        processor => 'Test2::Harness2::Collector::Auditor::Test',
+        processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file      => "$dir/events.jsonl.zst",
             transitions_file => "$dir/transitions.jsonl.zst",
@@ -117,7 +117,7 @@ subtest full_test_pipeline_fail => sub {
 
     my $info = collect(
         is_test   => 1,
-        processor => 'Test2::Harness2::Collector::Auditor::Test',
+        processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file      => "$dir/events.jsonl.zst",
             transitions_file => "$dir/transitions.jsonl.zst",
@@ -135,7 +135,7 @@ subtest spawn_collector_returns_pid_and_verdict_exit => sub {
 
     my $pid = spawn_collector(
         is_test   => 1,
-        processor => 'Test2::Harness2::Collector::Auditor::Test',
+        processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file      => "$dir/p-events.jsonl.zst",
             transitions_file => "$dir/p-transitions.jsonl.zst",
@@ -150,7 +150,7 @@ subtest spawn_collector_returns_pid_and_verdict_exit => sub {
 
     my $pid2 = spawn_collector(
         is_test   => 1,
-        processor => 'Test2::Harness2::Collector::Auditor::Test',
+        processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file      => "$dir/f-events.jsonl.zst",
             transitions_file => "$dir/f-transitions.jsonl.zst",
@@ -168,7 +168,7 @@ subtest collect_without_recorder => sub {
     # (including the auditor's verdict) is still returned.
     my $info = collect(
         is_test   => 1,
-        processor => 'Test2::Harness2::Collector::Auditor::Test',
+        processor => 'Test2::Harness2::Collector::Auditor',
         exec      => tap_child('print "1..1\nok 1\n"', 0),
     );
 

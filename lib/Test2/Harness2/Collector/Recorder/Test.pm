@@ -28,7 +28,7 @@ state transitions and the final verdict into their own files.
 =head1 DESCRIPTION
 
 A L<Test2::Harness2::Collector::Recorder> subclass for test jobs. The auditor
-(L<Test2::Harness2::Collector::Auditor::Test>) injects state-transition events
+(L<Test2::Harness2::Collector::Auditor>) injects state-transition events
 and a final-state event into the stream; this recorder routes them out of the
 main events file:
 

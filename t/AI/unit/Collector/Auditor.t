@@ -2,7 +2,7 @@ use Test2::V0;
 use v5.38;
 
 use Test2::Harness2::Event;
-use Test2::Harness2::Collector::Auditor::Test;
+use Test2::Harness2::Collector::Auditor;
 
 # The auditor is the collector pipeline's processor for test jobs. It passes
 # events through, validates the test (plan present, assertion numbers, plan vs
@@ -39,13 +39,13 @@ sub run_auditor ($auditor, @facets) {
 
 subtest does_processor_role => sub {
     ok(
-        Test2::Harness2::Collector::Auditor::Test->DOES('Test2::Harness2::Collector::Role::Processor'),
+        Test2::Harness2::Collector::Auditor->DOES('Test2::Harness2::Collector::Role::Processor'),
         "auditor consumes the Processor role",
     );
 };
 
 subtest starting_then_completed_and_final_order => sub {
-    my $a   = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a   = Test2::Harness2::Collector::Auditor->new;
     my @out = run_auditor($a, plan_f(1), assert_f(1, number => 1), exit_f(0));
 
     my @states = transitions(@out);
@@ -61,7 +61,7 @@ subtest starting_then_completed_and_final_order => sub {
 };
 
 subtest clean_pass => sub {
-    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a = Test2::Harness2::Collector::Auditor->new;
     my @out = run_auditor($a, plan_f(2), assert_f(1, number => 1), assert_f(1, number => 2), exit_f(0));
 
     ok($a->pass, "auditor passes a well-formed test");
@@ -73,21 +73,21 @@ subtest clean_pass => sub {
 };
 
 subtest missing_plan_fails => sub {
-    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a = Test2::Harness2::Collector::Auditor->new;
     run_auditor($a, assert_f(1, number => 1), exit_f(0));
 
     ok(!$a->pass, "a test with no plan fails");
 };
 
 subtest plan_count_mismatch_fails => sub {
-    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a = Test2::Harness2::Collector::Auditor->new;
     run_auditor($a, plan_f(3), assert_f(1, number => 1), exit_f(0));
 
     ok(!$a->pass, "planned 3 but saw 1 -> fail");
 };
 
 subtest failing_assert => sub {
-    my $a   = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a   = Test2::Harness2::Collector::Auditor->new;
     my @out = run_auditor($a, plan_f(1), assert_f(0, number => 1), exit_f(0));
 
     ok(!$a->pass, "a failing assertion fails the test");
@@ -95,21 +95,21 @@ subtest failing_assert => sub {
 };
 
 subtest amnesty_is_not_failure => sub {
-    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a = Test2::Harness2::Collector::Auditor->new;
     run_auditor($a, plan_f(1), assert_f(0, number => 1, amnesty => [{tag => 'TODO', details => 'later'}]), exit_f(0));
 
     ok($a->pass, "an amnestied (TODO) failure does not fail the test");
 };
 
 subtest nonzero_exit_fails => sub {
-    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a = Test2::Harness2::Collector::Auditor->new;
     run_auditor($a, plan_f(1), assert_f(1, number => 1), exit_f(256));
 
     ok(!$a->pass, "a non-zero child exit fails the test");
 };
 
 subtest bailout_fails_and_records_halt => sub {
-    my $a   = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a   = Test2::Harness2::Collector::Auditor->new;
     my @out = run_auditor($a, plan_f(1), assert_f(1, number => 1), {control => {halt => 1, details => 'bail'}}, exit_f(0));
 
     ok(!$a->pass, "a bail-out fails the test");
@@ -118,21 +118,21 @@ subtest bailout_fails_and_records_halt => sub {
 };
 
 subtest duplicate_assertion_number_fails => sub {
-    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a = Test2::Harness2::Collector::Auditor->new;
     run_auditor($a, plan_f(2), assert_f(1, number => 1), assert_f(1, number => 1), exit_f(0));
 
     ok(!$a->pass, "a duplicated assertion number fails the test");
 };
 
 subtest missing_assertion_number_fails => sub {
-    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a = Test2::Harness2::Collector::Auditor->new;
     run_auditor($a, plan_f(2), assert_f(1, number => 1), assert_f(1, number => 3), exit_f(0));
 
     ok(!$a->pass, "a skipped assertion number fails the test");
 };
 
 subtest diagnosing_transition => sub {
-    my $a   = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a   = Test2::Harness2::Collector::Auditor->new;
     my @out = run_auditor($a, plan_f(1), assert_f(1, number => 1), {info => [{tag => 'DIAG', debug => 1, details => 'note'}]}, exit_f(0));
 
     ok((grep { $_ eq 'diagnosing' } transitions(@out)), "a diagnosing transition was emitted");
@@ -140,7 +140,7 @@ subtest diagnosing_transition => sub {
 };
 
 subtest buffered_subtest_pass => sub {
-    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a = Test2::Harness2::Collector::Auditor->new;
 
     my $subtest = {
         assert => {pass => 1, details => 'my subtest', number => 1},
@@ -167,7 +167,7 @@ subtest buffered_subtest_pass => sub {
 };
 
 subtest buffered_subtest_fail => sub {
-    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a = Test2::Harness2::Collector::Auditor->new;
 
     my $subtest = {
         assert => {pass => 0, details => 'bad subtest', number => 1},
@@ -191,7 +191,7 @@ subtest buffered_subtest_fail => sub {
 };
 
 subtest timing_in_final_state => sub {
-    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+    my $a = Test2::Harness2::Collector::Auditor->new;
 
     my @out = map { $a->process_event(ev($_)) } (
         {assert => {pass => 1, number => 1}, trace => {stamp => 10}},

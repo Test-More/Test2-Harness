@@ -88,11 +88,11 @@ reached through the methods below.
 =cut
 
 sub init ($self) {
-    $self->{+ASSERTION_COUNT} = 0;
-    $self->{+FAILURES}        = 0;
-    $self->{+ERRORS}          = 0;
-    $self->{+PLANS}           = 0;
-    $self->{+STARTED}         = 0;
+    $self->{+ASSERTION_COUNT}  = 0;
+    $self->{+FAILURES}         = 0;
+    $self->{+ERRORS}           = 0;
+    $self->{+PLANS}            = 0;
+    $self->{+STARTED}          = 0;
     $self->{+STATE_FAILING}    = 0;
     $self->{+STATE_DIAGNOSING} = 0;
 
@@ -270,12 +270,12 @@ sub _account ($self, $f) {
 
     if (!$self->{+STATE_FAILING} && ($self->{+FAILURES} || $self->{+ERRORS} || defined $self->{+HALT})) {
         $self->{+STATE_FAILING} = 1;
-        $newly{failing}         = 1;
+        $newly{failing} = 1;
     }
 
     if (!$self->{+STATE_DIAGNOSING} && $self->_event_is_diagnostic($f)) {
         $self->{+STATE_DIAGNOSING} = 1;
-        $newly{diagnosing}         = 1;
+        $newly{diagnosing} = 1;
     }
 
     return \%newly;

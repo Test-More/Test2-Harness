@@ -93,29 +93,34 @@ a parser / processor pipeline into a zstd events file.
 
 =head1 DESCRIPTION
 
-Entry point for the collector subsystem. C<start> forks a single child,
-wires the child's STDOUT and STDERR to mixed-mode L<Atomic::Pipe>s, and in
-the collector parent drives the event pipeline:
+The collector subsystem. It forks a single child, wires the child's STDOUT
+and STDERR to mixed-mode L<Atomic::Pipe>s, and in the collector parent drives
+the event pipeline:
 
-    bytes  ->  parser  ->  optional processor  ->  events file
+    bytes  ->  parser  ->  optional processor  ->  recorder
 
 The parser turns raw stream lines and pre-decoded JSON message bursts into
 L<Test2::Harness2::Event> objects. The optional processor sees one event at a
 time and may drop it, pass it through, or expand it into several events. The
-resulting events are written to the C<events_file> as a multi-frame zstd
-file, one self-contained frame per event.
+resulting events are handed to the recorder, which owns the on-disk format
+(the base recorder writes a multi-frame C<jsonl.zst> events file, one
+self-contained frame per event). The collected process's own exit becomes a
+synthetic C<harness_process_exit> event dispatched through the pipeline after
+all output has drained, so the processor and recorder see it like any other
+event.
 
 Each message burst arrives with the on-wire zstd frame cached on the event's
-C<compressed_form> slot; when present, that frame is written verbatim instead
-of being re-encoded. A processor that modifies an event must delete its
+C<compressed_form> slot; when present, the recorder writes that frame verbatim
+instead of re-encoding. A processor that modifies an event must delete its
 C<compressed_form> so the changed event is re-encoded (see
 L<Test2::Harness2::Collector::Role::Processor>).
 
-The collector returns C<0> when the pipeline finished cleanly, regardless of
-the collected process's own exit status. The collected process's exit shows
-up as a C<harness_process_exit> event in the stream, not in the collector's
-return value. The collector returns C<255> only when it itself failed
-internally before the pipeline could finish.
+The polished entry points are the exported functions L</collect> (run in the
+current process, returns an info hashref) and L</spawn_collector> (fork a
+collector process, return its pid). The L</start> / L</run_collector> methods
+are the underlying engine: they return C<0> when the pipeline finished
+cleanly and C<255> only on an internal collector failure, regardless of the
+collected process's own exit status.
 
 =head1 SYNOPSIS
 
@@ -282,7 +287,7 @@ sub spawn_collector (%args) {
     my $class = __PACKAGE__;
     my %norm  = $class->_normalize_args(%args);
 
-    my $pid = fork // croak "Could not fork collector process: $!";
+    my $pid = fork // die "Could not fork collector process: $!";
     return $pid if $pid;
 
     $class->_run_spawned(\%norm);    # never returns
@@ -293,6 +298,8 @@ sub spawn_collector (%args) {
 =cut
 
 =over 4
+
+=item start
 
 =item $exit = Test2::Harness2::Collector->start(%args)
 
@@ -338,6 +345,8 @@ sub init ($self) {
 }
 
 =over 4
+
+=item run_collector
 
 =item $exit = $self->run_collector
 
@@ -444,7 +453,7 @@ sub _coerce_parser ($self, $thing) {
     return $self->_coerce_class_arg($thing, 'parser') if defined $thing;
 
     my $class =
-          $self->{+IS_TEST}
+        $self->{+IS_TEST}
         ? 'Test2::Harness2::Collector::Parser::TAPParser'
         : 'Test2::Harness2::Collector::Parser::IOParser';
     $self->_require_class($class);
@@ -1303,9 +1312,9 @@ sub _exit_facet ($self) {
         dmp   => $px->{dmp} ? 1 : 0,
         all   => $px->{all},
         stamp => $self->{+REAP_STAMP} // time,
-        ($self->{+ORPHANED}      ? (orphaned      => 1)                  : ()),
+        ($self->{+ORPHANED}      ? (orphaned      => 1)                   : ()),
         ($self->{+TIMED_OUT}     ? (timed_out     => $self->{+TIMED_OUT}) : ()),
-        ($self->{+PARENT_EXITED} ? (parent_exited => 1)                  : ()),
+        ($self->{+PARENT_EXITED} ? (parent_exited => 1)                   : ()),
     );
 
     if (my $end = $self->{+END_TIMES}) {

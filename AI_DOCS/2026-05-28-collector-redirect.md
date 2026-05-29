@@ -149,3 +149,8 @@ Dropped by decision: peek/live-preview mode (covered by buffering +
 ## Follow-ups not done
 
 - `scripts/t2h2_collector` is not yet wired into `dist.ini` packaging.
+- Selective proxying: `Collector::Monitor` proxies forward every message. A
+  future requirement (once global vs run services are distinguished and tests
+  are associated with a run) is to forward only global-service state/updates
+  to a `yath run` proxy, so a run does not receive other runs' test/service
+  updates. Captured in ARCHITECTURE.md §6.1.

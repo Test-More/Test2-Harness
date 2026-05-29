@@ -256,6 +256,9 @@ sub add_proxy ($self, $name, $pipe) {
     croak "a proxy name is required" unless defined $name && length $name;
     croak "a proxy pipe is required" unless $pipe;
 
+    # A proxy currently receives every message. A future filter (forward only
+    # global-service state to a `yath run` proxy) is described in
+    # ARCHITECTURE.md §6.1 "Selective proxying of global vs run services".
     apply_atomic_pipe_compression($pipe);
     $self->{+PROXIES}{$name} = $pipe;
 

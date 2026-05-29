@@ -325,4 +325,23 @@ forcing the decision, and note who is expected to answer it. Resolved
 entries move into the relevant numbered section above and are removed
 from this list.
 
-*(Empty.)*
+### 6.1 Selective proxying of global vs run services (future)
+
+`Collector::Monitor` proxying (§4.1) currently forwards B<every> message to
+every proxy. A future requirement, once the harness distinguishes B<global>
+services from B<run> services and associates every test with a run, is to
+forward only the messages a given proxy cares about — specifically, only the
+B<global> services' state and updates.
+
+The driving case is `yath start` + `yath run`: the global services start
+first under a long-lived process, and a `yath run` arrives later with its own
+tests and run-scoped services. That `run` needs the current state and ongoing
+updates of the global services (so it can use them), but must not receive
+updates for tests or services belonging to other runs. So `add_proxy` will
+need a filter (e.g. by collector category / run id), and the in-flight replay
+will need to honor the same filter.
+
+Not started — captured so the proxy interface is designed with room for it.
+The category groundwork exists (the monitor already tags collectors as
+`test` vs `service`); what is missing is the global/run-service distinction
+and the per-test run association.

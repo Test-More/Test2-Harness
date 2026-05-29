@@ -15,23 +15,27 @@ that on the `collector-redirect` branch and recorded the direction change in
 - `Collector::Role::Recorder` + base `Collector::Recorder` — the pipeline
   sink. Writes every event to one `jsonl.zst` file; may hold notification
   `pipes` (live `Atomic::Pipe` objects or `{ fifo => $path }` specs it opens
-  itself); `finalize` closes its files and sends a finalization message to
-  the pipes.
+  itself); stamps the collector's `uuid` (set via `set_collector_info`) on
+  every pipe message; `finalize` closes its files and sends a finalization
+  message to the pipes.
 - `Collector::Auditor` — the processor for test jobs. Passes events
   through, tracks the verdict, injects `harness_state_transition` events
   (starting / failing / diagnosing / completed) and a `harness_final_state`
   event on the process-exit event.
-- `Collector::Recorder::Test` — writes the final-state event to a state file
-  and sends it to the pipes; sends each transition to the pipes only (no
-  transitions file); leaves everything else in the events file.
+- `Collector::Recorder::Test` — sends each transition and the final state to
+  the pipes only (the start message adds `name` / events file / `try`, the
+  final message adds `name` / `try`); leaves everything else in the events
+  file. There is no state or transitions file — the events file is the only
+  output file.
 - `Test2::Harness2::Collector` gained the exported `collect` /
   `spawn_collector` functions and a recorder sink in place of the hard-coded
-  events-file writer.
-- `scripts/t2h2_collector` — runs one test file: creates an `Atomic::Pipe`,
-  `spawn_collector`s the collector (middle process) with the recorder holding
-  the write end, loops over the notification messages printing a basic line
-  per start / transition / final result, and exits 0/1 by the collector's
-  verdict.
+  events-file writer. It has a mandatory `name` (the test file or service
+  name) and generates a `uuid` in init, which it pushes to the recorder.
+- `scripts/t2h2_collector` — runs one test file (args: test file + events
+  file): creates an `Atomic::Pipe`, `spawn_collector`s the collector (middle
+  process) with the recorder holding the write end, loops over the
+  notification messages printing a basic line per start / transition / final
+  result, and exits 0/1 by the collector's verdict.
 
 ## Decisions and alternatives
 

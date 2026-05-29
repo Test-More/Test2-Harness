@@ -49,7 +49,7 @@ subtest records_events => sub {
     $rec->finalize;
 
     my $events = read_events($file);
-    is(scalar(@$events), 2, "wrote both events");
+    is(scalar(@$events),                           2,     "wrote both events");
     is($events->[0]{facet_data}{info}[0]{details}, 'one', "first event payload preserved");
     is($events->[1]{facet_data}{info}[0]{details}, 'two', "second event payload preserved");
 };
@@ -65,7 +65,7 @@ subtest compressed_form_fast_path => sub {
     $rec->finalize;
 
     my $events = read_events($file);
-    is(scalar(@$events), 1, "wrote the verbatim event");
+    is(scalar(@$events),                           1,          "wrote the verbatim event");
     is($events->[0]{facet_data}{info}[0]{details}, 'verbatim', "verbatim frame decodes back");
 };
 
@@ -76,6 +76,7 @@ subtest finalize_notifies_live_pipes => sub {
         events_file => "$tmp/notify-events.jsonl.zst",
         pipes       => [$w],
     );
+    $rec->set_collector_info(uuid => 'UUID-1', name => 'some/test.t');
     $rec->record_event(Test2::Harness2::Event->new(facet_data => {info => [{tag => 'D'}]}));
     $rec->finalize;
 
@@ -84,6 +85,7 @@ subtest finalize_notifies_live_pipes => sub {
     ok(defined $msg, "a message arrived on the pipe");
     my $decoded = decode_json($msg);
     ok($decoded->{facet_data}{harness_collector_finalized}, "finalization message sent on finalize");
+    is($decoded->{facet_data}{harness_collector}{uuid}, 'UUID-1', "message carries the collector uuid");
 };
 
 subtest finalize_notifies_fifo_pipe => sub {

@@ -9,11 +9,14 @@ use Time::HiRes qw/time/;
 
 use Test2::Harness2::Util::Zstd qw/open_zstd_writer/;
 use Test2::Harness2::Util::IPC qw/atomic_pipe_compression_args apply_atomic_pipe_compression/;
-use Test2::Harness2::Event;
+use Test2::Harness2::Util::JSON qw/encode_json/;
 
 use Object::HashBase qw{
     <events_file
     <pipes
+    -collector_uuid
+    -collector_name
+    -collector_try
     -events_writer
     -finalized
 };
@@ -123,9 +126,23 @@ otherwise the event is JSON-encoded and compressed into a fresh frame.
 Close the events file and send a finalization message to every notification
 pipe. Safe to call more than once -- subsequent calls are no-ops.
 
+=item $rec->set_collector_info(uuid => $uuid, name => $name, try => $try)
+
+Record the owning collector's identity. The collector calls this so the
+recorder can stamp the collector C<uuid> on every notification message and
+include the C<name>, events file, and (for test collectors) the C<try> number
+in the start message.
+
 =back
 
 =cut
+
+sub set_collector_info ($self, %info) {
+    $self->{+COLLECTOR_UUID} = $info{uuid} if exists $info{uuid};
+    $self->{+COLLECTOR_NAME} = $info{name} if exists $info{name};
+    $self->{+COLLECTOR_TRY}  = $info{try}  if exists $info{try};
+    return;
+}
 
 sub record_event ($self, $event) {
     my $writer = $self->_events_writer;
@@ -147,7 +164,7 @@ sub finalize ($self) {
         warn "events file close failed: $@\n" unless eval { $writer->close; 1 };
     }
 
-    $self->_notify_pipes($self->_finalization_message);
+    $self->_notify_pipes({harness_collector_finalized => {stamp => time}});
 
     return;
 }
@@ -168,16 +185,30 @@ that records nothing never creates the file.
 Turn a C<pipes> entry into a live L<Atomic::Pipe>: a blessed object is used
 as-is; a C<< { fifo => $path } >> spec is opened as a write-FIFO.
 
-=item $self->_notify_pipes($message)
+=item $self->_notify_pipes($facet_data)
 
-Write C<$message> as one atomic message to every notification pipe. A no-op
-when no pipes were supplied. Shared with subclasses that notify on other
-occasions.
+=item $self->_notify_pipes($facet_data, %collector_extra)
 
-=item $json = $self->_finalization_message
+Send one atomic message to every notification pipe: the JSON of an event
+whose facets are C<$facet_data> plus a C<harness_collector> facet carrying the
+collector C<uuid> and any C<%collector_extra> (the start message adds C<name>,
+C<events_file>, and C<try> via L</_start_extra>). A no-op when no pipes were
+supplied. Shared with subclasses that notify on other occasions.
 
-The JSON message body sent to the pipes when the collector finishes: an event
-carrying a C<harness_collector_finalized> facet.
+=item _collector_extra
+
+=item %extra = $self->_collector_extra
+
+The C<harness_collector> fields that identify the collected thing: its
+C<name>, and -- for test collectors -- the C<try> number. Included in the
+start and final-state messages.
+
+=item _start_extra
+
+=item %extra = $self->_start_extra
+
+L</_collector_extra> plus the C<events_file> path; the start message adds the
+events-file location on top of the identity fields.
 
 =back
 
@@ -198,8 +229,15 @@ sub _coerce_pipe ($self, $thing) {
     croak "recorder pipe must be an Atomic::Pipe object or a { fifo => \$path } spec";
 }
 
-sub _notify_pipes ($self, $message) {
+sub _notify_pipes ($self, $facet_data, %collector_extra) {
     my $pipes = $self->{+PIPES} or return;
+
+    my $message = encode_json({
+        facet_data => {
+            %$facet_data,
+            harness_collector => {uuid => $self->{+COLLECTOR_UUID}, %collector_extra},
+        },
+    });
 
     for my $pipe (@$pipes) {
         warn "recorder pipe notify failed: $@\n"
@@ -209,10 +247,15 @@ sub _notify_pipes ($self, $message) {
     return;
 }
 
-sub _finalization_message ($self) {
-    return Test2::Harness2::Event->new(
-        facet_data => {harness_collector_finalized => {stamp => time}},
-    )->as_json;
+sub _collector_extra ($self) {
+    return (
+        name => $self->{+COLLECTOR_NAME},
+        (defined $self->{+COLLECTOR_TRY} ? (try => $self->{+COLLECTOR_TRY}) : ()),
+    );
+}
+
+sub _start_extra ($self) {
+    return ($self->_collector_extra, events_file => $self->{+EVENTS_FILE});
 }
 
 1;

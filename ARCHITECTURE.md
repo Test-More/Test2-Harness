@@ -244,6 +244,14 @@ with a `control` facet carrying an `encoding`.
   Windows). A listener opens the read end and any number of collectors write
   to it.
 
+  Every pipe message carries a `harness_collector` facet with the collector's
+  `uuid`, so a listener can tell which collector sent it. The start message
+  (the `starting` transition) additionally carries the collected thing's
+  `name`, the `events_file` path, and — for test collectors — the `try`
+  number (always `1` until retry exists); the final-state message carries the
+  `name` and `try` too. The collector pushes its identity to the recorder via
+  `set_collector_info` during construction.
+
 **Functional interface.** `Test2::Harness2::Collector` exports `collect`
 (run in the current process; returns `{exit => {...}, final_state => ...}`
 where `exit` is the hash `parse_exit` returns — `sig` / `err` / `dmp` /
@@ -264,13 +272,15 @@ sub-auditor, tracks per-phase timing (startup / events / cleanup / total via
 events (starting / failing / diagnosing / completed) plus a
 `harness_final_state` event (with the top-level subtest summary and phase
 times) on exit. The test recorder
-(`Collector::Recorder::Test`) keeps those out of the events file: the final
-state goes to a state file and to the pipes, and transitions go only to the
-pipes. `scripts/t2h2_collector` wires this together for a single test file:
-it creates an `Atomic::Pipe`, `spawn_collector`s the collector (the middle
-process) with the recorder holding the write end, loops over the notification
-messages printing a basic line per start / transition / final result, and
-exits 0 (pass) / 1 (fail) from the collector's verdict.
+(`Collector::Recorder::Test`) keeps the transitions and the final state out of
+the events file and sends them to the pipes only (the final-state message also
+carries the collector `name` and `try`); there is no separate state file. The
+only output file is the events file. `scripts/t2h2_collector` wires this
+together for a single test file: it creates an `Atomic::Pipe`,
+`spawn_collector`s the collector (the middle process) with the recorder
+holding the write end, loops over the notification messages printing a basic
+line per start / transition / final result, and exits 0 (pass) / 1 (fail) from
+the collector's verdict. Its second argument is the events-file path.
 
 **Failure modes.** The engine returns `0` on a clean pipeline run and `255`
 on an internal collector failure, independent of the child's exit. The

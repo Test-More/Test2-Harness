@@ -32,8 +32,8 @@ subtest collect_returns_info => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     my $info = collect(
-        recorder => Test2::Harness2::Collector::Recorder->new(events_file => "$dir/events.jsonl.zst"),
-        exec     => [$^X, '-e', 'print "hi\n"; exit 3'],
+        name => "collector-test", recorder => Test2::Harness2::Collector::Recorder->new(events_file => "$dir/events.jsonl.zst"),
+        exec => [$^X, '-e', 'print "hi\n"; exit 3'],
     );
 
     # info exit mirrors parse_exit's output (sig / err / dmp / all).
@@ -49,9 +49,9 @@ subtest collect_applies_env => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     collect(
-        recorder => Test2::Harness2::Collector::Recorder->new(events_file => "$dir/events.jsonl.zst"),
-        env      => {T2H2_COLLECT_TEST => 'env-made-it'},
-        exec     => [$^X, '-e', 'print "VAR=$ENV{T2H2_COLLECT_TEST}\n"'],
+        name => "collector-test", recorder => Test2::Harness2::Collector::Recorder->new(events_file => "$dir/events.jsonl.zst"),
+        env  => {T2H2_COLLECT_TEST => 'env-made-it'},
+        exec => [$^X, '-e', 'print "VAR=$ENV{T2H2_COLLECT_TEST}\n"'],
     );
 
     my $events = read_jsonl_zst("$dir/events.jsonl.zst");
@@ -65,8 +65,8 @@ subtest collect_with_recorder_instance => sub {
     my $recorder = Test2::Harness2::Collector::Recorder->new(events_file => "$dir/explicit.jsonl.zst");
 
     my $info = collect(
-        recorder => $recorder,
-        exec     => [$^X, '-e', 'print "via recorder\n"'],
+        name => "collector-test", recorder => $recorder,
+        exec => [$^X, '-e', 'print "via recorder\n"'],
     );
 
     is($info->{exit}{err}, 0, "clean exit");
@@ -80,11 +80,10 @@ subtest full_test_pipeline_pass => sub {
     my ($r, $w) = Atomic::Pipe->pair(compression => 'zstd', keep_compressed => 1);
 
     my $info = collect(
-        is_test   => 1,
+        name      => "collector-test", is_test => 1,
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file => "$dir/events.jsonl.zst",
-            state_file  => "$dir/state.jsonl.zst",
             pipes       => [$w],
         ),
         exec => tap_child('print "1..1\nok 1 - good\n"', 0),
@@ -93,12 +92,8 @@ subtest full_test_pipeline_pass => sub {
     ok($info->{final_state}, "auditor final_state attached to info");
     is($info->{final_state}{pass}, 1, "verdict is pass");
 
-    ok($info->{final_state}{times}, "phase timings present for a real test");
+    ok($info->{final_state}{times},             "phase timings present for a real test");
     ok($info->{final_state}{times}{total} >= 0, "total phase duration is non-negative");
-
-    my $state = read_jsonl_zst("$dir/state.jsonl.zst");
-    is(scalar(@$state), 1, "one final-state row in the state file");
-    is($state->[0]{facet_data}{harness_final_state}{pass}, 1, "state file records pass");
 
     # Transitions, the final state, and the finalization arrive on the pipe.
     $r->blocking(0);    # read_message returns undef once drained
@@ -108,10 +103,21 @@ subtest full_test_pipeline_pass => sub {
     }
     my %seen = map { $_->{facet_data}{harness_state_transition}{state} => 1 }
         grep { $_->{facet_data}{harness_state_transition} } @msgs;
-    ok($seen{starting},  "starting transition delivered on the pipe");
-    ok($seen{completed}, "completed transition delivered on the pipe");
-    ok((grep { $_->{facet_data}{harness_final_state} }       @msgs), "final state delivered on the pipe");
+    ok($seen{starting},                                                "starting transition delivered on the pipe");
+    ok($seen{completed},                                               "completed transition delivered on the pipe");
+    ok((grep { $_->{facet_data}{harness_final_state} } @msgs),         "final state delivered on the pipe");
     ok((grep { $_->{facet_data}{harness_collector_finalized} } @msgs), "finalization delivered on the pipe");
+
+    # The collector's identity rides on the messages; the start one names it.
+    my ($start) = grep { ($_->{facet_data}{harness_state_transition}{state} // '') eq 'starting' } @msgs;
+    ok($start->{facet_data}{harness_collector}{uuid}, "start message carries the collector uuid");
+    is($start->{facet_data}{harness_collector}{name}, 'collector-test', "start message names the collected thing");
+    is($start->{facet_data}{harness_collector}{try},  1,                "test collector start carries try => 1");
+
+    # The final-result message also carries the name and try.
+    my ($final) = grep { $_->{facet_data}{harness_final_state} } @msgs;
+    is($final->{facet_data}{harness_collector}{name}, 'collector-test', "final message names the collected thing");
+    is($final->{facet_data}{harness_collector}{try},  1,                "final message carries try => 1");
 
     # Transition / final-state events are routed OUT of the events file.
     my $events = read_jsonl_zst("$dir/events.jsonl.zst");
@@ -125,11 +131,10 @@ subtest full_test_pipeline_fail => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     my $info = collect(
-        is_test   => 1,
+        name      => "collector-test", is_test => 1,
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file => "$dir/events.jsonl.zst",
-            state_file  => "$dir/state.jsonl.zst",
         ),
         exec => tap_child('print "1..1\nnot ok 1 - bad\n"', 1),
     );
@@ -142,11 +147,10 @@ subtest spawn_collector_returns_pid_and_verdict_exit => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     my $pid = spawn_collector(
-        is_test   => 1,
+        name      => "collector-test", is_test => 1,
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
-            events_file      => "$dir/p-events.jsonl.zst",
-            state_file       => "$dir/p-state.jsonl.zst",
+            events_file => "$dir/p-events.jsonl.zst",
         ),
         exec => tap_child('print "1..1\nok 1\n"', 0),
     );
@@ -156,11 +160,10 @@ subtest spawn_collector_returns_pid_and_verdict_exit => sub {
     is($? >> 8, 0, "passing test: collector process exits 0");
 
     my $pid2 = spawn_collector(
-        is_test   => 1,
+        name      => "collector-test", is_test => 1,
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
-            events_file      => "$dir/f-events.jsonl.zst",
-            state_file       => "$dir/f-state.jsonl.zst",
+            events_file => "$dir/f-events.jsonl.zst",
         ),
         exec => tap_child('print "1..1\nnot ok 1\n"', 1),
     );
@@ -173,12 +176,12 @@ subtest collect_without_recorder => sub {
     # No recorder: nothing is written, but the in-process info summary
     # (including the auditor's verdict) is still returned.
     my $info = collect(
-        is_test   => 1,
+        name      => "collector-test", is_test => 1,
         processor => 'Test2::Harness2::Collector::Auditor',
         exec      => tap_child('print "1..1\nok 1\n"', 0),
     );
 
-    is($info->{exit}{err}, 0, "clean exit with no recorder");
+    is($info->{exit}{err},         0, "clean exit with no recorder");
     is($info->{final_state}{pass}, 1, "verdict still available with no recorder");
 };
 

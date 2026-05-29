@@ -40,15 +40,14 @@ sub drain ($pipe) {
     return \@out;
 }
 
-sub event_ev ($tag)   { return Test2::Harness2::Event->new(facet_data => {info => [{tag => $tag}]}) }
-sub trans_ev ($state) { return Test2::Harness2::Event->new(facet_data => {harness_state_transition => {state => $state, stamp => 1}}) }
-sub final_ev ($pass)  { return Test2::Harness2::Event->new(facet_data => {harness_final_state => {pass => $pass, fail_count => $pass ? 0 : 1}}) }
+sub event_ev ($tag)   { return Test2::Harness2::Event->new(facet_data => {info                     => [{tag => $tag}]}) }
+sub trans_ev ($state) { return Test2::Harness2::Event->new(facet_data => {harness_state_transition => {state => $state, stamp      => 1}}) }
+sub final_ev ($pass)  { return Test2::Harness2::Event->new(facet_data => {harness_final_state      => {pass  => $pass,  fail_count => $pass ? 0 : 1}}) }
 
 sub new_recorder (%extra) {
     my $id = $n++;
     return Test2::Harness2::Collector::Recorder::Test->new(
         events_file => "$tmp/$id-events.jsonl.zst",
-        state_file  => "$tmp/$id-state.jsonl.zst",
         %extra,
     );
 }
@@ -60,16 +59,10 @@ subtest does_role => sub {
     );
 };
 
-subtest requires_state_file => sub {
-    my $err = dies {
-        Test2::Harness2::Collector::Recorder::Test->new(events_file => "$tmp/x.jsonl.zst");
-    };
-    like($err, qr/state_file/, "state_file required");
-};
-
 subtest routes_events_by_facet => sub {
     my ($r, $w) = Atomic::Pipe->pair(compression => 'zstd', keep_compressed => 1);
     my $rec = new_recorder(pipes => [$w]);
+    $rec->set_collector_info(uuid => 'UUID-9', name => 'some/test.t', try => 1);
 
     $rec->record_event(event_ev('A'));
     $rec->record_event(trans_ev('starting'));
@@ -79,22 +72,40 @@ subtest routes_events_by_facet => sub {
     $rec->finalize;
 
     my $events = read_jsonl_zst($rec->events_file);
-    my $state  = read_jsonl_zst($rec->state_file);
 
-    is(scalar(@$events), 2, "only the two plain events landed in the events file");
+    is(scalar(@$events),                                  2,          "only the two plain events landed in the events file");
     is([map { $_->{facet_data}{info}[0]{tag} } @$events], ['A', 'B'], "plain events kept; transitions/state routed away");
 
-    is(scalar(@$state), 1, "one final-state row in the state file");
-    is($state->[0]{facet_data}{harness_final_state}{pass}, 0, "final state recorded to file");
-
     # The pipe sees the transitions, the final state, and the finalization.
-    my $msgs = drain($r);
+    my $msgs   = drain($r);
     my @states = map { $_->{facet_data}{harness_state_transition}{state} }
         grep { $_->{facet_data}{harness_state_transition} } @$msgs;
     is(\@states, ['starting', 'failing'], "transitions delivered on the pipe in order");
 
-    ok((grep { $_->{facet_data}{harness_final_state} } @$msgs), "final state delivered on the pipe");
+    my ($final) = grep { $_->{facet_data}{harness_final_state} } @$msgs;
+    ok($final, "final state delivered on the pipe");
+    is($final->{facet_data}{harness_final_state}{pass}, 0, "final state carries the verdict");
     ok((grep { $_->{facet_data}{harness_collector_finalized} } @$msgs), "finalization delivered on the pipe");
+
+    # Every message carries the collector uuid.
+    ok((!grep { ($_->{facet_data}{harness_collector}{uuid} // '') ne 'UUID-9' } @$msgs), "every message carries the collector uuid");
+
+    # The starting message carries name, events file, and try.
+    my ($start) = grep { ($_->{facet_data}{harness_state_transition}{state} // '') eq 'starting' } @$msgs;
+    my $shc = $start->{facet_data}{harness_collector};
+    is($shc->{name}, 'some/test.t', "start message carries the collector name");
+    is($shc->{try},  1,             "start message carries the try number");
+    ok($shc->{events_file}, "start message carries the events file path");
+
+    # The final-state message also carries name and try, but not events_file.
+    my $fhc = $final->{facet_data}{harness_collector};
+    is($fhc->{name}, 'some/test.t', "final message carries the collector name");
+    is($fhc->{try},  1,             "final message carries the try number");
+    ok(!exists $fhc->{events_file}, "final message omits the events file path");
+
+    # A plain transition carries only the uuid.
+    my ($failing) = grep { ($_->{facet_data}{harness_state_transition}{state} // '') eq 'failing' } @$msgs;
+    ok(!exists $failing->{facet_data}{harness_collector}{name}, "non-start transition omits name");
 };
 
 subtest no_transitions_file => sub {

@@ -3,7 +3,7 @@ use v5.38;
 
 use File::Temp qw/tempdir/;
 use Atomic::Pipe;
-use POSIX ();
+use POSIX       ();
 use Time::HiRes ();
 
 use Test2::Harness2::Collector;
@@ -62,7 +62,7 @@ subtest exec_command => sub {
     my $ef  = "$dir/events.jsonl.zst";
 
     my $exit = Test2::Harness2::Collector->start(
-        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
+        name         => "collector-test", recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
         exec_command => [$^X, '-e', 'print "hello stdout\n"; print STDERR "oops stderr\n"; exit 3'],
     );
 
@@ -88,8 +88,8 @@ subtest run_sub => sub {
 
     my $ran  = 0;
     my $exit = Test2::Harness2::Collector->start(
-        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
-        run_sub     => sub ($guard) { $ran = 1; print "from the sub\n"; },
+        name    => "collector-test", recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
+        run_sub => sub ($guard) { $ran = 1; print "from the sub\n"; },
     );
 
     is($exit, 0, "collector returned 0 for run_sub");
@@ -110,8 +110,8 @@ subtest burst_passthrough => sub {
     # sync marker is a separate JSON array [pid, ordinal] written to both
     # handles. Markers are never recorded.
     my $exit = Test2::Harness2::Collector->start(
-        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
-        run_sub     => sub ($guard) {
+        name    => "collector-test", recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
+        run_sub => sub ($guard) {
             my $out = mixed_pipe(\*STDOUT);
             my $err = mixed_pipe(\*STDERR);
 
@@ -146,25 +146,25 @@ subtest exit_details => sub {
     my $ef  = "$dir/events.jsonl.zst";
 
     Test2::Harness2::Collector->start(
-        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
+        name         => "collector-test", recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
         exec_command => [$^X, '-e', 'exit 3'],
     );
 
-    my @events = read_events($ef);
+    my @events   = read_events($ef);
     my ($exit_e) = grep { $_->{facet_data}{harness_process_exit} } @events;
-    my $f = $exit_e->{facet_data}{harness_process_exit};
+    my $f        = $exit_e->{facet_data}{harness_process_exit};
 
-    is($f->{err}, 3, "decoded exit code (err) is 3");
-    is($f->{sig}, 0, "no terminating signal");
-    is($f->{dmp}, 0, "no core dump");
+    is($f->{err},      3, "decoded exit code (err) is 3");
+    is($f->{sig},      0, "no terminating signal");
+    is($f->{dmp},      0, "no core dump");
     is($f->{all} >> 8, 3, "raw wait status still present");
 
-    ok(defined $f->{times},                     "timing block present");
-    ok(defined $f->{times}{child}{user},        "child user cpu time present");
-    ok(defined $f->{times}{child}{system},      "child system cpu time present");
-    ok(defined $f->{times}{collector}{user},    "collector user cpu time present");
-    ok(defined $f->{times}{wall},               "child wall time present");
-    ok($f->{times}{wall} >= 0,                  "child wall time is non-negative");
+    ok(defined $f->{times},                  "timing block present");
+    ok(defined $f->{times}{child}{user},     "child user cpu time present");
+    ok(defined $f->{times}{child}{system},   "child system cpu time present");
+    ok(defined $f->{times}{collector}{user}, "collector user cpu time present");
+    ok(defined $f->{times}{wall},            "child wall time present");
+    ok($f->{times}{wall} >= 0,               "child wall time is non-negative");
 
     if (eval { require BSD::Resource; 1 }) {
         ok($f->{memory}, "memory facet present when BSD::Resource is available");
@@ -184,7 +184,7 @@ subtest watch_parent_pid => sub {
 
     my $start = Time::HiRes::time();
     my $exit  = Test2::Harness2::Collector->start(
-        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
+        name             => "collector-test", recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
         watch_parent_pid => $ppid,
         run_sub          => sub ($guard) { Time::HiRes::sleep(30) },
     );
@@ -201,25 +201,33 @@ subtest watch_parent_pid => sub {
     is($pe->{facet_data}{harness_parent_exit}{parent_pid}, $ppid, "event names the watched parent pid");
 
     my ($exit_e) = grep { $_->{facet_data}{harness_process_exit} } @events;
-    is($exit_e->{facet_data}{harness_process_exit}{parent_exited}, 1, "exit event flags parent_exited");
-    is($exit_e->{facet_data}{harness_process_exit}{sig}, 15, "child was terminated with SIGTERM");
+    is($exit_e->{facet_data}{harness_process_exit}{parent_exited}, 1,  "exit event flags parent_exited");
+    is($exit_e->{facet_data}{harness_process_exit}{sig},           15, "child was terminated with SIGTERM");
 };
 
-subtest mutual_exclusion => sub {
+subtest required_and_mutually_exclusive => sub {
     like(
-        dies { Test2::Harness2::Collector->new(exec_command => ['x'], run_sub => sub {}) },
+        dies { Test2::Harness2::Collector->new(exec_command => ['x']) },
+        qr/name is a required/,
+        "name is required",
+    );
+
+    like(
+        dies {
+            Test2::Harness2::Collector->new(name => 'x', exec_command => ['x'], run_sub => sub { })
+        },
         qr/mutually exclusive/,
         "exec_command and run_sub are mutually exclusive",
     );
 
     like(
-        dies { Test2::Harness2::Collector->new() },
+        dies { Test2::Harness2::Collector->new(name => 'x') },
         qr/exec_command or run_sub/,
         "one of exec_command / run_sub is required",
     );
 
     ok(
-        lives { Test2::Harness2::Collector->new(exec_command => ['x']) },
+        lives { Test2::Harness2::Collector->new(name => 'x', exec_command => ['x']) },
         "no recorder is allowed (an in-process run still returns its info)",
     );
 };

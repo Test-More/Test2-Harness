@@ -24,6 +24,7 @@ use Test2::Harness2::Util::IPC qw/
 /;
 use Test2::Harness2::Util::JSON qw/decode_json encode_json/;
 use Test2::Harness2::Event;
+use Test2::Util::UUID qw/gen_uuid/;
 
 our @EXPORT_OK = qw/collect spawn_collector/;
 
@@ -45,6 +46,8 @@ my @FORWARDED_SIGNALS = qw/TERM INT QUIT/;
 my @IGNORED_SIGNALS   = qw/USR1 USR2 HUP PIPE/;
 
 use Object::HashBase qw{
+    <name
+    <uuid
     <is_test
     <exec_command
     <run_sub
@@ -157,6 +160,18 @@ C<run_collector> on it.
 =head1 ATTRIBUTES
 
 =over 4
+
+=item name (required)
+
+Name of the thing being collected: the test file for a test job, or the
+service name for a service. It is included in the recorder's start
+notification so a listener knows what this collector is running.
+
+=item uuid
+
+This collector's identifier. Generated with L<Test2::Util::UUID> during
+construction when not supplied; the recorder stamps it on every notification
+message so a listener can tell which collector sent it.
 
 =item recorder => $instance_or_class
 
@@ -349,10 +364,15 @@ sub start ($class, %args) {
 sub init ($self) {
     $self->{+IS_TEST} = $self->{+IS_TEST} ? 1 : 0;
 
+    croak "name is a required attribute"
+        unless defined $self->{+NAME} && length $self->{+NAME};
+
     croak "exec_command or run_sub must be supplied"
         unless $self->{+EXEC_COMMAND} || $self->{+RUN_SUB};
     croak "exec_command and run_sub are mutually exclusive"
         if $self->{+EXEC_COMMAND} && $self->{+RUN_SUB};
+
+    $self->{+UUID} //= gen_uuid();
 
     $self->{+ORPHAN_TIMEOUT}   //= DEFAULT_ORPHAN_TIMEOUT;
     $self->{+SILENCE_TIMEOUT}  //= 0;
@@ -363,6 +383,17 @@ sub init ($self) {
     $self->{+PARSER}    = $self->_coerce_parser($self->{+PARSER});
     $self->{+PROCESSOR} = $self->_coerce_processor($self->{+PROCESSOR});
     $self->{+RECORDER}  = $self->_coerce_recorder($self->{+RECORDER});
+
+    # Hand the recorder this collector's identity so the messages it sends to
+    # its notification pipes can say which collector they came from and what
+    # is being collected.
+    if ($self->{+RECORDER} && $self->{+RECORDER}->can('set_collector_info')) {
+        $self->{+RECORDER}->set_collector_info(
+            uuid => $self->{+UUID},
+            name => $self->{+NAME},
+            ($self->{+IS_TEST} ? (try => 1) : ()),    # retry is not implemented yet
+        );
+    }
 
     $self->{+ORPHANED}  = 0;
     $self->{+TIMED_OUT} = 0;

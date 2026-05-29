@@ -1,0 +1,55 @@
+#!/usr/bin/env perl
+use v5.38;
+
+use Config qw/%Config/;
+use File::Path qw/make_path/;
+
+use Test2::Harness2::Collector qw/collect/;
+use Test2::Harness2::Collector::Auditor::Test;
+use Test2::Harness2::Collector::Recorder::Test;
+
+# t2h2_collector - run one test file under the collector, writing its logs to
+# an output directory, and exit 0 (pass) or 1 (fail).
+#
+# Usage: t2h2_collector TEST_FILE OUTPUT_DIR
+#
+# The script process itself is the collector: collect() forks the test file as
+# its child via exec, so only two processes exist (this one and the test). The
+# output directory receives events.jsonl.zst (the full event stream),
+# transitions.jsonl.zst (auditor state transitions), state.jsonl.zst (the
+# final verdict), and a touch file whose mtime moves on each transition and at
+# completion so monitors can watch it.
+
+my ($test_file, $out_dir) = @ARGV;
+
+die "Usage: $0 TEST_FILE OUTPUT_DIR\n"
+    unless defined $test_file && defined $out_dir;
+
+die "No such test file: $test_file\n" unless -f $test_file;
+
+make_path($out_dir) unless -d $out_dir;
+
+# The collected test runs with the stream formatter selected (is_test), so it
+# needs this harness's libraries on its include path. Propagate our own @INC
+# to the child so it can load them regardless of how we were invoked.
+my $sep = $Config{path_sep} || ':';
+my $perl5lib = join($sep, grep { defined && length } @INC, $ENV{PERL5LIB});
+
+my $info = collect(
+    is_test   => 1,
+    exec      => [$^X, $test_file],
+    env       => {PERL5LIB => $perl5lib},
+    processor => 'Test2::Harness2::Collector::Auditor::Test',
+    recorder  => Test2::Harness2::Collector::Recorder::Test->new(
+        events_file      => "$out_dir/events.jsonl.zst",
+        transitions_file => "$out_dir/transitions.jsonl.zst",
+        state_file       => "$out_dir/state.jsonl.zst",
+        touchfile        => "$out_dir/touch",
+    ),
+);
+
+my $passed =
+      $info->{final_state} ? $info->{final_state}{pass}
+    :                        !$info->{exit}{err};
+
+exit($passed ? 0 : 1);

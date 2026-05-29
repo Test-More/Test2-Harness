@@ -4,14 +4,12 @@ use v5.38;
 use Config qw/%Config/;
 use File::Path qw/make_path/;
 use File::Basename qw/dirname/;
-use Atomic::Pipe;
 use IO::Select;
 
 use Test2::Harness2::Collector qw/spawn_collector/;
 use Test2::Harness2::Collector::Auditor;
 use Test2::Harness2::Collector::Recorder::Test;
 use Test2::Harness2::Collector::Monitor;
-use Test2::Harness2::Util::IPC qw/atomic_pipe_compression_args/;
 use Test2::Harness2::Util::JSON qw/encode_pretty_json/;
 use Test2::Util::UUID qw/gen_uuid/;
 
@@ -21,13 +19,13 @@ use Test2::Util::UUID qw/gen_uuid/;
 #
 # Three processes: this script, the collector it spawns (the middle process,
 # which owns the recorder), and the test child the collector forks/execs. This
-# script hands the recorder one end of an Atomic::Pipe and loops over the
-# notification messages the recorder sends -- the start, each state
-# transition, and the final result -- printing a basic line for each. With
-# -v it also pretty-prints the full JSON payload of each message just after
-# its line. The full event stream is written to EVENTS_FILE; the verdict comes
-# over the pipe. Exits 0 (pass) or 1 (fail) from the collector's own
-# verdict-derived exit.
+# script creates a managed Monitor that listens on a unix socket and hands the
+# socket path to the recorder; the recorder connects back and sends the start,
+# each state transition, and the final result. The script loops over those
+# messages, printing a basic line for each. With -v it also pretty-prints the
+# full JSON payload of each message just after its line. The full event stream
+# is written to EVENTS_FILE; the verdict comes over the socket. Exits 0 (pass)
+# or 1 (fail) from the collector's own verdict-derived exit.
 
 my $verbose = @ARGV && $ARGV[0] eq '-v' ? shift @ARGV : 0;
 
@@ -47,7 +45,10 @@ make_path($dir) unless -d $dir;
 my $sep      = $Config{path_sep} || ':';
 my $perl5lib = join($sep, grep { defined && length } @INC, $ENV{PERL5LIB});
 
-my ($read, $write) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+# The managed monitor owns the listening socket; the recorder in the spawned
+# collector connects back to this path.
+my $sock_path = "$dir/transitions.sock";
+my $monitor   = Test2::Harness2::Collector::Monitor->new(listen => $sock_path);
 
 # This runner handles a single test as its own one-off run, so the run_uuid
 # and the collector's own uuid can be one and the same fresh uuid.
@@ -62,24 +63,18 @@ my $pid = spawn_collector(
     env       => {PERL5LIB => $perl5lib},
     processor => 'Test2::Harness2::Collector::Auditor',
     recorder  => Test2::Harness2::Collector::Recorder::Test->new(
-        events_file => $events_file,
-        pipes       => [$write],
+        events_file        => $events_file,
+        transition_sockets => [$sock_path],
     ),
 );
 
-# This process never writes; close our copy so the read end reaches EOF if the
-# collector dies without a clean finalization.
-$write->close;
-
-my $monitor = Test2::Harness2::Collector::Monitor->new(pipe => $read);
-my $select  = IO::Select->new($monitor->pipe->rh);
-
 my $done = 0;
 until ($done) {
-    $select->can_read;    # block until there is something to read (or EOF)
+    # Re-fetch the handles each iteration: the accepted connection appears
+    # after the first poll() accepts the recorder's connect.
+    IO::Select->new($monitor->io_handles)->can_read;
 
     my @payloads = $monitor->poll;
-    last unless @payloads;    # EOF: the collector closed the pipe
 
     for my $payload (@payloads) {
         my $fd = $payload->{facet_data};

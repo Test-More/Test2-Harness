@@ -4,10 +4,10 @@ use v5.38;
 use File::Temp qw/tempdir/;
 
 # The t2h2_collector script spawns a collector for a single test file, loops
-# over the notification messages it sends over an Atomic::Pipe, and prints a
-# basic line for the start, each transition, and the final result. It writes
-# the full event stream to the events file named as its second argument, and
-# exits 0 when the test passed and 1 when it failed.
+# over the notification messages the recorder sends over a unix transition
+# socket, and prints a basic line for the start, each transition, and the final
+# result. It writes the full event stream to the events file named as its
+# second argument, and exits 0 when the test passed and 1 when it failed.
 
 my $script = 'scripts/t2h2_collector';
 

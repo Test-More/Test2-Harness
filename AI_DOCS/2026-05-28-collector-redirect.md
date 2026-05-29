@@ -23,10 +23,10 @@ that on the `collector-redirect` branch and recorded the direction change in
   (starting / failing / diagnosing / completed) and a `harness_final_state`
   event on the process-exit event.
 - `Collector::Recorder::Test` — sends each transition and the final state to
-  the pipes only (the start message adds `name` / events file / `try`, the
-  final message adds `name` / `try`); leaves everything else in the events
-  file. There is no state or transitions file — the events file is the only
-  output file.
+  the pipes only; leaves everything else in the events file. Identity rides
+  the start message once (`name` / events file / `try`); every later message
+  carries only the `uuid`, since the consumer is a state machine. There is no
+  state or transitions file — the events file is the only output file.
 - `Test2::Harness2::Collector` gained the exported `collect` /
   `spawn_collector` functions and a recorder sink in place of the hard-coded
   events-file writer. It has a mandatory `name` (the test file or service

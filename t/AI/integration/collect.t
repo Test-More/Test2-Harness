@@ -114,10 +114,10 @@ subtest full_test_pipeline_pass => sub {
     is($start->{facet_data}{harness_collector}{name}, 'collector-test', "start message names the collected thing");
     is($start->{facet_data}{harness_collector}{try},  1,                "test collector start carries try => 1");
 
-    # The final-result message also carries the name and try.
+    # Identity is sent once: the final-result message carries only the uuid.
     my ($final) = grep { $_->{facet_data}{harness_final_state} } @msgs;
-    is($final->{facet_data}{harness_collector}{name}, 'collector-test', "final message names the collected thing");
-    is($final->{facet_data}{harness_collector}{try},  1,                "final message carries try => 1");
+    ok($final->{facet_data}{harness_collector}{uuid},         "final message carries the uuid");
+    ok(!exists $final->{facet_data}{harness_collector}{name}, "final message does not repeat the name");
 
     # Transition / final-state events are routed OUT of the events file.
     my $events = read_jsonl_zst("$dir/events.jsonl.zst");

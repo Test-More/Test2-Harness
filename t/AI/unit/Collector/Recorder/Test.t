@@ -97,13 +97,15 @@ subtest routes_events_by_facet => sub {
     is($shc->{try},  1,             "start message carries the try number");
     ok($shc->{events_file}, "start message carries the events file path");
 
-    # The final-state message also carries name and try, but not events_file.
+    # Identity is sent once (the start message); later messages carry only the
+    # uuid. The final-state message does not repeat name / try / events_file.
     my $fhc = $final->{facet_data}{harness_collector};
-    is($fhc->{name}, 'some/test.t', "final message carries the collector name");
-    is($fhc->{try},  1,             "final message carries the try number");
+    is($fhc->{uuid}, 'UUID-9', "final message carries the uuid");
+    ok(!exists $fhc->{name},        "final message omits the name");
+    ok(!exists $fhc->{try},         "final message omits the try");
     ok(!exists $fhc->{events_file}, "final message omits the events file path");
 
-    # A plain transition carries only the uuid.
+    # A plain transition carries only the uuid too.
     my ($failing) = grep { ($_->{facet_data}{harness_state_transition}{state} // '') eq 'failing' } @$msgs;
     ok(!exists $failing->{facet_data}{harness_collector}{name}, "non-start transition omits name");
 };

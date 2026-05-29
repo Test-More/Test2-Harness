@@ -200,8 +200,9 @@ supplied. Shared with subclasses that notify on other occasions.
 =item %extra = $self->_collector_extra
 
 The C<harness_collector> fields that identify the collected thing: its
-C<name>, and -- for test collectors -- the C<try> number. Included in the
-start and final-state messages.
+C<name>, and -- for test collectors -- the C<try> number. Sent once, in the
+start message; later messages carry only the C<uuid> since consumers track
+state across messages.
 
 =item _start_extra
 

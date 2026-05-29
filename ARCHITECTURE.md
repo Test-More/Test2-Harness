@@ -245,12 +245,13 @@ with a `control` facet carrying an `encoding`.
   to it.
 
   Every pipe message carries a `harness_collector` facet with the collector's
-  `uuid`, so a listener can tell which collector sent it. The start message
-  (the `starting` transition) additionally carries the collected thing's
-  `name`, the `events_file` path, and — for test collectors — the `try`
-  number (always `1` until retry exists); the final-state message carries the
-  `name` and `try` too. The collector pushes its identity to the recorder via
-  `set_collector_info` during construction.
+  `uuid`, so a listener can tell which collector sent it. Identity is sent
+  once: the start message (the `starting` transition) carries the collected
+  thing's `name`, the `events_file` path, and — for test collectors — the
+  `try` number (always `1` until retry exists). Later messages carry only the
+  `uuid`; a consumer (the monitor below) is a state machine and tracks the
+  rest across messages, so nothing is repeated. The collector pushes its
+  identity to the recorder via `set_collector_info` during construction.
 
 **Functional interface.** `Test2::Harness2::Collector` exports `collect`
 (run in the current process; returns `{exit => {...}, final_state => ...}`

@@ -32,7 +32,8 @@ and C<try>; the others carry only the collector C<uuid>.
 =item *
 
 An event carrying a C<harness_final_state> facet is sent only to the pipes,
-carrying the verdict plus the collector C<name> and C<try>.
+carrying the verdict (and, like every message, the collector C<uuid>). The
+identity fields are not repeated -- they rode the start message.
 
 =item *
 
@@ -63,8 +64,8 @@ L<Test2::Harness2::Collector/collect> returns).
 
 Route C<$event> by facet: a C<harness_state_transition> goes only to the
 notification pipes (the C<starting> one also carries the collector C<name>,
-events file, and C<try>); a C<harness_final_state> goes only to the pipes
-(carrying the collector C<name> and C<try>); everything else goes to the
+events file, and C<try> -- the only message that does); a
+C<harness_final_state> goes only to the pipes; everything else goes to the
 events file via the base recorder.
 
 =back
@@ -81,7 +82,7 @@ sub record_event ($self, $event) {
     }
 
     if ($f->{harness_final_state}) {
-        $self->_notify_pipes($f, $self->_collector_extra);
+        $self->_notify_pipes($f);
         return;
     }
 

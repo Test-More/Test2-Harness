@@ -55,13 +55,11 @@ auditor recognizes it, emits `completed` + `harness_final_state`, and only
 then is the recorder finalized — guaranteeing the exit/verdict land after all
 of the child's output.
 
-**`$info.exit` field naming.** The redirect specified `{code, err, sig}`
-without defining them. Mapped for consistency with the existing
-`parse_exit` / `harness_process_exit` facet semantics already in the
-codebase: `code` = raw wait status (`$?`), `err` = decoded exit code
-(`WEXITSTATUS`), `sig` = terminating signal. This is an interpretation of an
-underspecified field set; revisit if the intent was different (e.g. `code` =
-exit code, `err` = errno).
+**`$info.exit` is `parse_exit`'s output.** Per direction, `$info.exit` is the
+exact hash `Test2::Harness2::Util::IPC::parse_exit` returns — `sig` (signal),
+`err` (decoded exit code), `dmp` (core-dump flag), `all` (raw wait status) —
+so callers share one decoding of the wait status with the
+`harness_process_exit` facet.
 
 **`env` attribute stored as `child_env`.** `Object::HashBase` will not create
 an `ENV` constant (it collides with the `%ENV` superglobal), so the slot is

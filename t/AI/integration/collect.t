@@ -34,9 +34,11 @@ subtest collect_returns_info => sub {
         exec        => [$^X, '-e', 'print "hi\n"; exit 3'],
     );
 
-    is($info->{exit}{err},  3, "info exit.err is the child's exit code");
-    is($info->{exit}{sig},  0, "info exit.sig is 0 (no signal)");
-    is($info->{exit}{code}, 3 << 8, "info exit.code is the raw wait status");
+    # info exit mirrors parse_exit's output (sig / err / dmp / all).
+    is($info->{exit}{err}, 3,      "info exit.err is the child's exit code");
+    is($info->{exit}{sig}, 0,      "info exit.sig is 0 (no signal)");
+    is($info->{exit}{dmp}, 0,      "info exit.dmp is 0 (no core dump)");
+    is($info->{exit}{all}, 3 << 8, "info exit.all is the raw wait status");
 
     ok(-s "$dir/events.jsonl.zst", "events file written");
 };

@@ -227,8 +227,9 @@ always recorded **after** all of the child's output.
   (`Collector::Recorder`) writes every event to one `jsonl.zst` file.
 
 **Functional interface.** `Test2::Harness2::Collector` exports `collect`
-(run in the current process; returns `{exit => {code, err, sig}, final_state
-=> ...}`) and `spawn_collector` (fork a collector process; return its pid;
+(run in the current process; returns `{exit => {...}, final_state => ...}`
+where `exit` is the hash `parse_exit` returns — `sig` / `err` / `dmp` /
+`all`) and `spawn_collector` (fork a collector process; return its pid;
 exit 0/1 by verdict). `parser` / `processor` / `recorder` each accept a
 blessed instance, a class name, or `[class => @args]`.
 

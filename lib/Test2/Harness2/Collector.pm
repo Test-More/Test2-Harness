@@ -251,10 +251,11 @@ used as aliases for C<exec_command>, C<run_sub>, and C<child_env>. Returns an
 info hashref:
 
     $info = {
-        exit => {
-            code => $raw_wait_status,    # the child's raw wait status ($?)
-            err  => $exit_code,          # decoded exit code (WEXITSTATUS)
-            sig  => $signal,             # terminating signal, 0 if none
+        exit => {                        # the fields parse_exit() returns:
+            sig => $signal,              #   terminating signal, 0 if none
+            err => $exit_code,           #   decoded exit code (WEXITSTATUS)
+            dmp => $core_dumped,         #   core-dump flag
+            all => $raw_wait_status,     #   the child's raw wait status ($?)
         },
         # final_state => {...}           # present when the processor (e.g. the
         #                                # auditor) exposes a final_state
@@ -1366,13 +1367,7 @@ constructor's C<exec_command> / C<run_sub> attributes.
 sub _build_info ($self) {
     my $px = parse_exit($self->{+WAIT_STATUS} // 0);
 
-    my %info = (
-        exit => {
-            code => $px->{all},
-            err  => $px->{err},
-            sig  => $px->{sig},
-        },
-    );
+    my %info = (exit => {%$px});
 
     $info{exit}{orphaned}      = 1                   if $self->{+ORPHANED};
     $info{exit}{timed_out}     = $self->{+TIMED_OUT} if $self->{+TIMED_OUT};

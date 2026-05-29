@@ -89,6 +89,9 @@ subtest full_test_pipeline_pass => sub {
     ok($info->{final_state}, "auditor final_state attached to info");
     is($info->{final_state}{pass}, 1, "verdict is pass");
 
+    ok($info->{final_state}{times}, "phase timings present for a real test");
+    ok($info->{final_state}{times}{total} >= 0, "total phase duration is non-negative");
+
     my $state = read_jsonl_zst("$dir/state.jsonl.zst");
     is(scalar(@$state), 1, "one final-state row in the state file");
     is($state->[0]{facet_data}{harness_final_state}{pass}, 1, "state file records pass");

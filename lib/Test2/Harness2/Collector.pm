@@ -1318,10 +1318,10 @@ sub _safe_kill ($self) {
 
 Tail of the parent path: synthesize the C<harness_process_exit> event,
 dispatch it through the pipeline, and finalize the recorder. The event
-carries the decoded wait status (C<sig> / C<err> / C<dmp> / C<all>), any
-C<orphaned> / C<timed_out> / C<parent_exited> flags, the child's CPU and
-wall-clock timing, and -- when L<BSD::Resource> is available -- its peak
-memory. All of these are deduced by the time the child is reaped, so they
+carries the decoded wait status (C<sig> / C<err> / C<dmp> / C<all>), the
+launch and reap stamps (C<start_stamp> / C<stamp>), any C<orphaned> /
+C<timed_out> / C<parent_exited> flags, the child's CPU and wall-clock timing,
+and -- when L<BSD::Resource> is available -- its peak memory. All of these are deduced by the time the child is reaped, so they
 ride on the single exit event rather than separate events.
 
 =item $facet = $self->_exit_facet
@@ -1353,9 +1353,10 @@ sub _exit_facet ($self) {
         dmp   => $px->{dmp} ? 1 : 0,
         all   => $px->{all},
         stamp => $self->{+REAP_STAMP} // time,
-        ($self->{+ORPHANED}      ? (orphaned      => 1)                   : ()),
-        ($self->{+TIMED_OUT}     ? (timed_out     => $self->{+TIMED_OUT}) : ()),
-        ($self->{+PARENT_EXITED} ? (parent_exited => 1)                   : ()),
+        (defined $self->{+FORK_STAMP} ? (start_stamp   => $self->{+FORK_STAMP}) : ()),
+        ($self->{+ORPHANED}           ? (orphaned      => 1)                    : ()),
+        ($self->{+TIMED_OUT}          ? (timed_out     => $self->{+TIMED_OUT})  : ()),
+        ($self->{+PARENT_EXITED}      ? (parent_exited => 1)                    : ()),
     );
 
     if (my $end = $self->{+END_TIMES}) {

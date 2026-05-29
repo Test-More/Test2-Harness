@@ -90,6 +90,34 @@ stream formatter selected, which lives in this repo's `lib/`. The script
 passes its own `@INC` to the child so the formatter loads regardless of how
 the script was invoked.
 
+## Legacy audit (parsing / TAP / auditing / transitions)
+
+Audited the current implementation against all reference trees
+(`legacy`, `old2`, `old3`, `old4`, `botched`). TAP parsing and the
+state-transition set (starting / failing / diagnosing / completed) had no
+gaps — the transitions legacy had beyond these are run/scheduler-level
+(pending/running/broken/canceled), not per-test. Auditing core matched old4;
+the dropped items (rel/abs file, summary_file, retry, closed_by_eid) are
+run/job-layer concerns moved upstream. Two real gaps were worked back in:
+
+- **Raw-output encoding** (was in old2, dropped in the rewrite): the
+  collector again decodes the child's raw stream lines via an `encoding`
+  attribute, with mid-stream switching through a `control.encoding` facet.
+  Default off (bytes pass through), so behavior is unchanged unless used.
+
+- **Per-test phase timing** (yath1's `TimeTracker`): ported as
+  `Collector::Auditor::TimeTracker`, adapted to read stamps from facets
+  (`trace.stamp`, and the exit event's `start_stamp` / `stamp`) rather than
+  top-level `event.stamp`/`event_id`, which this architecture does not carry.
+  The auditor feeds it and exposes `times` (startup / events / cleanup /
+  total) in `final_state`. The renderer-facing bits of the legacy tracker
+  (`table` / `summary` / `job_fields`, which need `render_duration` and
+  event IDs) were not ported — no renderer consumes them yet.
+
+Dropped by decision: peek/live-preview mode (covered by buffering +
+`flush_interval`) and a dedicated skip-all field (the reason already rides in
+`final_state.plan.details`).
+
 ## Follow-ups not done
 
 - `scripts/t2h2_collector` is not yet wired into `dist.ini` packaging.

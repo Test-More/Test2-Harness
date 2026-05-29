@@ -10,6 +10,7 @@ use Time::HiRes qw/time/;
 use Test2::Harness2::Util qw/hub_truth/;
 use Test2::Harness2::Util::IPC qw/parse_exit/;
 use Test2::Harness2::Event;
+use Test2::Harness2::Collector::Auditor::TimeTracker;
 
 use Object::HashBase qw{
     -assertion_count
@@ -29,6 +30,7 @@ use Object::HashBase qw{
     -failing_subtests
     -top_level_subtests
     -started
+    -times
     +_state_failing
     +_state_diagnosing
 };
@@ -126,6 +128,11 @@ sub init ($self) {
     $self->{+_STATE_FAILING}    = 0;
     $self->{+_STATE_DIAGNOSING} = 0;
 
+    # Only the top-level auditor tracks wall-clock phase timing; sub-auditors
+    # audit buffered children that carry no launch/exit stamps.
+    $self->{+TIMES} = Test2::Harness2::Collector::Auditor::TimeTracker->new
+        if $self->{+NESTED} == 0;
+
     return;
 }
 
@@ -168,7 +175,8 @@ Whether an exit / plan has been seen.
 
 Hashref verdict snapshot: C<pass>, C<fail_count>, C<pass_count>,
 C<assertion_count>, C<exit>, and C<subtests> (the top-level subtest summary),
-plus C<plan> and C<halt> when seen.
+plus C<plan>, C<halt>, and C<times> (startup / events / cleanup / total phase
+durations) when available.
 
 =item fail_error_facet_list
 
@@ -212,6 +220,8 @@ sub process_event ($self, $event) {
         push @out => $se;
     }
 
+    $self->{+TIMES}->process($event, $self->{+ASSERTION_COUNT}) if $self->{+TIMES};
+
     if ($is_exit) {
         push @out => $self->_transition('completed');
         push @out => $self->_final_state_event;
@@ -254,8 +264,10 @@ sub final_state ($self) {
         subtests        => [@{$self->{+TOP_LEVEL_SUBTESTS} // []}],
     );
 
-    $state{plan} = $self->{+PLAN} if defined $self->{+PLAN};
-    $state{halt} = $self->{+HALT} if defined $self->{+HALT};
+    $state{plan}  = $self->{+PLAN} if defined $self->{+PLAN};
+    $state{halt}  = $self->{+HALT} if defined $self->{+HALT};
+    $state{times} = $self->{+TIMES}->totals
+        if $self->{+TIMES} && $self->{+TIMES}->useful;
 
     return \%state;
 }

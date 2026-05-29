@@ -190,4 +190,19 @@ subtest buffered_subtest_fail => sub {
     is($fs->{subtests}[0]{pass}, 0, "subtest marked failing");
 };
 
+subtest timing_in_final_state => sub {
+    my $a = Test2::Harness2::Collector::Auditor::Test->new;
+
+    my @out = map { $a->process_event(ev($_)) } (
+        {assert => {pass => 1, number => 1}, trace => {stamp => 10}},
+        {plan => {count => 1}, trace => {stamp => 11}},
+        {harness_process_exit => {all => 0, err => 0, sig => 0, dmp => 0, start_stamp => 8, stamp => 15}},
+    );
+
+    my $fs = final_of(@out);
+    ok($fs->{times}, "final state carries phase timings");
+    is($fs->{times}{startup}, 2, "startup phase (first 10 - start 8)");
+    is($fs->{times}{total},   7, "total phase (stop 15 - start 8)");
+};
+
 done_testing;

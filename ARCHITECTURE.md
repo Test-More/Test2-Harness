@@ -212,7 +212,12 @@ The parser turns lines and pre-decoded message bursts into
 time and returns zero or more events. The recorder is the sink. When a child
 exits, the collector drains both pipes, then dispatches a synthetic
 `harness_process_exit` event through the pipeline — so the exit event is
-always recorded **after** all of the child's output.
+always recorded **after** all of the child's output. The exit event carries
+the launch (`start_stamp`) and reap (`stamp`) times.
+
+The collector can decode the child's raw (non-structured) output by an
+`encoding` (default: bytes pass through), and a child may switch it mid-stream
+with a `control` facet carrying an `encoding`.
 
 **Stage contracts** (each a `Role::Tiny` role under
 `Collector/Role/`):
@@ -239,9 +244,11 @@ auditor passes events through (reassembling streaming subtests into buffered
 parent events), validates the run (plan present and matching the assertion
 count, no skipped or repeated assertion numbers, no incomplete subtests, no
 error / bail-out, zero exit), recurses into each subtest with a fresh
-sub-auditor, and injects `harness_state_transition` events (starting /
-failing / diagnosing / completed) plus a `harness_final_state` event (with
-the top-level subtest summary) on exit. The test recorder
+sub-auditor, tracks per-phase timing (startup / events / cleanup / total via
+`Collector::Auditor::TimeTracker`), and injects `harness_state_transition`
+events (starting / failing / diagnosing / completed) plus a
+`harness_final_state` event (with the top-level subtest summary and phase
+times) on exit. The test recorder
 (`Collector::Recorder::Test`) routes those out of the events file into a
 transitions file and a state file respectively. `scripts/t2h2_collector`
 wires this together for a single test file and exits 0 (pass) / 1 (fail).

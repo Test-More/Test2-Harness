@@ -66,10 +66,19 @@ an `ENV` constant (it collides with the `%ENV` superglobal), so the slot is
 `child_env` (constant `CHILD_ENV`). The functional interface accepts `env` as
 an alias (alongside `exec`/`run` for `exec_command`/`run_sub`).
 
-**Verdict counts only nesting-depth-zero assertions/plans.** Buffered subtest
-children would otherwise be double-counted against the parent's summary
-assertion. Streamed (nested) child assertions are skipped; the parent
-`Subtest:` summary assertion carries the subtest's pass/fail.
+**Full subtest auditing ported from `reference/old4`.** The auditor reassembles
+streaming subtests (buffering child events per nesting level via the hub-truth
+`nested` facet, then rolling them into a buffered parent event on close),
+recurses into each buffered subtest with a fresh sub-auditor, and runs the
+complete TAP validation: plan presence / count-vs-assertions, assertion-number
+gaps and duplicates, incomplete subtests, error / bail-out, and exit status.
+Pass/fail is the verdict of `fail_error_facet_list`, whose reasons are attached
+as error facets to the process-exit event. This is the core test-correctness
+logic, kept faithful to old4; it was adapted only to the new shape — the
+auditor is a Processor (`process_event`) that emits transitions and the final
+state as events rather than calling a recorder's `record_state`, and it has no
+`startup`/`shutdown` lifecycle (starting fires on the first event, completed +
+final-state on the exit event).
 
 **`events_file` kept as a convenience.** When no `recorder` is supplied the
 collector builds a base recorder from `events_file`, so existing
@@ -83,7 +92,4 @@ the script was invoked.
 
 ## Follow-ups not done
 
-- Deep nested-subtest diagnostic trees (old4's `subtest_fail_error_facet_list`
-  recursion) were not ported; the verdict is correct via the parent summary
-  assertion, but per-subtest failure detail is not yet synthesized.
 - `scripts/t2h2_collector` is not yet wired into `dist.ini` packaging.

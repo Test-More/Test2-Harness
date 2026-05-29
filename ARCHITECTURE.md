@@ -235,9 +235,13 @@ blessed instance, a class name, or `[class => @args]`.
 
 **Test jobs.** A test job (`is_test`) runs with the stream formatter selected
 and uses the auditor (`Collector::Auditor::Test`) as its processor. The
-auditor passes events through, tracks the verdict, and injects
-`harness_state_transition` events (starting / failing / diagnosing /
-completed) plus a `harness_final_state` event on exit. The test recorder
+auditor passes events through (reassembling streaming subtests into buffered
+parent events), validates the run (plan present and matching the assertion
+count, no skipped or repeated assertion numbers, no incomplete subtests, no
+error / bail-out, zero exit), recurses into each subtest with a fresh
+sub-auditor, and injects `harness_state_transition` events (starting /
+failing / diagnosing / completed) plus a `harness_final_state` event (with
+the top-level subtest summary) on exit. The test recorder
 (`Collector::Recorder::Test`) routes those out of the events file into a
 transitions file and a state file respectively. `scripts/t2h2_collector`
 wires this together for a single test file and exits 0 (pass) / 1 (fail).

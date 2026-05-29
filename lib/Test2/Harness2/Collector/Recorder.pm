@@ -13,13 +13,13 @@ use Test2::Harness2::Util::JSON qw/encode_json/;
 use Object::HashBase qw{
     <events_file
     <transition_sockets
-    -collector_uuid
-    -collector_name
-    -collector_try
-    -collector_run_uuid
-    -events_writer
-    -sockets
-    -finalized
+    <collector_uuid
+    <collector_name
+    <collector_try
+    <collector_run_uuid
+    <events_writer
+    <sockets
+    <finalized
 };
 
 use Role::Tiny::With;

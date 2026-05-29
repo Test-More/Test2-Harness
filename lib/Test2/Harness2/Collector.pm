@@ -63,26 +63,26 @@ use Object::HashBase qw{
     <watch_parent_pid
     <buffering
     <flush_interval
-    -child_pid
-    -out_pipe
-    -err_pipe
-    -pipes
-    -by_fh
-    -sel
-    -start_time
-    -last_activity
-    -last_flush
-    -wait_status
-    -orphaned
-    -timed_out
-    -parent_exited
-    -kill_state
-    -buffer
-    -start_times
-    -fork_stamp
-    -end_times
-    -reap_stamp
-    -child_maxrss
+    <child_pid
+    <out_pipe
+    <err_pipe
+    <pipes
+    <by_fh
+    <sel
+    <start_time
+    <last_activity
+    <last_flush
+    <wait_status
+    <orphaned
+    <timed_out
+    <parent_exited
+    <kill_state
+    <buffer
+    <start_times
+    <fork_stamp
+    <end_times
+    <reap_stamp
+    <child_maxrss
 };
 
 =pod

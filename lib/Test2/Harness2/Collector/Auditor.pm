@@ -13,24 +13,24 @@ use Test2::Harness2::Event;
 use Test2::Harness2::Collector::Auditor::TimeTracker;
 
 use Object::HashBase qw{
-    -assertion_count
-    -exit
-    -plan
+    <assertion_count
+    <exit
+    <plan
     +fail
     -_errors
     -_failures
     -_sub_failures
     -_plans
-    -nested
-    -subtests
-    -numbers
-    -halt
-    -failed_subtest_tree
-    -passing_subtests
-    -failing_subtests
-    -top_level_subtests
-    -started
-    -times
+    <nested
+    <subtests
+    <numbers
+    <halt
+    <failed_subtest_tree
+    <passing_subtests
+    <failing_subtests
+    <top_level_subtests
+    <started
+    <times
     +_state_failing
     +_state_diagnosing
 };

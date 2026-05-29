@@ -72,6 +72,11 @@ For every `.pm` that defines a class or role:
 - [ ] `HashBase` attribute slot ordering is intentional (review the
       constant list — additions go at the end unless the existing order
       has a documented reason).
+- [ ] Read-only attributes use the `<attr` prefix, not `-attr`. `-attr`
+      generates a throwaway `set_attr` that exists only to throw; `<attr`
+      generates no setter. Grep the touched files' HashBase blocks for a
+      line matching `^\s*-` and convert each to `<` unless a comment
+      explains why the throwing setter is needed.
 
 ## 2. Naming and structure — "methods, not functions"
 

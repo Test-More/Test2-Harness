@@ -12,7 +12,7 @@ use Test2::Harness2::Util::JSON qw/encode_json/;
 use Object::HashBase qw{
     <stdout_pipe
     <stderr_pipe
-    -ordinal
+    <ordinal
 };
 
 =pod

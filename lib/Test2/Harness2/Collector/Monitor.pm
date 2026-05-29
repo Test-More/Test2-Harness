@@ -14,10 +14,10 @@ use Test2::Harness2::Util::JSON qw/decode_json/;
 
 use Object::HashBase qw{
     <listen
-    -socket_path
-    -listen_sock
-    -select
-    -conns
+    <socket_path
+    <listen_sock
+    <select
+    <conns
     +collectors
     +proxies
     +replay

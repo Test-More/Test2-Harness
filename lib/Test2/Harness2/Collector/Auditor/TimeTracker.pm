@@ -4,11 +4,11 @@ use v5.38;
 our $VERSION = '2.000000';
 
 use Object::HashBase qw{
-    -start
-    -stop
-    -first
-    -last
-    -complete
+    <start
+    <stop
+    <first
+    <last
+    <complete
     -_totals
 };
 

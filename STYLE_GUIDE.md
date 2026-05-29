@@ -11,6 +11,16 @@ not here.
 - Use `Object::HashBase` for object attributes.
 - Slot ordering in `Object::HashBase` is intentional; additions should
   typically go at the end unless a specific grouping is documented.
+- For a read-only attribute, use the `<attr` prefix (reader, no setter),
+  **not** `-attr`. Both give a reader and no real writer, but `-attr`
+  generates a `set_attr` that exists only to throw "read-only" — a fake
+  writer that is never meant to be called. `<attr` generates no setter at
+  all, which is what we want. Internal writes via `$self->{+ATTR} = ...`
+  work identically under both. Prefer `<attr` for every read-only slot;
+  reach for `-attr` only in the rare case where you specifically need the
+  throwing `set_attr` to exist (e.g. to give a clearer error than
+  "method not found" at a call site you cannot remove). That case should
+  be commented.
 - Use `Role::Tiny` / `Role::Tiny::With` for roles.
 - Use `parent` for inheritance, not `base`.
 - `Object::HashBase` and `Role::Tiny` compose. `Object::HashBase` may

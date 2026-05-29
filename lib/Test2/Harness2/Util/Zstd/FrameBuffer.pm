@@ -9,7 +9,7 @@ use Compress::Zstd ();
 use Test2::Harness2::Util::Zstd qw/zstd_frame_size/;
 
 use Object::HashBase qw{
-    -buf
+    <buf
 };
 
 =pod

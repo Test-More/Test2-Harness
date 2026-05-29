@@ -322,7 +322,47 @@ Reserved for things that cut across multiple subsystems once more than
 one exists — wire formats shared between processes, error / event
 taxonomies, shutdown ordering, schema migration policy, and similar.
 
-*(Empty until the first cross-cutting concern lands.)*
+### 5.1 Event compression: measured conclusions
+
+The event encoding spans the test child (which serializes and sends
+events), the collector pipeline (which receives, decodes, and records
+them), and the on-disk events file. The compression decisions below are
+shared across that whole path. They were settled by measurement, not
+assumption; recorded here so they are not relitigated.
+
+- **Compress each event in the test child before sending it over the
+  pipe.** Compressing the JSON in the writer and decompressing in the
+  collector is cheaper end-to-end than sending uncompressed JSON: the
+  zstd cost is small next to the cost of pushing the larger uncompressed
+  payload through the pipe. The on-wire form is therefore a zstd frame,
+  not raw JSON.
+
+- **Pass an already-compressed frame through verbatim whenever
+  possible.** When an event still carries the compressed frame it
+  arrived on (its `compressed_form`) and nothing downstream modified it,
+  the recorder writes that frame to the events file as-is. This is the
+  common case and is effectively free — no recompression. The
+  collector / auditor already decompresses every event to process it, so
+  the decompressed JSON is available too, but the recorder prefers the
+  verbatim frame and only recompresses the rare event an auditor
+  actually changed.
+
+- **Do not buffer / batch writes to the events file.** Batching the
+  per-event `syswrite`s (and/or merging many events into one larger zstd
+  frame) was prototyped and benchmarked against real captured events.
+  Writing to the events file is not a meaningful cost: `syswrite` lands
+  in the page cache (no `fsync`, no disk wait), and at the worst-case
+  rate measured the write time was a sub-1% slice of what the pipeline
+  already spends decompressing and processing the same events. The
+  per-event recorder is already near-optimal because of verbatim
+  passthrough above. Batching's only real upside was a smaller events
+  file (merging frames compresses better), but that is a disk-size win,
+  not a speed win, and it would cost added recompression CPU, a flush
+  timer wired through the collector loop, a new "flush before notifying
+  the transition pipes" ordering invariant, and a change to the
+  one-frame-per-record file format every reader depends on. The
+  complexity is not worth the benefit, so the recorder writes one zstd
+  frame per event, immediately, with no buffer.
 
 ## 6. Open questions
 

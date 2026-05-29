@@ -3,8 +3,10 @@ use v5.38;
 
 use File::Temp qw/tempdir/;
 use POSIX ();
+use IO::Select;
 
-use Atomic::Pipe;
+use Test2::Harness2::Util::Socket qw/open_unix_listen/;
+use Test2::Harness2::Util::Zstd::FrameBuffer;
 use Test2::Harness2::Collector qw/collect spawn_collector/;
 use Test2::Harness2::Collector::Auditor;
 use Test2::Harness2::Collector::Recorder;
@@ -74,17 +76,16 @@ subtest collect_with_recorder_instance => sub {
 };
 
 subtest full_test_pipeline_pass => sub {
-    my $dir = tempdir(CLEANUP => 1);
-
-    # The collector runs in-process here, so a live notification pipe works.
-    my ($r, $w) = Atomic::Pipe->pair(compression => 'zstd', keep_compressed => 1);
+    my $dir   = tempdir(CLEANUP => 1);
+    my $spath = "$dir/transitions.sock";
+    my $listen = open_unix_listen($spath);
 
     my $info = collect(
         name      => "collector-test", is_test => 1, run_uuid => "RUN-1",
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
-            events_file => "$dir/events.jsonl.zst",
-            pipes       => [$w],
+            events_file        => "$dir/events.jsonl.zst",
+            transition_sockets => [$spath],
         ),
         exec => tap_child('print "1..1\nok 1 - good\n"', 0),
     );
@@ -95,12 +96,20 @@ subtest full_test_pipeline_pass => sub {
     ok($info->{final_state}{times},             "phase timings present for a real test");
     ok($info->{final_state}{times}{total} >= 0, "total phase duration is non-negative");
 
-    # Transitions, the final state, and the finalization arrive on the pipe.
-    $r->blocking(0);    # read_message returns undef once drained
-    my @msgs;
-    while (defined(my $msg = $r->read_message)) {
-        push @msgs => decode_json($msg);
+    # The recorder connected at construction; accept and drain its frames. Each
+    # frame decodes to a {type,payload} envelope; @msgs holds the payloads.
+    my $conn = $listen->accept;
+    $conn->blocking(0);
+    my $fb  = Test2::Harness2::Util::Zstd::FrameBuffer->new;
+    my $sel = IO::Select->new($conn);
+    while ($sel->can_read(2)) {
+        my $buf = '';
+        my $n = sysread($conn, $buf, 65536);
+        last unless $n;
+        $fb->push_bytes($buf);
     }
+    my @msgs = map { decode_json($_->{payload})->{payload} } $fb->drain;
+
     my %seen = map { $_->{facet_data}{harness_state_transition}{state} => 1 }
         grep { $_->{facet_data}{harness_state_transition} } @msgs;
     ok($seen{starting},                                                "starting transition delivered on the pipe");

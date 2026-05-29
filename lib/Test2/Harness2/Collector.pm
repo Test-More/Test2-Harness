@@ -54,6 +54,7 @@ use Object::HashBase qw{
     <parser
     <processor
     <recorder
+    <encoding
     <orphan_timeout
     <silence_timeout
     <lifetime_timeout
@@ -152,6 +153,14 @@ The pipeline sink: a L<Test2::Harness2::Collector::Role::Recorder> implementer
 (blessed instance, class name, or C<[class =E<gt> @args]>). When omitted, a
 base recorder is built from C<events_file>. The recorder receives every event
 the pipeline produces, including the synthetic process-exit event.
+
+=item encoding => $charset
+
+Optional charset name. When set, the child's raw (non-structured) output
+lines are C<Encode::decode>'d through it before becoming event text, so
+non-ASCII output is not mangled. A child may also switch the encoding
+mid-stream by emitting a C<control> facet carrying an C<encoding>. Unset by
+default (bytes pass through untouched).
 
 =item child_env => \%vars
 
@@ -977,7 +986,15 @@ collector uses the matched pair as the cross-stream flush point.
 
 Decode an event burst and turn it into a L<Test2::Harness2::Event> via the
 parser, carrying the on-wire compressed frame through C<compressed> for
-verbatim writing. Returns C<undef> (with a warning) on a decode failure.
+verbatim writing. Returns C<undef> (with a warning) on a decode failure. When
+the event carries a C<control> facet naming an C<encoding>, that becomes the
+encoding for subsequent raw lines.
+
+=item $text = $self->_decode_line($text)
+
+Decode a raw stream line through C<Encode::decode> using the current
+C<encoding>. A no-op (returns the bytes unchanged) when no encoding is set or
+the decode fails.
 
 =item $bool = $self->_is_sync_marker($data)
 
@@ -1010,6 +1027,7 @@ sub _handle_pipe_record ($self, $stream, $type, $data, $extra) {
 
     if ($type eq 'line') {
         chomp $data;
+        $data = $self->_decode_line($data);
         my $event = $self->{+PARSER}->parse_io(stream => $stream, line => $data);
         push @{$buf->{$stream}} => {event => $event} if $event;
 
@@ -1030,11 +1048,32 @@ sub _event_from_burst ($self, $stream, $data, $extra) {
         return undef;
     }
 
-    return $self->{+PARSER}->parse_io(
+    my $event = $self->{+PARSER}->parse_io(
         stream => $stream,
         event  => $decoded,
         (defined $extra->{compressed} ? (compressed => $extra->{compressed}) : ()),
     );
+
+    # A child can switch the encoding of its raw output mid-stream by emitting
+    # a control facet carrying the new encoding; honor it for later lines.
+    if ($event) {
+        my $ctrl = $event->facet_data->{control};
+        $self->{+ENCODING} = $ctrl->{encoding} if $ctrl && $ctrl->{encoding};
+    }
+
+    return $event;
+}
+
+sub _decode_line ($self, $text) {
+    my $enc = $self->{+ENCODING} or return $text;
+
+    require Encode;
+    my $decoded;
+    my $ok  = eval { $decoded = Encode::decode($enc, $text); 1 };
+    my $err = $@;
+    warn "decode($enc) of stream line failed: $err\n" unless $ok;
+
+    return $ok ? $decoded : $text;
 }
 
 sub _is_sync_marker ($self, $data) {
@@ -1044,6 +1083,7 @@ sub _is_sync_marker ($self, $data) {
 sub _handle_direct ($self, $stream, $type, $data, $extra) {
     if ($type eq 'line') {
         chomp $data;
+        $data = $self->_decode_line($data);
         my $event = $self->{+PARSER}->parse_io(stream => $stream, line => $data);
         $self->_dispatch_event($event) if $event;
         return;

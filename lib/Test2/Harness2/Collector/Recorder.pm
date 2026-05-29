@@ -95,11 +95,20 @@ sub init ($self) {
 
     $self->{+FINALIZED} = 0;
 
-    my @handles;
+    # Connect now, storing each handle as it opens so a mid-loop failure can
+    # still close the ones already opened before rethrowing.
+    $self->{+SOCKETS} = [];
     if (my $paths = $self->{+TRANSITION_SOCKETS}) {
-        push @handles => connect_unix($_) for @$paths;
+        my $ok = eval {
+            push @{$self->{+SOCKETS}} => connect_unix($_) for @$paths;
+            1;
+        };
+        my $err = $@;
+        unless ($ok) {
+            $self->_close_sockets;
+            die $err;
+        }
     }
-    $self->{+SOCKETS} = \@handles;
 
     return;
 }
@@ -165,13 +174,15 @@ sub finalize ($self) {
     }
 
     $self->_notify_sockets({harness_collector_finalized => {stamp => time}});
+    $self->_close_sockets;
 
-    if (my $sockets = delete $self->{+SOCKETS}) {
-        for my $sock (@$sockets) {
-            eval { close($sock); 1 };
-        }
-    }
+    return;
+}
 
+sub DESTROY ($self) {
+    # Close any transition sockets a recorder that was never finalized left
+    # open, so the peer (e.g. a managed monitor) sees the connection close.
+    $self->_close_sockets;
     return;
 }
 
@@ -180,6 +191,11 @@ sub finalize ($self) {
 =cut
 
 =over 4
+
+=item $self->_close_sockets
+
+Close and forget every connected transition socket. Idempotent; called by both
+L</finalize> and C<DESTROY>.
 
 =item $writer = $self->_events_writer
 
@@ -222,6 +238,14 @@ association on top of the identity fields.
 
 sub _events_writer ($self) {
     return $self->{+EVENTS_WRITER} //= open_zstd_writer($self->{+EVENTS_FILE});
+}
+
+sub _close_sockets ($self) {
+    my $sockets = delete $self->{+SOCKETS} or return;
+    for my $sock (@$sockets) {
+        eval { close($sock); 1 };
+    }
+    return;
 }
 
 sub _notify_sockets ($self, $facet_data, %collector_extra) {

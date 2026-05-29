@@ -6,7 +6,7 @@ our $VERSION = '2.000000';
 use Carp qw/croak/;
 
 use Compress::Zstd ();
-use IO::Select ();
+use IO::Select     ();
 
 use Test2::Harness2::Util::Socket qw/open_unix_listen connect_unix write_frame/;
 use Test2::Harness2::Util::Zstd::FrameBuffer;
@@ -122,7 +122,8 @@ sub init ($self) {
     $self->{+PENDING_FINALIZED}  = [];
 
     if (my $listen = $self->{+LISTEN}) {
-        my $path = ($listen eq '1' || $listen eq 1)
+        my $path =
+            ($listen eq '1' || $listen eq 1)
             ? $self->_default_socket_path
             : $listen;
 
@@ -249,7 +250,7 @@ sub poll ($self) {
         my $fb = $self->{+CONNS}{$fh} or next;
 
         my $buf = '';
-        my $n = sysread($fh, $buf, 65536);
+        my $n   = sysread($fh, $buf, 65536);
 
         # undef: would-block / transient -- try again next poll.
         next unless defined $n;
@@ -410,7 +411,7 @@ sub add_proxy ($self, $name, $target, %opts) {
     croak "a proxy name is required"   unless defined $name && length $name;
     croak "a proxy target is required" unless defined $target;
 
-    my $sock = ref($target) ? $target : connect_unix($target);
+    my $sock  = ref($target) ? $target : connect_unix($target);
     my $proxy = $self->{+PROXIES}{$name} = {sock => $sock, filter => $self->_build_filter(%opts)};
 
     # Replay the in-flight collectors the proxy wants, so its consumer does not

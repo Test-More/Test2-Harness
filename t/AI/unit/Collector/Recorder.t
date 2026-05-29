@@ -157,4 +157,26 @@ subtest finalize_is_idempotent => sub {
     ok(lives { $rec->finalize }, "second finalize is a no-op");
 };
 
+subtest abandoned_recorder_closes_sockets => sub {
+    my $path   = "$tmp/abandon.sock";
+    my $listen = open_unix_listen($path);
+
+    my $rec  = Test2::Harness2::Collector::Recorder->new(
+        events_file        => "$tmp/abandon-events.jsonl.zst",
+        transition_sockets => [$path],
+    );
+    my $conn = $listen->accept;
+
+    # Drop the recorder without finalize; DESTROY must close the connection so
+    # the peer reaches EOF (a managed monitor relies on this to reap the conn).
+    undef $rec;
+
+    $conn->blocking(0);
+    my $sel = IO::Select->new($conn);
+    ok($sel->can_read(2), "peer becomes readable after recorder is dropped");
+    my $buf = '';
+    my $n = sysread($conn, $buf, 65536);
+    is($n, 0, "peer sees EOF: the abandoned recorder closed its socket");
+};
+
 done_testing;

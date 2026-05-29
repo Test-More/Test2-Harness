@@ -31,12 +31,22 @@ that on the `collector-redirect` branch and recorded the direction change in
   `spawn_collector` functions and a recorder sink in place of the hard-coded
   events-file writer. It has a mandatory `name` (the test file or service
   name) and generates a `uuid` in init, which it pushes to the recorder.
+- `Collector::Monitor` — read side of the notification pipes. Constructed
+  with the read-end `Atomic::Pipe`; `poll` (non-blocking, context-sensitive:
+  payloads in list, count in scalar, nothing in void) folds messages into
+  per-collector state keyed by `uuid` (many test/service collectors per pipe),
+  answers `tests`/`services`/`status`/`events_file`/`final_state`, and offers
+  drain-on-call deltas (`new_collectors`, `new_failing`, `new_diagnosing`,
+  `new_completed`, `new_test_exits`, `new_finalized`). Exposes its `pipe` for
+  `IO::Select`. Used by `t2h2_collector`; future consumers are `App::Yath2`
+  and the scheduler.
 - `scripts/t2h2_collector` — runs one test file (args: test file + events
   file): creates an `Atomic::Pipe`, `spawn_collector`s the collector (middle
   process) with the recorder holding the write end, loops over the
-  notification messages printing a basic line per start / transition / final
-  result, and exits 0/1 by the collector's verdict. With `-v` it also
-  pretty-prints each message's full JSON payload after its line.
+  notification messages (via `Collector::Monitor` + `IO::Select`) printing a
+  basic line per start / transition / final result, and exits 0/1 by the
+  collector's verdict. With `-v` it also pretty-prints each message's full
+  JSON payload after its line.
 
 ## Decisions and alternatives
 

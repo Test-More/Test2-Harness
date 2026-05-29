@@ -5,12 +5,14 @@ use Config qw/%Config/;
 use File::Path qw/make_path/;
 use File::Basename qw/dirname/;
 use Atomic::Pipe;
+use IO::Select;
 
 use Test2::Harness2::Collector qw/spawn_collector/;
 use Test2::Harness2::Collector::Auditor;
 use Test2::Harness2::Collector::Recorder::Test;
+use Test2::Harness2::Collector::Monitor;
 use Test2::Harness2::Util::IPC qw/atomic_pipe_compression_args/;
-use Test2::Harness2::Util::JSON qw/decode_json encode_pretty_json/;
+use Test2::Harness2::Util::JSON qw/encode_pretty_json/;
 
 # t2h2_collector - run one test file under the collector and report progress.
 #
@@ -62,20 +64,30 @@ my $pid = spawn_collector(
 # collector dies without a clean finalization.
 $write->close;
 
-while (defined(my $msg = $read->read_message)) {
-    my $payload = decode_json($msg);
-    my $fd      = $payload->{facet_data};
+my $monitor = Test2::Harness2::Collector::Monitor->new(pipe => $read);
+my $select  = IO::Select->new($monitor->pipe->rh);
 
-    if (my $transition = $fd->{harness_state_transition}) {
-        say "transition: $transition->{state}";
+my $done = 0;
+until ($done) {
+    $select->can_read;    # block until there is something to read (or EOF)
+
+    my @payloads = $monitor->poll;
+    last unless @payloads;    # EOF: the collector closed the pipe
+
+    for my $payload (@payloads) {
+        my $fd = $payload->{facet_data};
+
+        if (my $transition = $fd->{harness_state_transition}) {
+            say "transition: $transition->{state}";
+        }
+        elsif (my $state = $fd->{harness_final_state}) {
+            say "result: " . ($state->{pass} ? 'PASS' : 'FAIL');
+        }
+
+        print encode_pretty_json($payload) if $verbose;
     }
-    elsif (my $state = $fd->{harness_final_state}) {
-        say "result: " . ($state->{pass} ? 'PASS' : 'FAIL');
-    }
 
-    print encode_pretty_json($payload) if $verbose;
-
-    last if $fd->{harness_collector_finalized};
+    $done = 1 if $monitor->new_finalized;
 }
 
 waitpid($pid, 0);

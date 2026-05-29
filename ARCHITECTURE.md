@@ -282,6 +282,19 @@ holding the write end, loops over the notification messages printing a basic
 line per start / transition / final result, and exits 0 (pass) / 1 (fail) from
 the collector's verdict. Its second argument is the events-file path.
 
+**Monitor.** `Collector::Monitor` is the read side of the notification pipes:
+constructed with the read-end `Atomic::Pipe`, its non-blocking `poll` reads
+whatever is available, folds each message into per-collector state (keyed by
+the message `uuid`, so any number of test and service collectors may share one
+pipe), and returns the payloads (list context) or their count (scalar). It
+answers queries — `tests` / `services`, per-collector `status` / `events_file`
+/ `final_state` — and drain-on-call deltas (`new_collectors`, `new_failing`,
+`new_diagnosing`, `new_completed`, `new_test_exits`, `new_finalized`) for
+callers that act on changes. It exposes its `pipe` so a caller can select on
+the read handle and block until there is something to poll. `t2h2_collector`
+uses it; `App::Yath2` and the scheduler (to free a slot when a test exits) are
+the intended future consumers.
+
 **Failure modes.** The engine returns `0` on a clean pipeline run and `255`
 on an internal collector failure, independent of the child's exit. The
 child's exit, any timeout / orphan / watched-parent-death, and the verdict

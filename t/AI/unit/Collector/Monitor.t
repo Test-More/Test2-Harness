@@ -220,4 +220,91 @@ subtest completed_collectors_not_replayed => sub {
     is([$down->tests], [], "a completed collector is not replayed to a new proxy");
 };
 
+subtest tracks_run_uuid => sub {
+    my ($mon, $w) = new_monitor();
+    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
+    start_msg($w, uuid => 'G1', name => 'svc');    # no run_uuid => global
+    $mon->poll;
+
+    is($mon->collector('T1')->{run_uuid}, 'RUN-1', "run_uuid tracked from the start message");
+    is($mon->collector('G1')->{run_uuid}, undef,   "a collector with no run_uuid is global");
+};
+
+# Drain a proxy read-end into a fresh downstream monitor and return it.
+sub downstream ($r) {
+    my $down = Test2::Harness2::Collector::Monitor->new(pipe => $r);
+    $down->poll;
+    return $down;
+}
+
+subtest proxy_filter_by_run_uuid => sub {
+    my ($mon, $w)  = new_monitor();
+    my ($dr,  $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+    $mon->add_proxy(run1 => $dw, run_uuid => 'RUN-1');
+
+    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
+    start_msg($w, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2');
+    start_msg($w, uuid => 'G1', name => 'svc');    # global
+    $mon->poll;
+
+    my $down = downstream($dr);
+    is([$down->collectors], ['T1'], "proxy only forwarded the RUN-1 collector");
+};
+
+subtest proxy_filter_global => sub {
+    my ($mon, $w)  = new_monitor();
+    my ($dr,  $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+    $mon->add_proxy(g => $dw, global => 1);
+
+    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
+    start_msg($w, uuid => 'G1', name => 'svc');    # global (no run_uuid)
+    $mon->poll;
+
+    my $down = downstream($dr);
+    is([$down->collectors], ['G1'], "global proxy only forwarded the run-less collector");
+};
+
+subtest proxy_filter_global_plus_run => sub {
+    my ($mon, $w)  = new_monitor();
+    my ($dr,  $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+    $mon->add_proxy(mix => $dw, global => 1, run_uuid => 'RUN-1');
+
+    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
+    start_msg($w, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2');
+    start_msg($w, uuid => 'G1', name => 'svc');    # global
+    $mon->poll;
+
+    my $down = downstream($dr);
+    is([sort $down->collectors], ['G1', 'T1'], "global+run proxy forwarded the global and RUN-1 collectors");
+};
+
+subtest proxy_filter_run_uuids_list => sub {
+    my ($mon, $w)  = new_monitor();
+    my ($dr,  $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+    $mon->add_proxy(multi => $dw, run_uuids => ['RUN-1', 'RUN-3']);
+
+    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
+    start_msg($w, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2');
+    start_msg($w, uuid => 'T3', name => 't/c.t', events_file => '/tmp/c', try => 1, run_uuid => 'RUN-3');
+    $mon->poll;
+
+    my $down = downstream($dr);
+    is([sort $down->collectors], ['T1', 'T3'], "run_uuids list forwarded both named runs");
+};
+
+subtest proxy_filter_replay_honors_filter => sub {
+    my ($mon, $w) = new_monitor();
+
+    # In-flight collectors of two runs before the proxy is added.
+    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
+    start_msg($w, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2');
+    $mon->poll;
+
+    my ($dr, $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+    $mon->add_proxy(run1 => $dw, run_uuid => 'RUN-1');
+
+    my $down = downstream($dr);
+    is([$down->collectors], ['T1'], "replay to a filtered proxy only includes matching runs");
+};
+
 done_testing;

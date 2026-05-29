@@ -13,6 +13,7 @@ use Test2::Harness2::Collector::Recorder::Test;
 use Test2::Harness2::Collector::Monitor;
 use Test2::Harness2::Util::IPC qw/atomic_pipe_compression_args/;
 use Test2::Harness2::Util::JSON qw/encode_pretty_json/;
+use Test2::Util::UUID qw/gen_uuid/;
 
 # t2h2_collector - run one test file under the collector and report progress.
 #
@@ -48,9 +49,15 @@ my $perl5lib = join($sep, grep { defined && length } @INC, $ENV{PERL5LIB});
 
 my ($read, $write) = Atomic::Pipe->pair(atomic_pipe_compression_args());
 
+# This runner handles a single test as its own one-off run, so the run_uuid
+# and the collector's own uuid can be one and the same fresh uuid.
+my $uuid = gen_uuid();
+
 my $pid = spawn_collector(
     is_test   => 1,
     name      => $test_file,
+    uuid      => $uuid,
+    run_uuid  => $uuid,
     exec      => [$^X, $test_file],
     env       => {PERL5LIB => $perl5lib},
     processor => 'Test2::Harness2::Collector::Auditor',

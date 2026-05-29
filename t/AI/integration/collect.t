@@ -80,7 +80,7 @@ subtest full_test_pipeline_pass => sub {
     my ($r, $w) = Atomic::Pipe->pair(compression => 'zstd', keep_compressed => 1);
 
     my $info = collect(
-        name      => "collector-test", is_test => 1,
+        name      => "collector-test", is_test => 1, run_uuid => "RUN-1",
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file => "$dir/events.jsonl.zst",
@@ -131,7 +131,7 @@ subtest full_test_pipeline_fail => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     my $info = collect(
-        name      => "collector-test", is_test => 1,
+        name      => "collector-test", is_test => 1, run_uuid => "RUN-1",
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file => "$dir/events.jsonl.zst",
@@ -147,7 +147,7 @@ subtest spawn_collector_returns_pid_and_verdict_exit => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     my $pid = spawn_collector(
-        name      => "collector-test", is_test => 1,
+        name      => "collector-test", is_test => 1, run_uuid => "RUN-1",
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file => "$dir/p-events.jsonl.zst",
@@ -160,7 +160,7 @@ subtest spawn_collector_returns_pid_and_verdict_exit => sub {
     is($? >> 8, 0, "passing test: collector process exits 0");
 
     my $pid2 = spawn_collector(
-        name      => "collector-test", is_test => 1,
+        name      => "collector-test", is_test => 1, run_uuid => "RUN-1",
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file => "$dir/f-events.jsonl.zst",
@@ -176,7 +176,7 @@ subtest collect_without_recorder => sub {
     # No recorder: nothing is written, but the in-process info summary
     # (including the auditor's verdict) is still returned.
     my $info = collect(
-        name      => "collector-test", is_test => 1,
+        name      => "collector-test", is_test => 1, run_uuid => "RUN-1",
         processor => 'Test2::Harness2::Collector::Auditor',
         exec      => tap_child('print "1..1\nok 1\n"', 0),
     );

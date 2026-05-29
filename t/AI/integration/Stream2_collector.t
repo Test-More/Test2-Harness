@@ -25,7 +25,7 @@ my $dir = tempdir(CLEANUP => 1);
 my $ef  = "$dir/events.jsonl.zst";
 
 my $exit = Test2::Harness2::Collector->start(
-    name         => "collector-test", is_test => 1,
+    name         => "collector-test", is_test => 1, run_uuid => "RUN-1",
     recorder     => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
     exec_command => [$^X, '-Ilib', 't/AI/scripts/stream2_job.pl'],
 );

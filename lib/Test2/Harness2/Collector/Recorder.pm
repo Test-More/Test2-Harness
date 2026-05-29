@@ -17,6 +17,7 @@ use Object::HashBase qw{
     -collector_uuid
     -collector_name
     -collector_try
+    -collector_run_uuid
     -events_writer
     -finalized
 };
@@ -126,21 +127,22 @@ otherwise the event is JSON-encoded and compressed into a fresh frame.
 Close the events file and send a finalization message to every notification
 pipe. Safe to call more than once -- subsequent calls are no-ops.
 
-=item $rec->set_collector_info(uuid => $uuid, name => $name, try => $try)
+=item $rec->set_collector_info(uuid => $uuid, name => $name, try => $try, run_uuid => $run)
 
 Record the owning collector's identity. The collector calls this so the
 recorder can stamp the collector C<uuid> on every notification message and
-include the C<name>, events file, and (for test collectors) the C<try> number
-in the start message.
+include the C<name>, events file, C<run_uuid> (when set), and (for test
+collectors) the C<try> number in the start message.
 
 =back
 
 =cut
 
 sub set_collector_info ($self, %info) {
-    $self->{+COLLECTOR_UUID} = $info{uuid} if exists $info{uuid};
-    $self->{+COLLECTOR_NAME} = $info{name} if exists $info{name};
-    $self->{+COLLECTOR_TRY}  = $info{try}  if exists $info{try};
+    $self->{+COLLECTOR_UUID}     = $info{uuid}     if exists $info{uuid};
+    $self->{+COLLECTOR_NAME}     = $info{name}     if exists $info{name};
+    $self->{+COLLECTOR_TRY}      = $info{try}      if exists $info{try};
+    $self->{+COLLECTOR_RUN_UUID} = $info{run_uuid} if exists $info{run_uuid};
     return;
 }
 
@@ -208,8 +210,9 @@ state across messages.
 
 =item %extra = $self->_start_extra
 
-L</_collector_extra> plus the C<events_file> path; the start message adds the
-events-file location on top of the identity fields.
+L</_collector_extra> plus the C<events_file> path and, when set, the
+C<run_uuid>; the start message adds the events-file location and run
+association on top of the identity fields.
 
 =back
 
@@ -256,7 +259,11 @@ sub _collector_extra ($self) {
 }
 
 sub _start_extra ($self) {
-    return ($self->_collector_extra, events_file => $self->{+EVENTS_FILE});
+    return (
+        $self->_collector_extra,
+        events_file => $self->{+EVENTS_FILE},
+        (defined $self->{+COLLECTOR_RUN_UUID} ? (run_uuid => $self->{+COLLECTOR_RUN_UUID}) : ()),
+    );
 }
 
 1;

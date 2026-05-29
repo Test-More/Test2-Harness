@@ -134,9 +134,10 @@ The uuids of all collectors seen, or just the tests / just the services.
 =item $state = $mon->collector($uuid)
 
 The state hashref for one collector (or C<undef>): C<uuid>, C<category>
-(C<test> / C<service>), C<name>, C<events_file>, C<try>, C<status>
-(C<running> / C<complete> / C<finalized>), the C<failing> / C<diagnosing>
-flags, and C<final_state> once seen.
+(C<test> / C<service>), C<name>, C<events_file>, C<try>, C<run_uuid> (the run
+it belongs to, or undef for a global collector), C<status> (C<running> /
+C<complete> / C<finalized>), the C<failing> / C<diagnosing> flags, and
+C<final_state> once seen.
 
 =item $status = $mon->status($uuid)
 
@@ -168,8 +169,11 @@ sub poll ($self) {
         $count++;
         push @payloads => $payload unless $void;
         $self->_process($payload);
-        $self->_forward($msg);
-        $self->_retain_for_replay($payload, $msg);
+
+        my $uuid = $payload->{facet_data}{harness_collector}{uuid};
+        next unless defined $uuid;
+        $self->_forward($uuid, $msg);
+        $self->_retain_for_replay($uuid, $msg);
     }
 
     return if $void;
@@ -234,37 +238,63 @@ sub new_finalized  ($self) { return $self->_drain(PENDING_FINALIZED) }
 
 =item $mon->add_proxy($name, $pipe)
 
-Register a proxy: every message the monitor reads from then on is also
-forwarded, verbatim, to C<$pipe> (an L<Atomic::Pipe> write end, switched to
-zstd here). Any number of proxies may be registered under distinct names.
+=item $mon->add_proxy($name, $pipe, global => 1)
 
-So a monitor added mid-run does not see collectors half-way through their
-lifecycle, C<add_proxy> first replays -- to the new proxy only -- the messages
-of every collector that has not yet completed, in arrival order. A downstream
-L<Test2::Harness2::Collector::Monitor> reading C<$pipe> therefore reconstructs
-the same state this monitor holds.
+=item $mon->add_proxy($name, $pipe, run_uuid => $uuid)
+
+=item $mon->add_proxy($name, $pipe, run_uuids => \@uuids)
+
+Register a proxy: messages the monitor reads from then on are also forwarded,
+verbatim, to C<$pipe> (an L<Atomic::Pipe> write end, switched to zstd here).
+Any number of proxies may be registered under distinct names.
+
+With no options the proxy receives B<every> message. Options restrict it to
+the collectors a consumer cares about, and may be combined:
+
+=over 4
+
+=item global => 1
+
+Forward only B<global> collectors -- those with no C<run_uuid>.
+
+=item run_uuid => $uuid
+
+=item run_uuids => \@uuids
+
+Forward only collectors whose C<run_uuid> is among those given.
+
+=back
+
+C<global =E<gt> 1> plus a run filter forwards both. The run_uuids need not
+correspond to any collector yet -- matching ones that arrive later are
+forwarded.
+
+So a proxy added mid-run does not see collectors half-way through their
+lifecycle, C<add_proxy> first replays -- to the new proxy only, and subject to
+the same filter -- the messages of every collector that has not yet completed,
+in arrival order. A downstream L<Test2::Harness2::Collector::Monitor> reading
+C<$pipe> therefore reconstructs the matching state this monitor holds.
 
 =item $pipe = $mon->remove_proxy($name)
 
-Stop forwarding to (and return) the proxy registered under C<$name>.
+Stop forwarding to (and return the pipe of) the proxy registered under
+C<$name>.
 
 =back
 
 =cut
 
-sub add_proxy ($self, $name, $pipe) {
+sub add_proxy ($self, $name, $pipe, %opts) {
     croak "a proxy name is required" unless defined $name && length $name;
     croak "a proxy pipe is required" unless $pipe;
 
-    # A proxy currently receives every message. A future filter (forward only
-    # global-service state to a `yath run` proxy) is described in
-    # ARCHITECTURE.md §6.1 "Selective proxying of global vs run services".
     apply_atomic_pipe_compression($pipe);
-    $self->{+PROXIES}{$name} = $pipe;
+    my $proxy = $self->{+PROXIES}{$name} = {pipe => $pipe, filter => $self->_build_filter(%opts)};
 
-    # Replay the in-flight collectors so the new proxy's consumer does not miss
-    # the start (and any failing/diagnosing) it needs to track state.
+    # Replay the in-flight collectors the proxy wants, so its consumer does not
+    # miss the start (and any failing/diagnosing) it needs to track state.
     for my $uuid (sort keys %{$self->{+REPLAY}}) {
+        next unless $self->_proxy_wants($proxy, $uuid);
         $self->_write_proxy($pipe, $_) for @{$self->{+REPLAY}{$uuid}};
     }
 
@@ -272,7 +302,8 @@ sub add_proxy ($self, $name, $pipe) {
 }
 
 sub remove_proxy ($self, $name) {
-    return delete $self->{+PROXIES}{$name};
+    my $proxy = delete $self->{+PROXIES}{$name} or return undef;
+    return $proxy->{pipe};
 }
 
 =head1 PRIVATE METHODS
@@ -290,11 +321,22 @@ Return and clear one of the pending change lists.
 Fold one decoded message into per-collector state and the pending change
 lists, keyed by the message's collector uuid.
 
-=item $self->_forward($msg)
+=item $self->_forward($uuid, $msg)
 
-Forward one raw message to every registered proxy.
+Forward one raw message (for collector C<$uuid>) to every registered proxy
+whose filter accepts it.
 
-=item $self->_retain_for_replay($payload, $msg)
+=item $filter = $self->_build_filter(%opts)
+
+Turn C<add_proxy>'s C<global> / C<run_uuid> / C<run_uuids> options into a
+filter hashref, or C<undef> when no options were given (forward everything).
+
+=item $bool = $self->_proxy_wants($proxy, $uuid)
+
+Whether a proxy's filter accepts the collector C<$uuid> (always true for an
+unfiltered proxy).
+
+=item $self->_retain_for_replay($uuid, $msg)
 
 Keep the raw message in the per-collector replay buffer while the collector is
 in flight, so a proxy added later can be caught up; drop the buffer once the
@@ -308,17 +350,43 @@ Write one raw message to a single proxy pipe, warning (not dying) on failure.
 
 =cut
 
-sub _forward ($self, $msg) {
+sub _forward ($self, $uuid, $msg) {
     my $proxies = $self->{+PROXIES};
     return unless %$proxies;
 
-    $self->_write_proxy($_, $msg) for values %$proxies;
+    for my $proxy (values %$proxies) {
+        next unless $self->_proxy_wants($proxy, $uuid);
+        $self->_write_proxy($proxy->{pipe}, $msg);
+    }
+
     return;
 }
 
-sub _retain_for_replay ($self, $payload, $msg) {
-    my $uuid = $payload->{facet_data}{harness_collector}{uuid} // return;
+sub _build_filter ($self, %opts) {
+    my @runs;
+    push @runs => $opts{run_uuid}     if defined $opts{run_uuid};
+    push @runs => @{$opts{run_uuids}} if $opts{run_uuids};
 
+    my $global = $opts{global} ? 1 : 0;
+
+    # No filter options: the proxy gets everything.
+    return undef unless $global || @runs;
+
+    return {global => $global, run_uuids => {map { $_ => 1 } @runs}};
+}
+
+sub _proxy_wants ($self, $proxy, $uuid) {
+    my $filter = $proxy->{filter} or return 1;    # no filter -> forward all
+
+    my $c   = $self->{+COLLECTORS}{$uuid};
+    my $run = $c ? $c->{run_uuid} : undef;
+
+    return 1 if $filter->{global} && !defined $run;
+    return 1 if defined $run      && $filter->{run_uuids}{$run};
+    return 0;
+}
+
+sub _retain_for_replay ($self, $uuid, $msg) {
     my $status = $self->{+COLLECTORS}{$uuid}{status} // '';
     if ($status eq 'complete' || $status eq 'finalized') {
         delete $self->{+REPLAY}{$uuid};
@@ -381,6 +449,7 @@ sub _process_transition ($self, $c, $state, $hc) {
         $c->{name}        = $hc->{name};
         $c->{events_file} = $hc->{events_file};
         $c->{try}         = $hc->{try};
+        $c->{run_uuid}    = $hc->{run_uuid};
         $c->{category}    = defined $hc->{try} ? 'test' : 'service';
         $c->{status}      = 'running';
         return;

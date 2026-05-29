@@ -48,6 +48,7 @@ my @IGNORED_SIGNALS   = qw/USR1 USR2 HUP PIPE/;
 use Object::HashBase qw{
     <name
     <uuid
+    <run_uuid
     <is_test
     <exec_command
     <run_sub
@@ -110,10 +111,9 @@ self-contained frame per event). The recorder is optional: with none, events
 are produced and audited but not written anywhere, so an in-process
 L</collect> still returns its info summary while a forked L</spawn_collector>
 (whose summary cannot cross the fork) requires one. The collected process's
-own exit becomes a synthetic
-synthetic C<harness_process_exit> event dispatched through the pipeline after
-all output has drained, so the processor and recorder see it like any other
-event.
+own exit becomes a synthetic C<harness_process_exit> event dispatched through
+the pipeline after all output has drained, so the processor and recorder see
+it like any other event.
 
 Each message burst arrives with the on-wire zstd frame cached on the event's
 C<compressed_form> slot; when present, the recorder writes that frame verbatim
@@ -172,6 +172,13 @@ notification so a listener knows what this collector is running.
 This collector's identifier. Generated with L<Test2::Util::UUID> during
 construction when not supplied; the recorder stamps it on every notification
 message so a listener can tell which collector sent it.
+
+=item run_uuid
+
+The run this collector belongs to. B<Required> for test collectors
+(C<is_test>); optional for service collectors, where its absence marks the
+collector as global. When set it is included in the recorder's start
+notification, so a consumer can group collectors by run.
 
 =item recorder => $instance_or_class
 
@@ -367,6 +374,9 @@ sub init ($self) {
     croak "name is a required attribute"
         unless defined $self->{+NAME} && length $self->{+NAME};
 
+    croak "run_uuid is a required attribute for test collectors"
+        if $self->{+IS_TEST} && !(defined $self->{+RUN_UUID} && length $self->{+RUN_UUID});
+
     croak "exec_command or run_sub must be supplied"
         unless $self->{+EXEC_COMMAND} || $self->{+RUN_SUB};
     croak "exec_command and run_sub are mutually exclusive"
@@ -391,7 +401,8 @@ sub init ($self) {
         $self->{+RECORDER}->set_collector_info(
             uuid => $self->{+UUID},
             name => $self->{+NAME},
-            ($self->{+IS_TEST} ? (try => 1) : ()),    # retry is not implemented yet
+            ($self->{+IS_TEST}          ? (try      => 1)                  : ()),    # retry is not implemented yet
+            (defined $self->{+RUN_UUID} ? (run_uuid => $self->{+RUN_UUID}) : ()),
         );
     }
 

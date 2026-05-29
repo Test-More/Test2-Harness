@@ -296,12 +296,19 @@ the read handle and block until there is something to poll. `t2h2_collector`
 uses it; `App::Yath2` and the scheduler (to free a slot when a test exits) are
 the intended future consumers.
 
-A monitor can also **proxy**: `add_proxy($name, $pipe)` forwards every message
-it reads on to another `Atomic::Pipe` (any number of named proxies). So a
-proxy added mid-run does not see collectors half-way through their lifecycle,
-`add_proxy` first replays the buffered messages of every not-yet-complete
-collector to the new proxy, so a downstream monitor reading it reconstructs
-the same state. `remove_proxy($name)` stops forwarding.
+A monitor can also **proxy**: `add_proxy($name, $pipe, %filter)` forwards
+messages it reads on to another `Atomic::Pipe` (any number of named proxies).
+With no filter the proxy gets everything; `global => 1` restricts it to
+collectors with no `run_uuid`, and `run_uuid => $u` / `run_uuids => \@u`
+restrict it to the named runs (combinable, and the runs need not exist yet).
+So a proxy added mid-run does not see collectors half-way through their
+lifecycle, `add_proxy` first replays — subject to the same filter — the
+buffered messages of every not-yet-complete collector, so a downstream monitor
+reconstructs the matching state. `remove_proxy($name)` stops forwarding.
+
+Each collector carries a `run_uuid` (required for tests, optional for
+services; absent ⇒ global), sent in its start message; the monitor tracks it
+and filters proxies on it.
 
 **Failure modes.** The engine returns `0` on a clean pipeline run and `255`
 on an internal collector failure, independent of the child's exit. The
@@ -325,23 +332,19 @@ forcing the decision, and note who is expected to answer it. Resolved
 entries move into the relevant numbered section above and are removed
 from this list.
 
-### 6.1 Selective proxying of global vs run services (future)
+### 6.1 Global vs run services for `yath start` / `yath run` (future)
 
-`Collector::Monitor` proxying (§4.1) currently forwards B<every> message to
-every proxy. A future requirement, once the harness distinguishes B<global>
-services from B<run> services and associates every test with a run, is to
-forward only the messages a given proxy cares about — specifically, only the
-B<global> services' state and updates.
+The proxy filtering needed for this is now in place (§4.1): a proxy can be
+restricted to `global => 1` and/or specific `run_uuid`s, and collectors carry
+a `run_uuid`. What remains is the surrounding machinery that will B<use> it.
 
-The driving case is `yath start` + `yath run`: the global services start
-first under a long-lived process, and a `yath run` arrives later with its own
-tests and run-scoped services. That `run` needs the current state and ongoing
-updates of the global services (so it can use them), but must not receive
-updates for tests or services belonging to other runs. So `add_proxy` will
-need a filter (e.g. by collector category / run id), and the in-flight replay
-will need to honor the same filter.
+The driving case is `yath start` + `yath run`: global services start first
+under a long-lived process, and a `yath run` arrives later with its own tests
+and run-scoped services. The `run` will attach a proxy filtered to
+`global => 1` plus its own `run_uuid`, so it sees the global services' state
+and its own collectors but not other runs' traffic.
 
-Not started — captured so the proxy interface is designed with room for it.
-The category groundwork exists (the monitor already tags collectors as
-`test` vs `service`); what is missing is the global/run-service distinction
-and the per-test run association.
+Still to do (not started): a first-class distinction between B<global> and
+B<run> services (today "global" is simply "no `run_uuid`"); the run lifecycle
+that assigns a `run_uuid` and feeds tests in after services are up; and the
+`yath start` / `yath run` commands that wire a filtered proxy per run.

@@ -24,13 +24,16 @@ that on the `collector-redirect` branch and recorded the direction change in
   event on the process-exit event.
 - `Collector::Recorder::Test` — sends each transition and the final state to
   the pipes only; leaves everything else in the events file. Identity rides
-  the start message once (`name` / events file / `try`); every later message
-  carries only the `uuid`, since the consumer is a state machine. There is no
-  state or transitions file — the events file is the only output file.
+  the start message once (`name` / events file / `try` / `run_uuid`); every
+  later message carries only the `uuid`, since the consumer is a state
+  machine. There is no state or transitions file — the events file is the
+  only output file.
 - `Test2::Harness2::Collector` gained the exported `collect` /
   `spawn_collector` functions and a recorder sink in place of the hard-coded
   events-file writer. It has a mandatory `name` (the test file or service
-  name) and generates a `uuid` in init, which it pushes to the recorder.
+  name), generates a `uuid` in init, and takes a `run_uuid` (required for test
+  collectors, optional/global for services); it pushes all of these to the
+  recorder.
 - `Collector::Monitor` — read side of the notification pipes. Constructed
   with the read-end `Atomic::Pipe`; `poll` (non-blocking, context-sensitive:
   payloads in list, count in scalar, nothing in void) folds messages into
@@ -39,10 +42,11 @@ that on the `collector-redirect` branch and recorded the direction change in
   drain-on-call deltas (`new_collectors`, `new_failing`, `new_diagnosing`,
   `new_completed`, `new_test_exits`, `new_finalized`). Exposes its `pipe` for
   `IO::Select`. Used by `t2h2_collector`; future consumers are `App::Yath2`
-  and the scheduler. Can also proxy: `add_proxy($name, $pipe)` forwards every
-  message to another pipe and first replays the buffered messages of each
-  not-yet-complete collector so a mid-run downstream monitor reconstructs full
-  state; `remove_proxy($name)` stops it.
+  and the scheduler. Can also proxy: `add_proxy($name, $pipe, %filter)`
+  forwards messages to another pipe (filterable by `global => 1` and/or
+  `run_uuid`/`run_uuids`) and first replays the buffered messages of each
+  not-yet-complete matching collector so a mid-run downstream monitor
+  reconstructs full state; `remove_proxy($name)` stops it.
 - `scripts/t2h2_collector` — runs one test file (args: test file + events
   file): creates an `Atomic::Pipe`, `spawn_collector`s the collector (middle
   process) with the recorder holding the write end, loops over the
@@ -149,8 +153,9 @@ Dropped by decision: peek/live-preview mode (covered by buffering +
 ## Follow-ups not done
 
 - `scripts/t2h2_collector` is not yet wired into `dist.ini` packaging.
-- Selective proxying: `Collector::Monitor` proxies forward every message. A
-  future requirement (once global vs run services are distinguished and tests
-  are associated with a run) is to forward only global-service state/updates
-  to a `yath run` proxy, so a run does not receive other runs' test/service
-  updates. Captured in ARCHITECTURE.md §6.1.
+- Global vs run services for `yath start` / `yath run`: the proxy filtering
+  (global / run_uuid) and the collector `run_uuid` are done; what remains is a
+  first-class global-vs-run service distinction, the run lifecycle that
+  assigns run_uuids and feeds tests in after services are up, and the yath
+  commands that attach a filtered proxy per run. Captured in ARCHITECTURE.md
+  §6.1.

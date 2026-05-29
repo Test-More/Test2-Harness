@@ -4,6 +4,7 @@ use v5.38;
 use File::Temp qw/tempdir/;
 
 use Test2::Harness2::Collector;
+use Test2::Harness2::Collector::Recorder;
 use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
 use Test2::Harness2::Util::JSON qw/decode_json/;
 
@@ -24,7 +25,7 @@ my $ef  = "$dir/events.jsonl.zst";
 my $tap = qq{TAP version 13\n1..2\nok 1 - alpha\nnot ok 2 - beta\n};
 
 my $exit = Test2::Harness2::Collector->start(
-    events_file  => $ef,
+    recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
     parser       => 'Test2::Harness2::Collector::Parser::TAPParser',
     exec_command => [$^X, '-e', "print q{$tap}; print STDERR qq{# a diagnostic\\n};"],
 );

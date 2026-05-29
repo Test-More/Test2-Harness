@@ -24,7 +24,6 @@ use Test2::Harness2::Util::IPC qw/
 /;
 use Test2::Harness2::Util::JSON qw/decode_json encode_json/;
 use Test2::Harness2::Event;
-use Test2::Harness2::Collector::Recorder;
 
 our @EXPORT_OK = qw/collect spawn_collector/;
 
@@ -32,7 +31,7 @@ our @EXPORT_OK = qw/collect spawn_collector/;
 # BSD::Resource is available. It is an optional dependency (Suggests) -- when
 # it is absent the exit event simply omits the memory facet. CPU timing comes
 # from the core times() builtin and is always present.
-my $HAVE_BSD_RESOURCE = do {
+use constant HAVE_BSD_RESOURCE => do {
     my $ok = eval { require BSD::Resource; 1 };
     $ok ? 1 : 0;
 };
@@ -50,7 +49,6 @@ use Object::HashBase qw{
     <exec_command
     <run_sub
     <child_env
-    <events_file
     <parser
     <processor
     <recorder
@@ -98,14 +96,18 @@ The collector subsystem. It forks a single child, wires the child's STDOUT
 and STDERR to mixed-mode L<Atomic::Pipe>s, and in the collector parent drives
 the event pipeline:
 
-    bytes  ->  parser  ->  optional processor  ->  recorder
+    bytes  ->  parser  ->  optional processor  ->  optional recorder
 
 The parser turns raw stream lines and pre-decoded JSON message bursts into
 L<Test2::Harness2::Event> objects. The optional processor sees one event at a
 time and may drop it, pass it through, or expand it into several events. The
 resulting events are handed to the recorder, which owns the on-disk format
 (the base recorder writes a multi-frame C<jsonl.zst> events file, one
-self-contained frame per event). The collected process's own exit becomes a
+self-contained frame per event). The recorder is optional: with none, events
+are produced and audited but not written anywhere, so an in-process
+L</collect> still returns its info summary while a forked L</spawn_collector>
+(whose summary cannot cross the fork) requires one. The collected process's
+own exit becomes a synthetic
 synthetic C<harness_process_exit> event dispatched through the pipeline after
 all output has drained, so the processor and recorder see it like any other
 event.
@@ -125,34 +127,46 @@ collected process's own exit status.
 
 =head1 SYNOPSIS
 
-    use Test2::Harness2::Collector;
+    use Test2::Harness2::Collector qw/collect spawn_collector/;
+    use Test2::Harness2::Collector::Recorder;
 
-    my $exit = Test2::Harness2::Collector->start(
-        is_test     => 1,
-        events_file => "$dir/events.jsonl.zst",
-        exec_command => [$^X, '-Ilib', 't/foo.t'],
+    # Run a test in this process and inspect the result.
+    my $info = collect(
+        is_test  => 1,
+        exec     => [$^X, '-Ilib', 't/foo.t'],
+        recorder => Test2::Harness2::Collector::Recorder->new(
+            events_file => "$dir/events.jsonl.zst",
+        ),
     );
 
-C<start> is a thin convenience that constructs a collector via C<new> and
-then calls C<run_collector> on it.
+    # Or fork a dedicated collector process (a recorder is required here).
+    my $pid = spawn_collector(
+        is_test  => 1,
+        exec     => [$^X, '-Ilib', 't/foo.t'],
+        recorder => Test2::Harness2::Collector::Recorder->new(
+            events_file => "$dir/events.jsonl.zst",
+        ),
+    );
+    waitpid($pid, 0);
+
+The exported functions are the polished interface; C<start> /
+C<run_collector> are the underlying engine, where C<start> is a thin
+convenience that constructs a collector via C<new> and then calls
+C<run_collector> on it.
 
 =head1 ATTRIBUTES
 
 =over 4
 
-=item events_file
-
-Path to a multi-frame zstd events file. A convenience for the common case:
-when no C<recorder> is supplied, the collector builds a base
-L<Test2::Harness2::Collector::Recorder> that writes to this path. One of
-C<events_file> or C<recorder> must be supplied.
-
 =item recorder => $instance_or_class
 
-The pipeline sink: a L<Test2::Harness2::Collector::Role::Recorder> implementer
-(blessed instance, class name, or C<[class =E<gt> @args]>). When omitted, a
-base recorder is built from C<events_file>. The recorder receives every event
-the pipeline produces, including the synthetic process-exit event.
+Optional pipeline sink: a L<Test2::Harness2::Collector::Role::Recorder>
+implementer (blessed instance, class name, or C<[class =E<gt> @args]>). It
+receives every event the pipeline produces, including the synthetic
+process-exit event, and owns whatever it writes (a file, a database, nothing
+at all). When omitted, nothing is recorded -- an in-process L</collect> still
+returns its info summary, but L</spawn_collector> throws, since a forked
+collector's summary cannot reach the caller.
 
 =item encoding => $charset
 
@@ -278,10 +292,13 @@ C<orphaned>, C<timed_out>, or C<parent_exited> as applicable.
 =item $pid = spawn_collector(%args)
 
 Fork a dedicated collector process (which in turn forks and collects the
-child) and return its pid to the caller. The collector process runs
-L</collect> and exits C<0> when the run passed and C<1> when it failed (from
-the processor's verdict, or the child's own exit code when there is no
-verdict). Two processes are created in total: the collector and its child.
+child) and return its pid to the caller. A C<recorder> is required: the
+collector process's info summary cannot reach the caller across the fork, so
+a recorder is the only way to capture the run; calling without one croaks.
+The collector process runs L</collect> and exits C<0> when the run passed and
+C<1> when it failed (from the processor's verdict, or the child's own exit
+code when there is no verdict). Two processes are created in total: the
+collector and its child.
 
 =back
 
@@ -296,6 +313,9 @@ sub collect (%args) {
 sub spawn_collector (%args) {
     my $class = __PACKAGE__;
     my %norm  = $class->_normalize_args(%args);
+
+    croak "spawn_collector requires a recorder (a forked collector's info summary cannot reach the caller)"
+        unless $norm{recorder};
 
     my $pid = fork // die "Could not fork collector process: $!";
     return $pid if $pid;
@@ -333,10 +353,6 @@ sub init ($self) {
         unless $self->{+EXEC_COMMAND} || $self->{+RUN_SUB};
     croak "exec_command and run_sub are mutually exclusive"
         if $self->{+EXEC_COMMAND} && $self->{+RUN_SUB};
-
-    croak "recorder or events_file is a required attribute"
-        unless $self->{+RECORDER}
-        || (defined $self->{+EVENTS_FILE} && length $self->{+EVENTS_FILE});
 
     $self->{+ORPHAN_TIMEOUT}   //= DEFAULT_ORPHAN_TIMEOUT;
     $self->{+SILENCE_TIMEOUT}  //= 0;
@@ -444,8 +460,7 @@ Coerce a pipeline-part attribute into an instance via L</_coerce_class_arg>,
 applying the part's default when C<$thing> is C<undef>: the parser defaults
 to L<Test2::Harness2::Collector::Parser::TAPParser> for a test job
 (C<is_test> true) and L<Test2::Harness2::Collector::Parser::IOParser>
-otherwise; the processor stays C<undef>; the recorder defaults to a base
-L<Test2::Harness2::Collector::Recorder> over C<events_file>.
+otherwise; the processor and recorder both stay C<undef>.
 
 =item _coerce_class_arg
 
@@ -476,11 +491,8 @@ sub _coerce_processor ($self, $thing) {
 }
 
 sub _coerce_recorder ($self, $thing) {
-    return $self->_coerce_class_arg($thing, 'recorder') if defined $thing;
-
-    # No recorder supplied: default to the base recorder writing the
-    # events_file the caller named (init guaranteed one of the two is set).
-    return Test2::Harness2::Collector::Recorder->new(events_file => $self->{+EVENTS_FILE});
+    return undef unless defined $thing;
+    return $self->_coerce_class_arg($thing, 'recorder');
 }
 
 sub _coerce_class_arg ($self, $thing, $label) {
@@ -760,7 +772,7 @@ installed or the lookup fails.
 =cut
 
 sub _child_maxrss ($self) {
-    return undef unless $HAVE_BSD_RESOURCE;
+    return undef unless HAVE_BSD_RESOURCE;
 
     my $maxrss;
     my $ok = eval {
@@ -1153,7 +1165,7 @@ sub _dispatch_event ($self, $event) {
     my $processor = $self->{+PROCESSOR};
     my @events    = $processor ? $processor->process_event($event) : ($event);
 
-    my $recorder = $self->{+RECORDER};
+    my $recorder = $self->{+RECORDER} or return;
     for my $e (@events) {
         warn "recorder record_event failed: $@\n"
             unless eval { $recorder->record_event($e); 1 };

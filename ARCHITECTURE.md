@@ -205,11 +205,12 @@ pipeline parts under `lib/Test2/Harness2/Collector/`.
 **Pipeline.** A single child is forked; its STDOUT and STDERR are wired to
 mixed-mode `Atomic::Pipe`s (zstd on the wire). The collector parent runs:
 
-    bytes  ->  parser  ->  optional processor  ->  recorder
+    bytes  ->  parser  ->  optional processor  ->  optional recorder
 
 The parser turns lines and pre-decoded message bursts into
 `Test2::Harness2::Event` objects. The optional processor sees one event at a
-time and returns zero or more events. The recorder is the sink. When a child
+time and returns zero or more events. The optional recorder is the sink (it
+owns whatever it writes — a file, a database, nothing). When a child
 exits, the collector drains both pipes, then dispatches a synthetic
 `harness_process_exit` event through the pipeline — so the exit event is
 always recorded **after** all of the child's output. The exit event carries
@@ -229,13 +230,17 @@ with a `control` facet carrying an `encoding`.
   must clear its `compressed_form`.
 - **Recorder** — `record_event($event)` persists one event; `finalize`
   closes and, given a `touchfile`, touches it. The base recorder
-  (`Collector::Recorder`) writes every event to one `jsonl.zst` file.
+  (`Collector::Recorder`) writes every event to one `jsonl.zst` file. The
+  recorder is optional and there is no default: with none, events are still
+  parsed and audited but nothing is written.
 
 **Functional interface.** `Test2::Harness2::Collector` exports `collect`
 (run in the current process; returns `{exit => {...}, final_state => ...}`
 where `exit` is the hash `parse_exit` returns — `sig` / `err` / `dmp` /
 `all`) and `spawn_collector` (fork a collector process; return its pid;
-exit 0/1 by verdict). `parser` / `processor` / `recorder` each accept a
+exit 0/1 by verdict). A recorder-less `collect` still returns its summary;
+`spawn_collector` **requires** a recorder, since a forked collector's summary
+cannot cross the fork. `parser` / `processor` / `recorder` each accept a
 blessed instance, a class name, or `[class => @args]`.
 
 **Test jobs.** A test job (`is_test`) runs with the stream formatter selected

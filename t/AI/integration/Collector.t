@@ -7,6 +7,7 @@ use POSIX ();
 use Time::HiRes ();
 
 use Test2::Harness2::Collector;
+use Test2::Harness2::Collector::Recorder;
 use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
 use Test2::Harness2::Util::JSON qw/decode_json encode_json/;
 
@@ -61,7 +62,7 @@ subtest exec_command => sub {
     my $ef  = "$dir/events.jsonl.zst";
 
     my $exit = Test2::Harness2::Collector->start(
-        events_file  => $ef,
+        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
         exec_command => [$^X, '-e', 'print "hello stdout\n"; print STDERR "oops stderr\n"; exit 3'],
     );
 
@@ -87,7 +88,7 @@ subtest run_sub => sub {
 
     my $ran  = 0;
     my $exit = Test2::Harness2::Collector->start(
-        events_file => $ef,
+        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
         run_sub     => sub ($guard) { $ran = 1; print "from the sub\n"; },
     );
 
@@ -109,7 +110,7 @@ subtest burst_passthrough => sub {
     # sync marker is a separate JSON array [pid, ordinal] written to both
     # handles. Markers are never recorded.
     my $exit = Test2::Harness2::Collector->start(
-        events_file => $ef,
+        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
         run_sub     => sub ($guard) {
             my $out = mixed_pipe(\*STDOUT);
             my $err = mixed_pipe(\*STDERR);
@@ -145,7 +146,7 @@ subtest exit_details => sub {
     my $ef  = "$dir/events.jsonl.zst";
 
     Test2::Harness2::Collector->start(
-        events_file  => $ef,
+        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
         exec_command => [$^X, '-e', 'exit 3'],
     );
 
@@ -183,7 +184,7 @@ subtest watch_parent_pid => sub {
 
     my $start = Time::HiRes::time();
     my $exit  = Test2::Harness2::Collector->start(
-        events_file      => $ef,
+        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
         watch_parent_pid => $ppid,
         run_sub          => sub ($guard) { Time::HiRes::sleep(30) },
     );
@@ -206,21 +207,20 @@ subtest watch_parent_pid => sub {
 
 subtest mutual_exclusion => sub {
     like(
-        dies { Test2::Harness2::Collector->new(events_file => 'x', exec_command => ['x'], run_sub => sub {}) },
+        dies { Test2::Harness2::Collector->new(exec_command => ['x'], run_sub => sub {}) },
         qr/mutually exclusive/,
         "exec_command and run_sub are mutually exclusive",
     );
 
     like(
-        dies { Test2::Harness2::Collector->new(events_file => 'x') },
+        dies { Test2::Harness2::Collector->new() },
         qr/exec_command or run_sub/,
         "one of exec_command / run_sub is required",
     );
 
-    like(
-        dies { Test2::Harness2::Collector->new(exec_command => ['x']) },
-        qr/events_file is a required/,
-        "events_file is required",
+    ok(
+        lives { Test2::Harness2::Collector->new(exec_command => ['x']) },
+        "no recorder is allowed (an in-process run still returns its info)",
     );
 };
 

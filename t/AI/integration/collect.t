@@ -6,6 +6,7 @@ use POSIX ();
 
 use Test2::Harness2::Collector qw/collect spawn_collector/;
 use Test2::Harness2::Collector::Auditor::Test;
+use Test2::Harness2::Collector::Recorder;
 use Test2::Harness2::Collector::Recorder::Test;
 use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
 use Test2::Harness2::Util::JSON qw/decode_json/;
@@ -30,8 +31,8 @@ subtest collect_returns_info => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     my $info = collect(
-        events_file => "$dir/events.jsonl.zst",
-        exec        => [$^X, '-e', 'print "hi\n"; exit 3'],
+        recorder => Test2::Harness2::Collector::Recorder->new(events_file => "$dir/events.jsonl.zst"),
+        exec     => [$^X, '-e', 'print "hi\n"; exit 3'],
     );
 
     # info exit mirrors parse_exit's output (sig / err / dmp / all).
@@ -47,9 +48,9 @@ subtest collect_applies_env => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     collect(
-        events_file => "$dir/events.jsonl.zst",
-        env         => {T2H2_COLLECT_TEST => 'env-made-it'},
-        exec        => [$^X, '-e', 'print "VAR=$ENV{T2H2_COLLECT_TEST}\n"'],
+        recorder => Test2::Harness2::Collector::Recorder->new(events_file => "$dir/events.jsonl.zst"),
+        env      => {T2H2_COLLECT_TEST => 'env-made-it'},
+        exec     => [$^X, '-e', 'print "VAR=$ENV{T2H2_COLLECT_TEST}\n"'],
     );
 
     my $events = read_jsonl_zst("$dir/events.jsonl.zst");
@@ -160,6 +161,26 @@ subtest spawn_collector_returns_pid_and_verdict_exit => sub {
 
     waitpid($pid2, 0);
     is($? >> 8, 1, "failing test: collector process exits 1");
+};
+
+subtest collect_without_recorder => sub {
+    # No recorder: nothing is written, but the in-process info summary
+    # (including the auditor's verdict) is still returned.
+    my $info = collect(
+        is_test   => 1,
+        processor => 'Test2::Harness2::Collector::Auditor::Test',
+        exec      => tap_child('print "1..1\nok 1\n"', 0),
+    );
+
+    is($info->{exit}{err}, 0, "clean exit with no recorder");
+    is($info->{final_state}{pass}, 1, "verdict still available with no recorder");
+};
+
+subtest spawn_collector_requires_recorder => sub {
+    my $err = dies {
+        spawn_collector(exec => [$^X, '-e', 'exit 0']);
+    };
+    like($err, qr/requires a recorder/, "spawn_collector without a recorder croaks");
 };
 
 done_testing;

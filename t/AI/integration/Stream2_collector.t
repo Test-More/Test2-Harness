@@ -4,6 +4,7 @@ use v5.38;
 use File::Temp qw/tempdir/;
 
 use Test2::Harness2::Collector;
+use Test2::Harness2::Collector::Recorder;
 use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
 use Test2::Harness2::Util::JSON qw/decode_json/;
 
@@ -25,7 +26,7 @@ my $ef  = "$dir/events.jsonl.zst";
 
 my $exit = Test2::Harness2::Collector->start(
     is_test      => 1,
-    events_file  => $ef,
+    recorder => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
     exec_command => [$^X, '-Ilib', 't/AI/scripts/stream2_job.pl'],
 );
 

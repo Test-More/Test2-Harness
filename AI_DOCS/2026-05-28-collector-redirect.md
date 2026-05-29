@@ -80,10 +80,14 @@ state as events rather than calling a recorder's `record_state`, and it has no
 `startup`/`shutdown` lifecycle (starting fires on the first event, completed +
 final-state on the exit event).
 
-**`events_file` kept as a convenience.** When no `recorder` is supplied the
-collector builds a base recorder from `events_file`, so existing
-`events_file` callers and integration tests keep working while `recorder`
-becomes the canonical sink.
+**No `events_file` shortcut; the recorder is optional with no default.**
+An earlier iteration let the collector build a default base recorder from an
+`events_file` attribute. That was removed on review: the recorder owns its
+own outputs (some recorders, e.g. a database recorder, have no files at all),
+so callers pass a `recorder` (or none). With no recorder nothing is written —
+an in-process `collect` still returns its info summary, but `spawn_collector`
+croaks without one, since a forked collector's summary cannot reach the
+caller.
 
 **`t2h2_collector` propagates `@INC` via `PERL5LIB`.** Test jobs run with the
 stream formatter selected, which lives in this repo's `lib/`. The script

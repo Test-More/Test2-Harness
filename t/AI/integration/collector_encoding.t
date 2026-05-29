@@ -4,6 +4,7 @@ use v5.38;
 use File::Temp qw/tempdir/;
 
 use Test2::Harness2::Collector qw/collect/;
+use Test2::Harness2::Collector::Recorder;
 use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
 use Test2::Harness2::Util::JSON qw/decode_json/;
 
@@ -29,9 +30,9 @@ subtest decodes_utf8 => sub {
 
     # Child prints the UTF-8 bytes of "é" (U+00E9) as raw bytes.
     collect(
-        events_file => "$dir/events.jsonl.zst",
-        encoding    => 'UTF-8',
-        exec        => [$^X, '-e', 'binmode(STDOUT); print "caf\xC3\xA9\n"'],
+        recorder => Test2::Harness2::Collector::Recorder->new(events_file => "$dir/events.jsonl.zst"),
+        encoding => 'UTF-8',
+        exec     => [$^X, '-e', 'binmode(STDOUT); print "caf\xC3\xA9\n"'],
     );
 
     my $details = stream_details($dir);
@@ -43,8 +44,8 @@ subtest passthrough_without_encoding => sub {
     my $dir = tempdir(CLEANUP => 1);
 
     collect(
-        events_file => "$dir/events.jsonl.zst",
-        exec        => [$^X, '-e', 'print "plain ascii\n"'],
+        recorder => Test2::Harness2::Collector::Recorder->new(events_file => "$dir/events.jsonl.zst"),
+        exec     => [$^X, '-e', 'print "plain ascii\n"'],
     );
 
     my $details = stream_details($dir);

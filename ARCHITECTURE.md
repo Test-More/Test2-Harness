@@ -44,12 +44,12 @@ by concern:
 
 - **`Test2::Harness2`** owns **producing results**: running tests,
   driving the collector pipeline, schedulers, launchers, recorders,
-  preloads, and the harness database (results recorded to disk and
-  to the DB).
+  and preloads. Results are recorded to disk (the collector pipeline
+  writes per-process event logs); see §1's note on the database.
 - **`App::Yath2`** owns **the user interface**: parsing user input,
   feeding tests-to-run into `Test2::Harness2`, and formatting /
   displaying results (live render, archived render, querying past
-  runs against the harness database).
+  runs).
 
 Both namespaces live under `lib/` in this repository and ship as
 parts of the same distribution. The split is a code-level
@@ -62,10 +62,14 @@ external module that discovers and loads our `App::Yath2`
 implementation). This distribution does not ship its own `yath`
 binary.
 
-The harness database owned by `Test2::Harness2` *is* the archive.
-There is no separate log-archive layer or pluggable DB-backend layer
-beneath the schema; persistence is the schema, and tooling (every
-read path in `App::Yath2`) reads it directly.
+The harness is **not database-driven**. Results are produced and
+recorded to disk by the collector pipeline: each collected process's
+events stream to a `jsonl.zst` log written by a recorder (§2.3,
+§4 when it lands). Cross-process coordination does not flow through a
+database. A database is a **deferred** concern — when it arrives it
+will be used to store / archive logs, not as the live coordination
+substrate — and its schema will be defined with `DBIx::QuickORM`
+(§2.3).
 
 ## 2. Foundational rules
 
@@ -93,18 +97,22 @@ already time-ordered.
 
 ### 2.3 Databases
 
-- The default backend is SQLite via `DBD::SQLite` used directly.
+The harness is no longer database-driven (§1). A database is a
+**deferred** concern: results are recorded to disk by the collector
+pipeline, and a database — when it lands — is for storing / archiving
+those logs, not for live cross-process coordination. The rules below
+fix the decisions already made so the DB layer is built consistently
+once it arrives; nothing here is wired up yet.
+
+- The schema is defined with **`DBIx::QuickORM`** (schema-as-Perl),
+  not hand-written DDL files and not `DBIx::Class`.
+- UUIDs are still generated in Perl as v7 (§2.2), never by the
+  database.
 - Non-default flavors (Postgres, MySQL, MariaDB, Percona) are
   driver-loaded on demand; their `DBD::*` modules are Suggests /
   Recommends in `dist.ini`, never hard requires.
-- Row code is hand-written SQL on `DBI`. `SQL::Abstract` is fine where
-  it helps. **`DBIx::Class` is not used.**
-- `DBIx::QuickDB` is used for ephemeral test databases and for spinning
-  up non-default flavors on the fly. It is **not** used for the default
-  SQLite path.
-- The schema lives at `share/schema/<flavor>.sql`. All flavors move
-  together: every DDL change touches every flavor file in the same
-  commit.
+- `DBIx::QuickDB` is used for ephemeral test databases and for
+  spinning up non-default flavors on the fly.
 
 ### 2.4 No `IPC::Manager`
 
@@ -115,9 +123,11 @@ architecture **does not use `IPC::Manager`**.
 
 If a reference doc, a design note, or a snippet of `reference/` code
 calls for `IPC::Manager`, treat that as outdated and follow this
-document instead. The positive replacement (which transport carries
-what) will be specified in the relevant §4 subsystem section once
-the design lands.
+document instead. The transport is `Atomic::Pipe` (mixed-mode, with
+zstd compression on the wire) for transient bytes between processes;
+the collector pipeline (§4 when it lands) is the first consumer.
+Durable cross-process state, where needed later, goes to disk, not
+through a live coordination daemon.
 
 ### 2.5 Minimum Perl version
 
@@ -161,8 +171,6 @@ Top-level layout that architecture depends on:
 - `lib/Test2/Harness2/Util/` — leaf utility modules.
 - `lib/Test2/Harness2/Role/` — `Role::Tiny` roles consumed by harness
   code.
-- `share/schema/<flavor>.sql` — schema definitions, one file per DB
-  flavor. All flavors move together.
 - `t/` — human-authored tests.
 - `t/AI/` — AI-generated tests, mirroring `t/`'s subdirectory layout.
 - `reference/` — historical iterations; immutable, see §2.5.

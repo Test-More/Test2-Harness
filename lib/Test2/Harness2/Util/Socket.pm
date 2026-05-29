@@ -97,6 +97,11 @@ sub write_frame ($fh, $frame) {
     my $len = length $frame;
     my $off = 0;
 
+    # A reader that has gone away turns a write into SIGPIPE, which would kill
+    # the writer; neutralize it locally so the failure surfaces as an EPIPE
+    # error the caller can trap instead.
+    local $SIG{PIPE} = 'IGNORE';
+
     while ($off < $len) {
         my $sent = syswrite($fh, $frame, $len - $off, $off);
 

@@ -5,11 +5,19 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 
-use Test2::Harness2::Util::IPC qw/apply_atomic_pipe_compression/;
+use Compress::Zstd ();
+use IO::Select ();
+
+use Test2::Harness2::Util::Socket qw/open_unix_listen connect_unix write_frame/;
+use Test2::Harness2::Util::Zstd::FrameBuffer;
 use Test2::Harness2::Util::JSON qw/decode_json/;
 
 use Object::HashBase qw{
-    <pipe
+    <listen
+    -socket_path
+    -listen_sock
+    -select
+    -conns
     +collectors
     +proxies
     +replay
@@ -27,69 +35,84 @@ use Object::HashBase qw{
 
 =head1 NAME
 
-Test2::Harness2::Collector::Monitor - Consume a collector notification pipe and
-track the state of every collector writing to it.
+Test2::Harness2::Collector::Monitor - Consume collector transition messages and
+track the state of every collector.
 
 =head1 DESCRIPTION
 
-A monitor reads the notification messages that one or more collector recorders
-send over a transition pipe (see
-L<Test2::Harness2::Collector::Recorder>). B<Any number of collectors -- tests
-and services alike -- may write to the same pipe>; the monitor keys all of its
-state on the per-message collector C<uuid>, so messages from different
-collectors interleave freely.
+A monitor folds the notification messages that collector recorders send (see
+L<Test2::Harness2::Collector::Recorder>) into per-collector state, keyed on the
+collector C<uuid> that rides on every message. B<Any number of collectors --
+tests and services alike -- are tracked by one monitor.> It can then be queried
+for the tests and services it has seen, each one's status, events file, and
+(once complete) final result, plus "what changed since I last asked" deltas --
+L</new_collectors>, L</new_failing>, L</new_test_exits>, and friends -- each of
+which drains and returns the uuids that entered that state since the previous
+call.
 
-L</poll> reads whatever is available without blocking, folds each message into
-per-collector state, and returns the payloads it read. The monitor can then be
-queried for the tests and services it has seen, each one's status, events
-file, and (once complete) final result. It also answers "what changed since I
-last asked" questions -- L</new_collectors>, L</new_failing>,
-L</new_test_exits>, and friends -- each of which drains and returns the uuids
-that entered that state since the previous call.
+The monitor runs in one of two modes:
 
-The underlying L<Atomic::Pipe> is exposed via L</pipe> so a caller can add its
-read handle to an L<IO::Select> and block until there is something to
-L</poll>.
+=over 4
+
+=item Managed (C<listen>)
+
+The monitor owns a listening unix socket. Each collector's recorder connects to
+it and writes self-contained zstd frames; one accepted connection per collector
+means no two collectors' frames ever interleave. L</poll> -- which never blocks
+-- accepts pending connections, reads ready ones, splits frames, and folds each
+C<transition> envelope into state. The monitor's file descriptors are exposed
+via L</io_handles> so a caller can add them to its own L<IO::Select> loop, and
+the listen path via L</socket_path>.
+
+=item Unmanaged (no C<listen>)
+
+Some other component owns the socket(s). It reads, decompresses, decodes, and
+unwraps frames itself, then hands the monitor already-decoded transition
+payloads via L</feed> (or raw frames via L</feed_frame>, which also forwards to
+proxies). In this mode L</poll> does nothing.
+
+=back
 
 =head1 SYNOPSIS
 
     use IO::Select;
     use Test2::Harness2::Collector::Monitor;
 
-    my $mon = Test2::Harness2::Collector::Monitor->new(pipe => $read_pipe);
-    my $sel = IO::Select->new($mon->pipe->rh);
+    # Managed: the monitor listens; recorders connect to its socket path.
+    my $mon = Test2::Harness2::Collector::Monitor->new(listen => 1);
+    my $path = $mon->socket_path;    # hand this to recorder transition_sockets
 
     while (1) {
-        $sel->can_read;           # block until a message is available
-        my $payloads = $mon->poll;
-        last unless @$payloads;   # EOF: every writer closed
+        IO::Select->new($mon->io_handles)->can_read;    # block until ready
+        $mon->poll;                                     # never blocks
 
         $_ and do_something($_) for $mon->new_test_exits;    # freed slots, ...
     }
+
+    # Unmanaged: feed already-decoded payloads from elsewhere.
+    my $mon2 = Test2::Harness2::Collector::Monitor->new;
+    $mon2->feed($decoded_transition_payload);
 
 =head1 ATTRIBUTES
 
 =over 4
 
-=item pipe (required)
+=item listen
 
-The read-end L<Atomic::Pipe> the collectors write to. The monitor switches it
-to non-blocking and enables zstd decompression on construction.
+Optional. C<1> to have the monitor create a listening socket at a path it picks
+(see L</socket_path>); a path string to listen on that exact path. The monitor
+unlinks a stale path, binds, and listens at construction, and unlinks its own
+socket on L</close> / C<DESTROY>. Omit entirely for unmanaged mode.
 
 =back
 
 =cut
 
 sub init ($self) {
-    my $pipe = $self->{+PIPE}
-        or croak "pipe is a required attribute";
-
-    $pipe->blocking(0);
-    apply_atomic_pipe_compression($pipe);
-
     $self->{+COLLECTORS} = {};
     $self->{+PROXIES}    = {};
     $self->{+REPLAY}     = {};
+    $self->{+CONNS}      = {};
 
     $self->{+PENDING_NEW}        = [];
     $self->{+PENDING_FAILING}    = [];
@@ -98,7 +121,27 @@ sub init ($self) {
     $self->{+PENDING_EXITS}      = [];
     $self->{+PENDING_FINALIZED}  = [];
 
+    if (my $listen = $self->{+LISTEN}) {
+        my $path = ($listen eq '1' || $listen eq 1)
+            ? $self->_default_socket_path
+            : $listen;
+
+        $self->{+SOCKET_PATH} = $path;
+        $self->{+LISTEN_SOCK} = open_unix_listen($path);
+        $self->{+LISTEN_SOCK}->blocking(0);
+
+        my $sel = IO::Select->new;
+        $sel->add($self->{+LISTEN_SOCK});
+        $self->{+SELECT} = $sel;
+    }
+
     return;
+}
+
+sub _default_socket_path ($self) {
+    require File::Temp;
+    my $dir = File::Temp::tempdir(CLEANUP => 1);
+    return "$dir/transitions.sock";
 }
 
 =head1 PUBLIC METHODS
@@ -115,11 +158,37 @@ sub init ($self) {
 
 =item $mon->poll
 
-Read every message currently available on the pipe without blocking and update
-internal state. Context-sensitive: in list context returns the decoded
-payloads (in arrival order); in scalar context returns the number of messages
-read; in void context returns nothing (skipping the bookkeeping a caller that
-only wants the state update does not need).
+Managed mode only (a no-op in unmanaged mode). Never blocks: accept any pending
+connections, read every connection that is ready, split complete frames, and
+fold each C<transition> envelope into internal state. A connection at EOF is
+reaped (cleanup only -- the C<harness_collector_finalized> message arrives
+before the close). Context-sensitive: in list context returns the decoded
+transition payloads (in arrival order); in scalar context returns the number of
+messages processed; in void context returns nothing.
+
+=item $path = $mon->socket_path
+
+Managed mode: the path of the listening socket (the one given, or the one the
+monitor picked for C<< listen =E<gt> 1 >>). C<undef> in unmanaged mode.
+
+=item @handles = $mon->io_handles
+
+Managed mode: the monitor's current file descriptors -- the listening socket
+plus every live accepted connection -- so a caller can add them to its own
+L<IO::Select>. The set changes as connections come and go, so re-fetch it each
+loop. Empty in unmanaged mode.
+
+=item $mon->feed($payload)
+
+Unmanaged mode: fold one already-decoded transition C<$payload> (the envelope's
+C<payload>, i.e. C<< {facet_data =E<gt> ...} >>) into state. Does not forward to
+proxies (there is no frame to forward).
+
+=item $payload = $mon->feed_frame($frame)
+
+Unmanaged mode with a raw frame in hand: decode the frame, fold the
+C<transition> payload into state, and forward the verbatim frame to proxies.
+Returns the payload, or C<undef> for a non-transition frame.
 
 =item @uuids = $mon->collectors
 
@@ -152,32 +221,67 @@ Conveniences for individual fields of L</collector>.
 =cut
 
 sub poll ($self) {
-    my $pipe = $self->{+PIPE};
-
     my $void = !defined wantarray;
+
+    my $sel = $self->{+SELECT};
+    return ($void ? undef : (wantarray ? () : 0)) unless $sel;    # unmanaged: nothing to poll
+
+    # Accept any pending connections first.
+    while (my $conn = $self->{+LISTEN_SOCK}->accept) {
+        $conn->blocking(0);
+        $sel->add($conn);
+        $self->{+CONNS}{$conn} = Test2::Harness2::Util::Zstd::FrameBuffer->new;
+    }
 
     my @payloads;
     my $count = 0;
-    while (defined(my $msg = $pipe->read_message)) {
-        my $payload;
-        my $ok = eval { $payload = decode_json($msg); 1 };
-        unless ($ok) {
-            warn "monitor: could not decode a pipe message: $@\n";
+
+    for my $fh ($sel->can_read(0)) {
+        next if $fh == $self->{+LISTEN_SOCK};
+        my $fb = $self->{+CONNS}{$fh} or next;
+
+        my $buf = '';
+        my $n = sysread($fh, $buf, 65536);
+
+        # undef: would-block / transient -- try again next poll.
+        next unless defined $n;
+
+        # 0: EOF. Connection closed; reap it (cleanup only, not a state signal).
+        if ($n == 0) {
+            $sel->remove($fh);
+            delete $self->{+CONNS}{$fh};
+            close($fh);
             next;
         }
 
-        $count++;
-        push @payloads => $payload unless $void;
-        $self->_process($payload);
-
-        my $uuid = $payload->{facet_data}{harness_collector}{uuid};
-        next unless defined $uuid;
-        $self->_forward($uuid, $msg);
-        $self->_retain_for_replay($uuid, $msg);
+        $fb->push_bytes($buf);
+        for my $rec ($fb->drain) {
+            my $payload = $self->_handle_frame($rec);
+            next unless defined $payload;
+            $count++;
+            push @payloads => $payload unless $void;
+        }
     }
 
     return if $void;
     return wantarray ? @payloads : $count;
+}
+
+sub io_handles ($self) {
+    my $sel = $self->{+SELECT} or return ();
+    return $sel->handles;
+}
+
+sub feed ($self, $payload) {
+    $self->_process($payload);
+    return;
+}
+
+sub feed_frame ($self, $frame) {
+    my $payload = Compress::Zstd::decompress($frame);
+    croak "monitor: feed_frame given an undecodable frame"
+        unless defined $payload;
+    return $self->_handle_frame({frame => $frame, payload => $payload});
 }
 
 sub collectors ($self) { return keys %{$self->{+COLLECTORS}} }
@@ -223,6 +327,12 @@ C<new_collectors> reports collectors seen for the first time (their events
 file is available by then); C<new_test_exits> reports tests whose process has
 exited (the C<completed> transition), which the scheduler uses to free a slot.
 
+=item $mon->close
+
+Managed mode: close the listening socket and every accepted connection, and
+unlink the socket path. Called automatically on C<DESTROY>. A no-op in
+unmanaged mode.
+
 =back
 
 =cut
@@ -238,15 +348,17 @@ sub new_finalized  ($self) { return $self->_drain(PENDING_FINALIZED) }
 
 =item $mon->add_proxy($name, $pipe)
 
-=item $mon->add_proxy($name, $pipe, global => 1)
+=item $mon->add_proxy($name, $target, global => 1)
 
-=item $mon->add_proxy($name, $pipe, run_uuid => $uuid)
+=item $mon->add_proxy($name, $target, run_uuid => $uuid)
 
-=item $mon->add_proxy($name, $pipe, run_uuids => \@uuids)
+=item $mon->add_proxy($name, $target, run_uuids => \@uuids)
 
-Register a proxy: messages the monitor reads from then on are also forwarded,
-verbatim, to C<$pipe> (an L<Atomic::Pipe> write end, switched to zstd here).
-Any number of proxies may be registered under distinct names.
+Register a proxy: frames the monitor reads from then on are also forwarded,
+verbatim (no recompression), to C<$target>. C<$target> is either an
+already-connected socket handle (used as-is) or a path to a unix socket the
+monitor C<connect()>s to. Any number of proxies may be registered under
+distinct names.
 
 With no options the proxy receives B<every> message. Options restrict it to
 the collectors a consumer cares about, and may be combined:
@@ -271,31 +383,31 @@ forwarded.
 
 So a proxy added mid-run does not see collectors half-way through their
 lifecycle, C<add_proxy> first replays -- to the new proxy only, and subject to
-the same filter -- the messages of every collector that has not yet completed,
+the same filter -- the frames of every collector that has not yet completed,
 in arrival order. A downstream L<Test2::Harness2::Collector::Monitor> reading
-C<$pipe> therefore reconstructs the matching state this monitor holds.
+C<$target> therefore reconstructs the matching state this monitor holds.
 
-=item $pipe = $mon->remove_proxy($name)
+=item $sock = $mon->remove_proxy($name)
 
-Stop forwarding to (and return the pipe of) the proxy registered under
+Stop forwarding to (and return the socket of) the proxy registered under
 C<$name>.
 
 =back
 
 =cut
 
-sub add_proxy ($self, $name, $pipe, %opts) {
-    croak "a proxy name is required" unless defined $name && length $name;
-    croak "a proxy pipe is required" unless $pipe;
+sub add_proxy ($self, $name, $target, %opts) {
+    croak "a proxy name is required"   unless defined $name && length $name;
+    croak "a proxy target is required" unless defined $target;
 
-    apply_atomic_pipe_compression($pipe);
-    my $proxy = $self->{+PROXIES}{$name} = {pipe => $pipe, filter => $self->_build_filter(%opts)};
+    my $sock = ref($target) ? $target : connect_unix($target);
+    my $proxy = $self->{+PROXIES}{$name} = {sock => $sock, filter => $self->_build_filter(%opts)};
 
     # Replay the in-flight collectors the proxy wants, so its consumer does not
     # miss the start (and any failing/diagnosing) it needs to track state.
     for my $uuid (sort keys %{$self->{+REPLAY}}) {
         next unless $self->_proxy_wants($proxy, $uuid);
-        $self->_write_proxy($pipe, $_) for @{$self->{+REPLAY}{$uuid}};
+        $self->_write_proxy($sock, $_) for @{$self->{+REPLAY}{$uuid}};
     }
 
     return;
@@ -303,7 +415,7 @@ sub add_proxy ($self, $name, $pipe, %opts) {
 
 sub remove_proxy ($self, $name) {
     my $proxy = delete $self->{+PROXIES}{$name} or return undef;
-    return $proxy->{pipe};
+    return $proxy->{sock};
 }
 
 =head1 PRIVATE METHODS
@@ -311,6 +423,17 @@ sub remove_proxy ($self, $name) {
 =cut
 
 =over 4
+
+=item $path = $self->_default_socket_path
+
+Pick a unique unix socket path in a fresh temp directory, for C<listen =E<gt> 1>.
+
+=item $payload = $self->_handle_frame($rec)
+
+Process one decoded frame C<< {frame =E<gt> $raw, payload =E<gt> $json} >>:
+decode the C<< {type, payload} >> envelope, fold a C<transition> payload into
+state, forward the verbatim frame to proxies, and retain it for replay. Returns
+the transition payload, or C<undef> for a non-transition or undecodable frame.
 
 =item @uuids = $self->_drain($slot)
 
@@ -321,9 +444,9 @@ Return and clear one of the pending change lists.
 Fold one decoded message into per-collector state and the pending change
 lists, keyed by the message's collector uuid.
 
-=item $self->_forward($uuid, $msg)
+=item $self->_forward($uuid, $frame)
 
-Forward one raw message (for collector C<$uuid>) to every registered proxy
+Forward one raw frame (for collector C<$uuid>) to every registered proxy
 whose filter accepts it.
 
 =item $filter = $self->_build_filter(%opts)
@@ -336,27 +459,49 @@ filter hashref, or C<undef> when no options were given (forward everything).
 Whether a proxy's filter accepts the collector C<$uuid> (always true for an
 unfiltered proxy).
 
-=item $self->_retain_for_replay($uuid, $msg)
+=item $self->_retain_for_replay($uuid, $frame)
 
-Keep the raw message in the per-collector replay buffer while the collector is
+Keep the raw frame in the per-collector replay buffer while the collector is
 in flight, so a proxy added later can be caught up; drop the buffer once the
 collector is complete or finalized (it will not be replayed).
 
-=item $self->_write_proxy($pipe, $msg)
+=item $self->_write_proxy($sock, $frame)
 
-Write one raw message to a single proxy pipe, warning (not dying) on failure.
+Write one raw frame to a single proxy socket, warning (not dying) on failure.
 
 =back
 
 =cut
 
-sub _forward ($self, $uuid, $msg) {
+sub _handle_frame ($self, $rec) {
+    my $envelope;
+    my $ok = eval { $envelope = decode_json($rec->{payload}); 1 };
+    unless ($ok) {
+        warn "monitor: could not decode a transition frame: $@\n";
+        return undef;
+    }
+
+    return undef unless ($envelope->{type} // '') eq 'transition';
+
+    my $payload = $envelope->{payload};
+    $self->_process($payload);
+
+    my $uuid = $payload->{facet_data}{harness_collector}{uuid};
+    if (defined $uuid) {
+        $self->_forward($uuid, $rec->{frame});
+        $self->_retain_for_replay($uuid, $rec->{frame});
+    }
+
+    return $payload;
+}
+
+sub _forward ($self, $uuid, $frame) {
     my $proxies = $self->{+PROXIES};
     return unless %$proxies;
 
     for my $proxy (values %$proxies) {
         next unless $self->_proxy_wants($proxy, $uuid);
-        $self->_write_proxy($proxy->{pipe}, $msg);
+        $self->_write_proxy($proxy->{sock}, $frame);
     }
 
     return;
@@ -386,20 +531,20 @@ sub _proxy_wants ($self, $proxy, $uuid) {
     return 0;
 }
 
-sub _retain_for_replay ($self, $uuid, $msg) {
+sub _retain_for_replay ($self, $uuid, $frame) {
     my $status = $self->{+COLLECTORS}{$uuid}{status} // '';
     if ($status eq 'complete' || $status eq 'finalized') {
         delete $self->{+REPLAY}{$uuid};
         return;
     }
 
-    push @{$self->{+REPLAY}{$uuid}} => $msg;
+    push @{$self->{+REPLAY}{$uuid}} => $frame;
     return;
 }
 
-sub _write_proxy ($self, $pipe, $msg) {
+sub _write_proxy ($self, $sock, $frame) {
     warn "monitor: proxy forward failed: $@\n"
-        unless eval { $pipe->write_message($msg); 1 };
+        unless eval { write_frame($sock, $frame); 1 };
     return;
 }
 
@@ -477,6 +622,27 @@ sub _process_transition ($self, $c, $state, $hc) {
         return;
     }
 
+    return;
+}
+
+sub close ($self) {
+    if (my $sel = $self->{+SELECT}) {
+        for my $fh ($sel->handles) {
+            $sel->remove($fh);
+            close($fh);
+        }
+    }
+    $self->{+CONNS} = {};
+
+    if (my $path = $self->{+SOCKET_PATH}) {
+        unlink $path if -e $path;
+    }
+
+    return;
+}
+
+sub DESTROY ($self) {
+    $self->close;
     return;
 }
 

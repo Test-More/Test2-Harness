@@ -1,67 +1,70 @@
 use Test2::V0;
 use v5.38;
 
-use Atomic::Pipe;
+use File::Temp ();
 use IO::Select;
+use Compress::Zstd qw/compress/;
 
-use Test2::Harness2::Util::IPC qw/atomic_pipe_compression_args/;
-use Test2::Harness2::Util::JSON qw/encode_json/;
+use Test2::Harness2::Util::Socket qw/open_unix_listen connect_unix write_frame/;
+use Test2::Harness2::Util::Zstd::FrameBuffer;
+use Test2::Harness2::Util::JSON qw/encode_json decode_json/;
 
 use Test2::Harness2::Collector::Monitor;
 
-# The monitor consumes a transition pipe that one or more collectors write to.
-# poll() reads whatever is available without blocking, updates its per-collector
-# state, and returns the payloads it read. It also answers "what changed since
-# last time" questions (new collectors, new failing, new exits, ...).
+# A monitor folds collector transition messages into per-collector state. It
+# runs managed (owns a listening unix socket, reads framed messages on poll())
+# or unmanaged (fed already-decoded payloads, or raw frames, from elsewhere).
+# Either way it tracks tests/services, their status, and "what changed" deltas,
+# and can fan messages out to proxy sockets.
 
-# Build a recorder-shaped notification message and write it to the pipe.
-sub send_msg ($w, $facet, %collector) {
+# --- unmanaged-mode helpers: feed already-decoded transition payloads ---
+
+sub payload_for ($facet, %collector) {
     my $fd = {%$facet, harness_collector => {%collector}};
-    $w->write_message(encode_json({facet_data => $fd}));
-    return;
+    return {facet_data => $fd};
 }
 
-sub start_msg     ($w, %c)        { send_msg($w, {harness_state_transition => {state => 'starting', stamp => 1}}, %c) }
-sub transition    ($w, $s, $uuid) { send_msg($w, {harness_state_transition => {state => $s, stamp => 1}}, uuid => $uuid) }
-sub final_msg     ($w, $uuid, $p) { send_msg($w, {harness_final_state => {pass => $p, fail_count => $p ? 0 : 1}}, uuid => $uuid, name => 'n', ($p ? () : ())) }
-sub finalized_msg ($w, $uuid)     { send_msg($w, {harness_collector_finalized => {stamp => 1}}, uuid => $uuid) }
+sub feed_start ($mon, %c)        { $mon->feed(payload_for({harness_state_transition => {state => 'starting', stamp => 1}}, %c)) }
+sub feed_trans ($mon, $s, $uuid) { $mon->feed(payload_for({harness_state_transition => {state => $s, stamp => 1}}, uuid => $uuid)) }
+sub feed_final ($mon, $uuid, $p) { $mon->feed(payload_for({harness_final_state => {pass => $p, fail_count => $p ? 0 : 1}}, uuid => $uuid)) }
+sub feed_fin   ($mon, $uuid)     { $mon->feed(payload_for({harness_collector_finalized => {stamp => 1}}, uuid => $uuid)) }
 
-sub new_monitor () {
-    my ($r, $w) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    my $mon = Test2::Harness2::Collector::Monitor->new(pipe => $r);
-    return ($mon, $w);
+sub unmanaged_monitor () { Test2::Harness2::Collector::Monitor->new }
+
+# Build a {type,payload} transition envelope frame for one collector message.
+sub frame_for ($facet, %collector) {
+    my $fd = {%$facet, harness_collector => {%collector}};
+    return compress(encode_json({type => 'transition', payload => {facet_data => $fd}}));
 }
 
-subtest poll_empty => sub {
-    my ($mon, $w) = new_monitor();
-    is([$mon->poll],     [], "poll with nothing available returns an empty list");
+# Read every frame a connection received and replay it into a fresh unmanaged
+# downstream monitor (mirrors what a real downstream consumer would do).
+sub downstream_from_conn ($conn) {
+    $conn->blocking(0);
+    my $fb  = Test2::Harness2::Util::Zstd::FrameBuffer->new;
+    my $sel = IO::Select->new($conn);
+    while ($sel->can_read(2)) {
+        my $buf = '';
+        my $n = sysread($conn, $buf, 65536);
+        last unless $n;
+        $fb->push_bytes($buf);
+    }
+    my $down = unmanaged_monitor();
+    $down->feed(decode_json($_->{payload})->{payload}) for $fb->drain;
+    return $down;
+}
+
+subtest empty_unmanaged => sub {
+    my $mon = unmanaged_monitor();
     is([$mon->tests],    [], "no tests yet");
     is([$mon->services], [], "no services yet");
-};
-
-subtest poll_contexts => sub {
-    my ($mon, $w) = new_monitor();
-    start_msg($w, uuid => 'T1', name => 't/foo.t', events_file => '/tmp/foo.jsonl.zst', try => 1);
-
-    my @got = $mon->poll;
-    is(scalar(@got),                                         1,          "list context returns the payloads");
-    is($got[0]{facet_data}{harness_state_transition}{state}, 'starting', "payload is the decoded message");
-
-    transition($w, 'completed', 'T1');
-    my $n = $mon->poll;
-    is($n, 1, "scalar context returns the message count");
-
-    # void context still updates state but returns nothing.
-    transition($w, 'failing', 'T1');
-    $mon->poll;
-    ok($mon->collector('T1')->{failing}, "void-context poll still updated state");
+    is([$mon->poll],     [], "poll on an unmanaged monitor is a no-op");
 };
 
 subtest tracks_tests_and_services => sub {
-    my ($mon, $w) = new_monitor();
-    start_msg($w, uuid => 'T1', name => 't/foo.t', events_file => '/tmp/foo.jsonl.zst', try => 1);
-    start_msg($w, uuid => 'S1', name => 'my-service');    # no try => service
-    $mon->poll;
+    my $mon = unmanaged_monitor();
+    feed_start($mon, uuid => 'T1', name => 't/foo.t', events_file => '/tmp/foo.jsonl.zst', try => 1);
+    feed_start($mon, uuid => 'S1', name => 'my-service');    # no try => service
 
     is([sort $mon->tests],    ['T1'], "T1 categorized as a test (has try)");
     is([sort $mon->services], ['S1'], "S1 categorized as a service (no try)");
@@ -75,23 +78,20 @@ subtest tracks_tests_and_services => sub {
 };
 
 subtest new_collectors_delta => sub {
-    my ($mon, $w) = new_monitor();
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
-    $mon->poll;
+    my $mon = unmanaged_monitor();
+    feed_start($mon, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
     is([$mon->new_collectors], ['T1'], "first call reports the new collector");
     is([$mon->new_collectors], [],     "second call reports nothing new");
 
-    start_msg($w, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1);
-    $mon->poll;
+    feed_start($mon, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1);
     is([$mon->new_collectors], ['T2'], "only the newly-seen collector is reported");
 };
 
 subtest failing_and_diagnosing_deltas => sub {
-    my ($mon, $w) = new_monitor();
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
-    transition($w, 'diagnosing', 'T1');
-    transition($w, 'failing',    'T1');
-    $mon->poll;
+    my $mon = unmanaged_monitor();
+    feed_start($mon, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
+    feed_trans($mon, 'diagnosing', 'T1');
+    feed_trans($mon, 'failing',    'T1');
 
     is([$mon->new_diagnosing], ['T1'], "diagnosing delta reports T1");
     is([$mon->new_failing],    ['T1'], "failing delta reports T1");
@@ -102,11 +102,10 @@ subtest failing_and_diagnosing_deltas => sub {
 };
 
 subtest final_state_and_exits => sub {
-    my ($mon, $w) = new_monitor();
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
-    final_msg($w, 'T1', 1);
-    transition($w, 'completed', 'T1');
-    $mon->poll;
+    my $mon = unmanaged_monitor();
+    feed_start($mon, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
+    feed_final($mon, 'T1', 1);
+    feed_trans($mon, 'completed', 'T1');
 
     is($mon->final_state('T1')->{pass}, 1,          "final state stored");
     is($mon->collector('T1')->{status}, 'complete', "completed collector is complete");
@@ -115,195 +114,236 @@ subtest final_state_and_exits => sub {
 };
 
 subtest finalized => sub {
-    my ($mon, $w) = new_monitor();
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
-    finalized_msg($w, 'T1');
-    $mon->poll;
+    my $mon = unmanaged_monitor();
+    feed_start($mon, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
+    feed_fin($mon, 'T1');
 
     is($mon->collector('T1')->{status}, 'finalized', "finalized collector status");
     is([$mon->new_finalized],           ['T1'],      "finalized delta reports T1");
 };
 
-subtest exposes_handle_for_select => sub {
-    my ($mon, $w) = new_monitor();
-    my $sel = IO::Select->new($mon->pipe->rh);
-
-    ok(!$sel->can_read(0), "nothing to read yet");
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
-    ok($sel->can_read(2), "select sees the pipe become readable");
-
-    $mon->poll;
-    is([$mon->tests], ['T1'], "after select+poll the message is consumed");
-};
-
-subtest proxy_forwarding => sub {
-    my ($mon, $w) = new_monitor();
-
-    # A proxy is a write-end the monitor forwards every message to; here the
-    # read end feeds a second, downstream monitor.
-    my ($dr, $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    $mon->add_proxy(down => $dw);
-
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
-    $mon->poll;
-
-    my $down = Test2::Harness2::Collector::Monitor->new(pipe => $dr);
-    $down->poll;
-    is([$down->tests],                 ['T1'],  "message forwarded to the proxy and consumed downstream");
-    is($down->collector('T1')->{name}, 't/a.t', "downstream sees the identity");
-
-    # remove_proxy stops forwarding.
-    $mon->remove_proxy('down');
-    transition($w, 'completed', 'T1');
-    $mon->poll;
-    $down->poll;
-    isnt($down->collector('T1')->{status}, 'complete', "no more messages after remove_proxy");
-};
-
-subtest multiple_proxies => sub {
-    my ($mon, $w)  = new_monitor();
-    my ($ar,  $aw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    my ($br,  $bw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    $mon->add_proxy(a => $aw);
-    $mon->add_proxy(b => $bw);
-
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
-    $mon->poll;
-
-    for my $pair (['a', $ar], ['b', $br]) {
-        my ($n, $r) = @$pair;
-        my $down = Test2::Harness2::Collector::Monitor->new(pipe => $r);
-        $down->poll;
-        is([$down->tests], ['T1'], "proxy $n received the message");
-    }
-};
-
-subtest add_proxy_replays_inflight => sub {
-    my ($mon, $w) = new_monitor();
-
-    # An in-flight collector: started, went failing, but not completed.
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
-    transition($w, 'failing', 'T1');
-    $mon->poll;
-
-    # Add the proxy AFTER the collector is mid-lifecycle.
-    my ($dr, $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    $mon->add_proxy(down => $dw);
-
-    my $down = Test2::Harness2::Collector::Monitor->new(pipe => $dr);
-    $down->poll;
-
-    # The downstream monitor must have the full state, not a half-lifecycle.
-    is([$down->tests],                 ['T1'],  "replayed the in-flight collector");
-    is($down->collector('T1')->{name}, 't/a.t', "downstream has identity from replayed start");
-    ok($down->collector('T1')->{failing}, "downstream has the failing state from replay");
-
-    # Subsequent live messages flow through too.
-    transition($w, 'completed', 'T1');
-    $mon->poll;
-    $down->poll;
-    is($down->collector('T1')->{status}, 'complete', "live messages forwarded after replay");
-};
-
-subtest completed_collectors_not_replayed => sub {
-    my ($mon, $w) = new_monitor();
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
-    transition($w, 'completed', 'T1');
-    $mon->poll;
-
-    my ($dr, $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    $mon->add_proxy(down => $dw);
-    $dw->close;    # nothing should have been written; close so reads EOF
-
-    my $down = Test2::Harness2::Collector::Monitor->new(pipe => $dr);
-    $down->poll;
-    is([$down->tests], [], "a completed collector is not replayed to a new proxy");
-};
-
 subtest tracks_run_uuid => sub {
-    my ($mon, $w) = new_monitor();
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
-    start_msg($w, uuid => 'G1', name => 'svc');    # no run_uuid => global
-    $mon->poll;
+    my $mon = unmanaged_monitor();
+    feed_start($mon, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
+    feed_start($mon, uuid => 'G1', name => 'svc');    # no run_uuid => global
 
     is($mon->collector('T1')->{run_uuid}, 'RUN-1', "run_uuid tracked from the start message");
     is($mon->collector('G1')->{run_uuid}, undef,   "a collector with no run_uuid is global");
 };
 
-# Drain a proxy read-end into a fresh downstream monitor and return it.
-sub downstream ($r) {
-    my $down = Test2::Harness2::Collector::Monitor->new(pipe => $r);
-    $down->poll;
-    return $down;
-}
+# --- managed mode: the monitor owns a listening socket ---
 
-subtest proxy_filter_by_run_uuid => sub {
-    my ($mon, $w)  = new_monitor();
-    my ($dr,  $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    $mon->add_proxy(run1 => $dw, run_uuid => 'RUN-1');
+subtest managed_mode_reads_sockets => sub {
+    my $mon  = Test2::Harness2::Collector::Monitor->new(listen => 1);
+    my $path = $mon->socket_path;
+    ok($path && -S $path, "managed monitor created a listening socket");
 
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
-    start_msg($w, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2');
-    start_msg($w, uuid => 'G1', name => 'svc');    # global
+    my $client = connect_unix($path);
+    $mon->poll;    # accept the pending connection
+
+    write_frame($client, frame_for({harness_state_transition => {state => 'starting', stamp => 1}},
+        uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1));
+
+    my $sel = IO::Select->new($mon->io_handles);
+    ok($sel->can_read(2), "monitor handle became readable");
     $mon->poll;
 
-    my $down = downstream($dr);
+    is([$mon->tests], ['T1'], "managed monitor tracked the collector from the socket");
+
+    write_frame($client, frame_for({harness_state_transition => {state => 'completed', stamp => 1}}, uuid => 'T1'));
+    IO::Select->new($mon->io_handles)->can_read(2);
+    $mon->poll;
+    is($mon->collector('T1')->{status}, 'complete', "later frames on the same connection tracked");
+};
+
+subtest managed_mode_listen_path => sub {
+    my $dir  = File::Temp::tempdir(CLEANUP => 1);
+    my $path = "$dir/mon.sock";
+    my $mon  = Test2::Harness2::Collector::Monitor->new(listen => $path);
+    is($mon->socket_path, $path, "monitor used the provided listen path");
+    ok(-S $path, "bound the provided path");
+};
+
+# --- proxy fan-out over sockets (unmanaged source via feed_frame) ---
+
+subtest proxy_forwarding_socket => sub {
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/down.sock";
+    my $dlisten = open_unix_listen($dpath);
+
+    my $mon = unmanaged_monitor();
+    $mon->add_proxy(down => $dpath);    # monitor connects to the path
+    my $dconn = $dlisten->accept;
+
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}},
+        uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1));
+
+    my $down = downstream_from_conn($dconn);
+    is([$down->tests],                 ['T1'],  "message forwarded over the proxy socket");
+    is($down->collector('T1')->{name}, 't/a.t', "downstream sees the identity");
+
+    # remove_proxy stops forwarding.
+    $mon->remove_proxy('down');
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'completed', stamp => 1}}, uuid => 'T1'));
+    my $down2 = downstream_from_conn($dconn);
+    is([$down2->tests], [], "no more messages after remove_proxy");
+};
+
+subtest proxy_accepts_connected_socket => sub {
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/conn.sock";
+    my $dlisten = open_unix_listen($dpath);
+
+    my $mon  = unmanaged_monitor();
+    my $sock = connect_unix($dpath);    # caller-connected socket handle
+    $mon->add_proxy(down => $sock);
+    my $dconn = $dlisten->accept;
+
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}},
+        uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1));
+
+    my $down = downstream_from_conn($dconn);
+    is([$down->tests], ['T1'], "proxy accepts an already-connected socket");
+};
+
+subtest multiple_proxies => sub {
+    my $dir = File::Temp::tempdir(CLEANUP => 1);
+
+    my $la = open_unix_listen("$dir/a.sock");
+    my $lb = open_unix_listen("$dir/b.sock");
+
+    my $mon = unmanaged_monitor();
+    $mon->add_proxy(a => "$dir/a.sock");    # connects now
+    my $ca = $la->accept;
+    $mon->add_proxy(b => "$dir/b.sock");    # connects now
+    my $cb = $lb->accept;
+
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}},
+        uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1));
+
+    is([downstream_from_conn($ca)->tests], ['T1'], "proxy a received the message");
+    is([downstream_from_conn($cb)->tests], ['T1'], "proxy b received the message");
+};
+
+subtest add_proxy_replays_inflight => sub {
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/down.sock";
+    my $dlisten = open_unix_listen($dpath);
+
+    my $mon = unmanaged_monitor();
+    # An in-flight collector: started, went failing, but not completed.
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}},
+        uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1));
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'failing', stamp => 1}}, uuid => 'T1'));
+
+    # Add the proxy AFTER the collector is mid-lifecycle.
+    $mon->add_proxy(down => $dpath);
+    my $dconn = $dlisten->accept;
+
+    my $down = downstream_from_conn($dconn);
+    is([$down->tests],                 ['T1'],  "replayed the in-flight collector");
+    is($down->collector('T1')->{name}, 't/a.t', "downstream has identity from replayed start");
+    ok($down->collector('T1')->{failing}, "downstream has the failing state from replay");
+};
+
+subtest completed_collectors_not_replayed => sub {
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/down.sock";
+    my $dlisten = open_unix_listen($dpath);
+
+    my $mon = unmanaged_monitor();
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}},
+        uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1));
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'completed', stamp => 1}}, uuid => 'T1'));
+
+    $mon->add_proxy(down => $dpath);
+    my $dconn = $dlisten->accept;
+
+    my $down = downstream_from_conn($dconn);
+    is([$down->tests], [], "a completed collector is not replayed to a new proxy");
+};
+
+subtest proxy_filter_by_run_uuid => sub {
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/run1.sock";
+    my $dlisten = open_unix_listen($dpath);
+
+    my $mon = unmanaged_monitor();
+    $mon->add_proxy(run1 => $dpath, run_uuid => 'RUN-1');
+    my $dconn = $dlisten->accept;
+
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1'));
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2'));
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'G1', name => 'svc'));
+
+    my $down = downstream_from_conn($dconn);
     is([$down->collectors], ['T1'], "proxy only forwarded the RUN-1 collector");
 };
 
 subtest proxy_filter_global => sub {
-    my ($mon, $w)  = new_monitor();
-    my ($dr,  $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    $mon->add_proxy(g => $dw, global => 1);
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/g.sock";
+    my $dlisten = open_unix_listen($dpath);
 
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
-    start_msg($w, uuid => 'G1', name => 'svc');    # global (no run_uuid)
-    $mon->poll;
+    my $mon = unmanaged_monitor();
+    $mon->add_proxy(g => $dpath, global => 1);
+    my $dconn = $dlisten->accept;
 
-    my $down = downstream($dr);
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1'));
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'G1', name => 'svc'));
+
+    my $down = downstream_from_conn($dconn);
     is([$down->collectors], ['G1'], "global proxy only forwarded the run-less collector");
 };
 
 subtest proxy_filter_global_plus_run => sub {
-    my ($mon, $w)  = new_monitor();
-    my ($dr,  $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    $mon->add_proxy(mix => $dw, global => 1, run_uuid => 'RUN-1');
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/mix.sock";
+    my $dlisten = open_unix_listen($dpath);
 
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
-    start_msg($w, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2');
-    start_msg($w, uuid => 'G1', name => 'svc');    # global
-    $mon->poll;
+    my $mon = unmanaged_monitor();
+    $mon->add_proxy(mix => $dpath, global => 1, run_uuid => 'RUN-1');
+    my $dconn = $dlisten->accept;
 
-    my $down = downstream($dr);
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1'));
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2'));
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'G1', name => 'svc'));
+
+    my $down = downstream_from_conn($dconn);
     is([sort $down->collectors], ['G1', 'T1'], "global+run proxy forwarded the global and RUN-1 collectors");
 };
 
 subtest proxy_filter_run_uuids_list => sub {
-    my ($mon, $w)  = new_monitor();
-    my ($dr,  $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    $mon->add_proxy(multi => $dw, run_uuids => ['RUN-1', 'RUN-3']);
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/multi.sock";
+    my $dlisten = open_unix_listen($dpath);
 
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
-    start_msg($w, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2');
-    start_msg($w, uuid => 'T3', name => 't/c.t', events_file => '/tmp/c', try => 1, run_uuid => 'RUN-3');
-    $mon->poll;
+    my $mon = unmanaged_monitor();
+    $mon->add_proxy(multi => $dpath, run_uuids => ['RUN-1', 'RUN-3']);
+    my $dconn = $dlisten->accept;
 
-    my $down = downstream($dr);
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1'));
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2'));
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'T3', name => 't/c.t', events_file => '/tmp/c', try => 1, run_uuid => 'RUN-3'));
+
+    my $down = downstream_from_conn($dconn);
     is([sort $down->collectors], ['T1', 'T3'], "run_uuids list forwarded both named runs");
 };
 
 subtest proxy_filter_replay_honors_filter => sub {
-    my ($mon, $w) = new_monitor();
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/run1.sock";
+    my $dlisten = open_unix_listen($dpath);
 
+    my $mon = unmanaged_monitor();
     # In-flight collectors of two runs before the proxy is added.
-    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1');
-    start_msg($w, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2');
-    $mon->poll;
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1, run_uuid => 'RUN-1'));
+    $mon->feed_frame(frame_for({harness_state_transition => {state => 'starting', stamp => 1}}, uuid => 'T2', name => 't/b.t', events_file => '/tmp/b', try => 1, run_uuid => 'RUN-2'));
 
-    my ($dr, $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
-    $mon->add_proxy(run1 => $dw, run_uuid => 'RUN-1');
+    $mon->add_proxy(run1 => $dpath, run_uuid => 'RUN-1');
+    my $dconn = $dlisten->accept;
 
-    my $down = downstream($dr);
+    my $down = downstream_from_conn($dconn);
     is([$down->collectors], ['T1'], "replay to a filtered proxy only includes matching runs");
 };
 

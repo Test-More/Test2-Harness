@@ -74,22 +74,22 @@ until ($done) {
     # after the first poll() accepts the recorder's connect.
     IO::Select->new($monitor->io_handles)->can_read;
 
+    # poll() folds the messages into the monitor's per-collector state; we read
+    # progress from its change-delta APIs rather than re-inspecting each payload.
     my @payloads = $monitor->poll;
 
-    for my $payload (@payloads) {
-        my $fd = $payload->{facet_data};
+    say "transition: starting"   for $monitor->new_collectors;
+    say "transition: diagnosing" for $monitor->new_diagnosing;
+    say "transition: failing"    for $monitor->new_failing;
+    say "transition: completed"  for $monitor->new_completed;
 
-        if (my $transition = $fd->{harness_state_transition}) {
-            say "transition: $transition->{state}";
-        }
-        elsif (my $state = $fd->{harness_final_state}) {
-            say "result: " . ($state->{pass} ? 'PASS' : 'FAIL');
-        }
-
-        print encode_pretty_json($payload) if $verbose;
+    for my $uuid ($monitor->new_finalized) {
+        my $state = $monitor->final_state($uuid);
+        say "result: " . ($state && $state->{pass} ? 'PASS' : 'FAIL');
+        $done = 1;
     }
 
-    $done = 1 if $monitor->new_finalized;
+    print encode_pretty_json($_) for $verbose ? @payloads : ();
 }
 
 waitpid($pid, 0);

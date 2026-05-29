@@ -5,9 +5,7 @@ our $VERSION = '2.000000';
 
 use Carp qw/croak/;
 
-use Compress::Zstd ();
-
-use Test2::Harness2::Util::Zstd ();
+use Test2::Harness2::Util::Zstd::FrameBuffer;
 
 =pod
 
@@ -51,10 +49,10 @@ sub _open ($class, $path) {
     binmode $fh;
 
     return bless {
-        path    => $path,
-        fh      => $fh,
-        records => [],
-        raw_buf => '',
+        path => $path,
+        fh   => $fh,
+        fb   => Test2::Harness2::Util::Zstd::FrameBuffer->new,
+        recs => [],
     } => $class;
 }
 
@@ -63,10 +61,10 @@ sub _open_fh ($class, $fh) {
     binmode $fh;
 
     return bless {
-        path    => '<fh>',
-        fh      => $fh,
-        records => [],
-        raw_buf => '',
+        path => '<fh>',
+        fh   => $fh,
+        fb   => Test2::Harness2::Util::Zstd::FrameBuffer->new,
+        recs => [],
     } => $class;
 }
 
@@ -89,12 +87,12 @@ trailing newlines; this reader adds and strips nothing.
 =cut
 
 sub readline ($self) {
-    while (!@{$self->{records}}) {
-        my $progress = $self->_refill_records;
+    while (!@{$self->{recs}}) {
+        my $progress = $self->_refill;
         last unless $progress;
     }
 
-    return shift @{$self->{records}} if @{$self->{records}};
+    return shift @{$self->{recs}} if @{$self->{recs}};
     return undef;
 }
 
@@ -121,13 +119,13 @@ sub close ($self) {
 
 =item $bytes_read = $r->_read_more
 
-Append the next chunk of raw bytes from the file handle to the read buffer.
+Read the next chunk of raw bytes from the file handle into the frame buffer.
 Returns the number of bytes read (C<0> at EOF).
 
-=item $progress = $r->_refill_records
+=item $progress = $r->_refill
 
-Read more bytes and split the buffer into as many complete zstd frames as
-are now available, decoding each into the records queue.
+Read more bytes, then push every complete frame's decoded payload that the
+frame buffer can now yield onto the records queue.
 
 =back
 
@@ -142,27 +140,13 @@ sub _read_more ($self) {
 
     return 0 unless $n;
 
-    $self->{raw_buf} .= $chunk;
+    $self->{fb}->push_bytes($chunk);
     return $n;
 }
 
-sub _refill_records ($self) {
+sub _refill ($self) {
     my $progress = $self->_read_more;
-
-    while (length $self->{raw_buf}) {
-        my $size = Test2::Harness2::Util::Zstd::zstd_frame_size($self->{raw_buf});
-        last unless defined $size;
-
-        my $frame = substr($self->{raw_buf}, 0, $size);
-        substr($self->{raw_buf}, 0, $size) = '';
-
-        my $plain = Compress::Zstd::decompress($frame);
-        croak "zstd decompress failed in '$self->{path}'"
-            unless defined $plain;
-
-        push @{$self->{records}} => $plain;
-    }
-
+    push @{$self->{recs}} => map { $_->{payload} } $self->{fb}->drain;
     return $progress;
 }
 

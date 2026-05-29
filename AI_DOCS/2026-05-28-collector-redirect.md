@@ -39,7 +39,10 @@ that on the `collector-redirect` branch and recorded the direction change in
   drain-on-call deltas (`new_collectors`, `new_failing`, `new_diagnosing`,
   `new_completed`, `new_test_exits`, `new_finalized`). Exposes its `pipe` for
   `IO::Select`. Used by `t2h2_collector`; future consumers are `App::Yath2`
-  and the scheduler.
+  and the scheduler. Can also proxy: `add_proxy($name, $pipe)` forwards every
+  message to another pipe and first replays the buffered messages of each
+  not-yet-complete collector so a mid-run downstream monitor reconstructs full
+  state; `remove_proxy($name)` stops it.
 - `scripts/t2h2_collector` — runs one test file (args: test file + events
   file): creates an `Atomic::Pipe`, `spawn_collector`s the collector (middle
   process) with the recorder holding the write end, loops over the

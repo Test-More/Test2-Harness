@@ -136,4 +136,88 @@ subtest exposes_handle_for_select => sub {
     is([$mon->tests], ['T1'], "after select+poll the message is consumed");
 };
 
+subtest proxy_forwarding => sub {
+    my ($mon, $w) = new_monitor();
+
+    # A proxy is a write-end the monitor forwards every message to; here the
+    # read end feeds a second, downstream monitor.
+    my ($dr, $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+    $mon->add_proxy(down => $dw);
+
+    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
+    $mon->poll;
+
+    my $down = Test2::Harness2::Collector::Monitor->new(pipe => $dr);
+    $down->poll;
+    is([$down->tests],                 ['T1'],  "message forwarded to the proxy and consumed downstream");
+    is($down->collector('T1')->{name}, 't/a.t', "downstream sees the identity");
+
+    # remove_proxy stops forwarding.
+    $mon->remove_proxy('down');
+    transition($w, 'completed', 'T1');
+    $mon->poll;
+    $down->poll;
+    isnt($down->collector('T1')->{status}, 'complete', "no more messages after remove_proxy");
+};
+
+subtest multiple_proxies => sub {
+    my ($mon, $w)  = new_monitor();
+    my ($ar,  $aw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+    my ($br,  $bw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+    $mon->add_proxy(a => $aw);
+    $mon->add_proxy(b => $bw);
+
+    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
+    $mon->poll;
+
+    for my $pair (['a', $ar], ['b', $br]) {
+        my ($n, $r) = @$pair;
+        my $down = Test2::Harness2::Collector::Monitor->new(pipe => $r);
+        $down->poll;
+        is([$down->tests], ['T1'], "proxy $n received the message");
+    }
+};
+
+subtest add_proxy_replays_inflight => sub {
+    my ($mon, $w) = new_monitor();
+
+    # An in-flight collector: started, went failing, but not completed.
+    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
+    transition($w, 'failing', 'T1');
+    $mon->poll;
+
+    # Add the proxy AFTER the collector is mid-lifecycle.
+    my ($dr, $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+    $mon->add_proxy(down => $dw);
+
+    my $down = Test2::Harness2::Collector::Monitor->new(pipe => $dr);
+    $down->poll;
+
+    # The downstream monitor must have the full state, not a half-lifecycle.
+    is([$down->tests],                 ['T1'],  "replayed the in-flight collector");
+    is($down->collector('T1')->{name}, 't/a.t', "downstream has identity from replayed start");
+    ok($down->collector('T1')->{failing}, "downstream has the failing state from replay");
+
+    # Subsequent live messages flow through too.
+    transition($w, 'completed', 'T1');
+    $mon->poll;
+    $down->poll;
+    is($down->collector('T1')->{status}, 'complete', "live messages forwarded after replay");
+};
+
+subtest completed_collectors_not_replayed => sub {
+    my ($mon, $w) = new_monitor();
+    start_msg($w, uuid => 'T1', name => 't/a.t', events_file => '/tmp/a', try => 1);
+    transition($w, 'completed', 'T1');
+    $mon->poll;
+
+    my ($dr, $dw) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+    $mon->add_proxy(down => $dw);
+    $dw->close;    # nothing should have been written; close so reads EOF
+
+    my $down = Test2::Harness2::Collector::Monitor->new(pipe => $dr);
+    $down->poll;
+    is([$down->tests], [], "a completed collector is not replayed to a new proxy");
+};
+
 done_testing;

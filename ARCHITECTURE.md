@@ -296,6 +296,13 @@ the read handle and block until there is something to poll. `t2h2_collector`
 uses it; `App::Yath2` and the scheduler (to free a slot when a test exits) are
 the intended future consumers.
 
+A monitor can also **proxy**: `add_proxy($name, $pipe)` forwards every message
+it reads on to another `Atomic::Pipe` (any number of named proxies). So a
+proxy added mid-run does not see collectors half-way through their lifecycle,
+`add_proxy` first replays the buffered messages of every not-yet-complete
+collector to the new proxy, so a downstream monitor reading it reconstructs
+the same state. `remove_proxy($name)` stops forwarding.
+
 **Failure modes.** The engine returns `0` on a clean pipeline run and `255`
 on an internal collector failure, independent of the child's exit. The
 child's exit, any timeout / orphan / watched-parent-death, and the verdict

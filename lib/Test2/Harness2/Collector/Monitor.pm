@@ -11,6 +11,8 @@ use Test2::Harness2::Util::JSON qw/decode_json/;
 use Object::HashBase qw{
     <pipe
     +collectors
+    +proxies
+    +replay
     +pending_new
     +pending_failing
     +pending_diagnosing
@@ -86,6 +88,8 @@ sub init ($self) {
     apply_atomic_pipe_compression($pipe);
 
     $self->{+COLLECTORS} = {};
+    $self->{+PROXIES}    = {};
+    $self->{+REPLAY}     = {};
 
     $self->{+PENDING_NEW}        = [];
     $self->{+PENDING_FAILING}    = [];
@@ -164,6 +168,8 @@ sub poll ($self) {
         $count++;
         push @payloads => $payload unless $void;
         $self->_process($payload);
+        $self->_forward($msg);
+        $self->_retain_for_replay($payload, $msg);
     }
 
     return if $void;
@@ -224,6 +230,48 @@ sub new_completed  ($self) { return $self->_drain(PENDING_COMPLETED) }
 sub new_test_exits ($self) { return $self->_drain(PENDING_EXITS) }
 sub new_finalized  ($self) { return $self->_drain(PENDING_FINALIZED) }
 
+=over 4
+
+=item $mon->add_proxy($name, $pipe)
+
+Register a proxy: every message the monitor reads from then on is also
+forwarded, verbatim, to C<$pipe> (an L<Atomic::Pipe> write end, switched to
+zstd here). Any number of proxies may be registered under distinct names.
+
+So a monitor added mid-run does not see collectors half-way through their
+lifecycle, C<add_proxy> first replays -- to the new proxy only -- the messages
+of every collector that has not yet completed, in arrival order. A downstream
+L<Test2::Harness2::Collector::Monitor> reading C<$pipe> therefore reconstructs
+the same state this monitor holds.
+
+=item $pipe = $mon->remove_proxy($name)
+
+Stop forwarding to (and return) the proxy registered under C<$name>.
+
+=back
+
+=cut
+
+sub add_proxy ($self, $name, $pipe) {
+    croak "a proxy name is required" unless defined $name && length $name;
+    croak "a proxy pipe is required" unless $pipe;
+
+    apply_atomic_pipe_compression($pipe);
+    $self->{+PROXIES}{$name} = $pipe;
+
+    # Replay the in-flight collectors so the new proxy's consumer does not miss
+    # the start (and any failing/diagnosing) it needs to track state.
+    for my $uuid (sort keys %{$self->{+REPLAY}}) {
+        $self->_write_proxy($pipe, $_) for @{$self->{+REPLAY}{$uuid}};
+    }
+
+    return;
+}
+
+sub remove_proxy ($self, $name) {
+    return delete $self->{+PROXIES}{$name};
+}
+
 =head1 PRIVATE METHODS
 
 =cut
@@ -239,9 +287,50 @@ Return and clear one of the pending change lists.
 Fold one decoded message into per-collector state and the pending change
 lists, keyed by the message's collector uuid.
 
+=item $self->_forward($msg)
+
+Forward one raw message to every registered proxy.
+
+=item $self->_retain_for_replay($payload, $msg)
+
+Keep the raw message in the per-collector replay buffer while the collector is
+in flight, so a proxy added later can be caught up; drop the buffer once the
+collector is complete or finalized (it will not be replayed).
+
+=item $self->_write_proxy($pipe, $msg)
+
+Write one raw message to a single proxy pipe, warning (not dying) on failure.
+
 =back
 
 =cut
+
+sub _forward ($self, $msg) {
+    my $proxies = $self->{+PROXIES};
+    return unless %$proxies;
+
+    $self->_write_proxy($_, $msg) for values %$proxies;
+    return;
+}
+
+sub _retain_for_replay ($self, $payload, $msg) {
+    my $uuid = $payload->{facet_data}{harness_collector}{uuid} // return;
+
+    my $status = $self->{+COLLECTORS}{$uuid}{status} // '';
+    if ($status eq 'complete' || $status eq 'finalized') {
+        delete $self->{+REPLAY}{$uuid};
+        return;
+    }
+
+    push @{$self->{+REPLAY}{$uuid}} => $msg;
+    return;
+}
+
+sub _write_proxy ($self, $pipe, $msg) {
+    warn "monitor: proxy forward failed: $@\n"
+        unless eval { $pipe->write_message($msg); 1 };
+    return;
+}
 
 sub _drain ($self, $slot) {
     my $list = $self->{$slot};

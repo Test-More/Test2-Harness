@@ -13,15 +13,17 @@ that on the `collector-redirect` branch and recorded the direction change in
 ## What landed
 
 - `Collector::Role::Recorder` + base `Collector::Recorder` — the pipeline
-  sink. Writes every event to one `jsonl.zst` file; `finalize` closes and
-  touches an optional `touchfile`.
+  sink. Writes every event to one `jsonl.zst` file; may hold notification
+  `pipes` (live `Atomic::Pipe` objects or `{ fifo => $path }` specs it opens
+  itself); `finalize` closes its files and sends a finalization message to
+  the pipes.
 - `Collector::Auditor` — the processor for test jobs. Passes events
   through, tracks the verdict, injects `harness_state_transition` events
   (starting / failing / diagnosing / completed) and a `harness_final_state`
   event on the process-exit event.
-- `Collector::Recorder::Test` — routes transition events to a transitions
-  file and the final-state event to a state file; touches the touchfile on
-  each transition.
+- `Collector::Recorder::Test` — writes the final-state event to a state file
+  and sends it to the pipes; sends each transition to the pipes only (no
+  transitions file); leaves everything else in the events file.
 - `Test2::Harness2::Collector` gained the exported `collect` /
   `spawn_collector` functions and a recorder sink in place of the hard-coded
   events-file writer.

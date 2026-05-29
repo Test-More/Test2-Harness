@@ -4,13 +4,16 @@ use v5.38;
 our $VERSION = '2.000000';
 
 use Carp qw/croak/;
+use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 
 use Test2::Harness2::Util::Zstd qw/open_zstd_writer/;
+use Test2::Harness2::Util::IPC qw/atomic_pipe_compression_args apply_atomic_pipe_compression/;
+use Test2::Harness2::Event;
 
 use Object::HashBase qw{
     <events_file
-    <touchfile
+    <pipes
     -events_writer
     -finalized
 };
@@ -32,25 +35,35 @@ event to one jsonl.zst file.
 The sink at the end of the collector pipeline. Each event the pipeline
 produces is handed to L</record_event>, which appends it to the
 C<events_file> as a multi-frame zstd file -- one self-contained frame per
-event. When the run ends the collector calls L</finalize>, which closes the
-file and, if a C<touchfile> was supplied, updates its mtime so an
-inotify-based monitor wakes up.
+event.
+
+The recorder may also be given one or more notification C<pipes>
+(L<Atomic::Pipe> objects). Important occurrences -- not every event, only the
+ones a monitor cares about -- are sent to every pipe as a single
+zstd-compressed atomic message. The base recorder sends one such message when
+the collector finishes (L</finalize>); subclasses
+(L<Test2::Harness2::Collector::Recorder::Test>) send more, e.g. one per state
+transition. A listener opens the read end (an in-process pipe or an on-disk
+FIFO) and any number of collectors can write to it.
 
 This base class enforces nothing about the filename it is handed; the caller
-chooses the path. Subclasses (e.g. L<Test2::Harness2::Collector::Recorder::Test>)
-override L</record_event> to route some events to additional files.
+chooses the path. Subclasses override L</record_event> to route some events
+to additional files.
 
 =head1 SYNOPSIS
 
     use Test2::Harness2::Collector::Recorder;
+    use Atomic::Pipe;
+
+    my ($r, $w) = Atomic::Pipe->pair;
 
     my $rec = Test2::Harness2::Collector::Recorder->new(
         events_file => "$dir/events.jsonl.zst",
-        touchfile   => "$dir/touch",          # optional
+        pipes       => [$w],                       # optional, any number
     );
 
     $rec->record_event($event);
-    $rec->finalize;
+    $rec->finalize;                                # sends a finalization message
 
 =head1 ATTRIBUTES
 
@@ -61,11 +74,14 @@ override L</record_event> to route some events to additional files.
 Path to the multi-frame zstd events file. Opened for append the first time an
 event is recorded.
 
-=item touchfile
+=item pipes => \@pipes
 
-Optional path. When set, L</finalize> updates the file's mtime (creating it
-if absent) so monitors watching it via inotify are woken when the collector
-finishes.
+Optional arrayref of notification targets. Each entry is either a live
+L<Atomic::Pipe> object (only usable when the collector shares memory with the
+listener -- in-process or post-C<fork>) or a C<< { fifo => $path } >> spec,
+which the recorder opens as a write-FIFO itself (usable across an C<exec>,
+and the portable choice on platforms without inheritable pipe handles). All
+pipes receive the same messages.
 
 =back
 
@@ -76,6 +92,12 @@ sub init ($self) {
         unless defined $self->{+EVENTS_FILE} && length $self->{+EVENTS_FILE};
 
     $self->{+FINALIZED} = 0;
+
+    if (my $pipes = $self->{+PIPES}) {
+        my @coerced = map { $self->_coerce_pipe($_) } @$pipes;
+        apply_atomic_pipe_compression($_) for @coerced;
+        $self->{+PIPES} = \@coerced;
+    }
 
     return;
 }
@@ -98,8 +120,8 @@ otherwise the event is JSON-encoded and compressed into a fresh frame.
 
 =item $rec->finalize
 
-Close the events file and, when a C<touchfile> was supplied, touch it. Safe
-to call more than once -- subsequent calls are no-ops.
+Close the events file and send a finalization message to every notification
+pipe. Safe to call more than once -- subsequent calls are no-ops.
 
 =back
 
@@ -125,7 +147,7 @@ sub finalize ($self) {
         warn "events file close failed: $@\n" unless eval { $writer->close; 1 };
     }
 
-    $self->_touch($self->{+TOUCHFILE});
+    $self->_notify_pipes($self->_finalization_message);
 
     return;
 }
@@ -141,10 +163,21 @@ sub finalize ($self) {
 Lazily open (and cache) the zstd writer for the events file, so a recorder
 that records nothing never creates the file.
 
-=item $self->_touch($path)
+=item $pipe = $self->_coerce_pipe($thing)
 
-Update C<$path>'s mtime, creating it if absent. A no-op when C<$path> is
-undef or empty. Shared with subclasses that touch on other occasions.
+Turn a C<pipes> entry into a live L<Atomic::Pipe>: a blessed object is used
+as-is; a C<< { fifo => $path } >> spec is opened as a write-FIFO.
+
+=item $self->_notify_pipes($message)
+
+Write C<$message> as one atomic message to every notification pipe. A no-op
+when no pipes were supplied. Shared with subclasses that notify on other
+occasions.
+
+=item $json = $self->_finalization_message
+
+The JSON message body sent to the pipes when the collector finishes: an event
+carrying a C<harness_collector_finalized> facet.
 
 =back
 
@@ -154,17 +187,32 @@ sub _events_writer ($self) {
     return $self->{+EVENTS_WRITER} //= open_zstd_writer($self->{+EVENTS_FILE});
 }
 
-sub _touch ($self, $path) {
-    return unless defined $path && length $path;
+sub _coerce_pipe ($self, $thing) {
+    return $thing if blessed($thing);
 
-    if (-e $path) {
-        my $now = time;
-        utime($now, $now, $path) or warn "utime '$path' failed: $!\n";
-        return;
+    if (ref($thing) eq 'HASH' && defined $thing->{fifo}) {
+        require Atomic::Pipe;
+        return Atomic::Pipe->write_fifo($thing->{fifo}, atomic_pipe_compression_args());
     }
 
-    open(my $fh, '>>', $path) or warn "touch '$path' failed: $!\n";
+    croak "recorder pipe must be an Atomic::Pipe object or a { fifo => \$path } spec";
+}
+
+sub _notify_pipes ($self, $message) {
+    my $pipes = $self->{+PIPES} or return;
+
+    for my $pipe (@$pipes) {
+        warn "recorder pipe notify failed: $@\n"
+            unless eval { $pipe->write_message($message); 1 };
+    }
+
     return;
+}
+
+sub _finalization_message ($self) {
+    return Test2::Harness2::Event->new(
+        facet_data => {harness_collector_finalized => {stamp => time}},
+    )->as_json;
 }
 
 1;

@@ -15,10 +15,9 @@ use Test2::Harness2::Collector::Recorder::Test;
 #
 # The script process itself is the collector: collect() forks the test file as
 # its child via exec, so only two processes exist (this one and the test). The
-# output directory receives events.jsonl.zst (the full event stream),
-# transitions.jsonl.zst (auditor state transitions), state.jsonl.zst (the
-# final verdict), and a touch file whose mtime moves on each transition and at
-# completion so monitors can watch it.
+# output directory receives events.jsonl.zst (the full event stream) and
+# state.jsonl.zst (the final verdict). This runner attaches no notification
+# pipes, so state transitions are not captured here.
 
 my ($test_file, $out_dir) = @ARGV;
 
@@ -41,10 +40,8 @@ my $info = collect(
     env       => {PERL5LIB => $perl5lib},
     processor => 'Test2::Harness2::Collector::Auditor',
     recorder  => Test2::Harness2::Collector::Recorder::Test->new(
-        events_file      => "$out_dir/events.jsonl.zst",
-        transitions_file => "$out_dir/transitions.jsonl.zst",
-        state_file       => "$out_dir/state.jsonl.zst",
-        touchfile        => "$out_dir/touch",
+        events_file => "$out_dir/events.jsonl.zst",
+        state_file  => "$out_dir/state.jsonl.zst",
     ),
 );
 

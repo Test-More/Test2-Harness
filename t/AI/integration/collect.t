@@ -4,6 +4,7 @@ use v5.38;
 use File::Temp qw/tempdir/;
 use POSIX ();
 
+use Atomic::Pipe;
 use Test2::Harness2::Collector qw/collect spawn_collector/;
 use Test2::Harness2::Collector::Auditor;
 use Test2::Harness2::Collector::Recorder;
@@ -75,14 +76,16 @@ subtest collect_with_recorder_instance => sub {
 subtest full_test_pipeline_pass => sub {
     my $dir = tempdir(CLEANUP => 1);
 
+    # The collector runs in-process here, so a live notification pipe works.
+    my ($r, $w) = Atomic::Pipe->pair(compression => 'zstd', keep_compressed => 1);
+
     my $info = collect(
         is_test   => 1,
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
-            events_file      => "$dir/events.jsonl.zst",
-            transitions_file => "$dir/transitions.jsonl.zst",
-            state_file       => "$dir/state.jsonl.zst",
-            touchfile        => "$dir/touch",
+            events_file => "$dir/events.jsonl.zst",
+            state_file  => "$dir/state.jsonl.zst",
+            pipes       => [$w],
         ),
         exec => tap_child('print "1..1\nok 1 - good\n"', 0),
     );
@@ -97,12 +100,18 @@ subtest full_test_pipeline_pass => sub {
     is(scalar(@$state), 1, "one final-state row in the state file");
     is($state->[0]{facet_data}{harness_final_state}{pass}, 1, "state file records pass");
 
-    my $trans = read_jsonl_zst("$dir/transitions.jsonl.zst");
-    my %seen  = map { $_->{facet_data}{harness_state_transition}{state} => 1 } @$trans;
-    ok($seen{starting},  "starting transition recorded");
-    ok($seen{completed}, "completed transition recorded");
-
-    ok(-e "$dir/touch", "touchfile touched");
+    # Transitions, the final state, and the finalization arrive on the pipe.
+    $r->blocking(0);    # read_message returns undef once drained
+    my @msgs;
+    while (defined(my $msg = $r->read_message)) {
+        push @msgs => decode_json($msg);
+    }
+    my %seen = map { $_->{facet_data}{harness_state_transition}{state} => 1 }
+        grep { $_->{facet_data}{harness_state_transition} } @msgs;
+    ok($seen{starting},  "starting transition delivered on the pipe");
+    ok($seen{completed}, "completed transition delivered on the pipe");
+    ok((grep { $_->{facet_data}{harness_final_state} }       @msgs), "final state delivered on the pipe");
+    ok((grep { $_->{facet_data}{harness_collector_finalized} } @msgs), "finalization delivered on the pipe");
 
     # Transition / final-state events are routed OUT of the events file.
     my $events = read_jsonl_zst("$dir/events.jsonl.zst");
@@ -119,9 +128,8 @@ subtest full_test_pipeline_fail => sub {
         is_test   => 1,
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
-            events_file      => "$dir/events.jsonl.zst",
-            transitions_file => "$dir/transitions.jsonl.zst",
-            state_file       => "$dir/state.jsonl.zst",
+            events_file => "$dir/events.jsonl.zst",
+            state_file  => "$dir/state.jsonl.zst",
         ),
         exec => tap_child('print "1..1\nnot ok 1 - bad\n"', 1),
     );
@@ -138,7 +146,6 @@ subtest spawn_collector_returns_pid_and_verdict_exit => sub {
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file      => "$dir/p-events.jsonl.zst",
-            transitions_file => "$dir/p-transitions.jsonl.zst",
             state_file       => "$dir/p-state.jsonl.zst",
         ),
         exec => tap_child('print "1..1\nok 1\n"', 0),
@@ -153,7 +160,6 @@ subtest spawn_collector_returns_pid_and_verdict_exit => sub {
         processor => 'Test2::Harness2::Collector::Auditor',
         recorder  => Test2::Harness2::Collector::Recorder::Test->new(
             events_file      => "$dir/f-events.jsonl.zst",
-            transitions_file => "$dir/f-transitions.jsonl.zst",
             state_file       => "$dir/f-state.jsonl.zst",
         ),
         exec => tap_child('print "1..1\nnot ok 1\n"', 1),

@@ -37,9 +37,9 @@ subtest passing_test => sub {
 
     is($code, 0, "script exits 0 for a passing test");
 
-    ok(-e "$dir/events.jsonl.zst",      "events file produced");
-    ok(-e "$dir/transitions.jsonl.zst", "transitions file produced");
-    ok(-e "$dir/state.jsonl.zst",       "state file produced");
+    ok(-e "$dir/events.jsonl.zst", "events file produced");
+    ok(-e "$dir/state.jsonl.zst",  "state file produced");
+    ok(!-e "$dir/transitions.jsonl.zst", "no transitions file (transitions go to pipes)");
 
     my $fs = final_state($dir);
     is($fs->{pass}, 1, "state file records a pass");

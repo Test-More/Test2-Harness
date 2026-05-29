@@ -2,6 +2,8 @@ use Test2::V0;
 use v5.38;
 
 use File::Temp qw/tempdir/;
+use POSIX ();
+use Atomic::Pipe;
 
 use Test2::Harness2::Event;
 use Test2::Harness2::Util::Zstd qw/compress_blob open_zstd_reader/;
@@ -11,7 +13,7 @@ use Test2::Harness2::Collector::Recorder;
 
 # The base recorder is the pipeline sink: it writes every event handed to it
 # to a single jsonl.zst events file, and on finalize it closes that file and
-# (when asked) touches a touchfile so inotify-based monitors wake up.
+# sends a finalization message to any notification pipes it was given.
 
 my $tmp = tempdir(CLEANUP => 1);
 
@@ -67,16 +69,40 @@ subtest compressed_form_fast_path => sub {
     is($events->[0]{facet_data}{info}[0]{details}, 'verbatim', "verbatim frame decodes back");
 };
 
-subtest finalize_touches_touchfile => sub {
-    my $file  = "$tmp/touch-events.jsonl.zst";
-    my $touch = "$tmp/touchfile";
-    ok(!-e $touch, "touchfile absent before finalize");
+subtest finalize_notifies_live_pipes => sub {
+    my ($r, $w) = Atomic::Pipe->pair(compression => 'zstd', keep_compressed => 1);
 
-    my $rec = Test2::Harness2::Collector::Recorder->new(events_file => $file, touchfile => $touch);
+    my $rec = Test2::Harness2::Collector::Recorder->new(
+        events_file => "$tmp/notify-events.jsonl.zst",
+        pipes       => [$w],
+    );
     $rec->record_event(Test2::Harness2::Event->new(facet_data => {info => [{tag => 'D'}]}));
     $rec->finalize;
 
-    ok(-e $touch, "touchfile created/touched on finalize");
+    $r->blocking(0);
+    my $msg = $r->read_message;
+    ok(defined $msg, "a message arrived on the pipe");
+    my $decoded = decode_json($msg);
+    ok($decoded->{facet_data}{harness_collector_finalized}, "finalization message sent on finalize");
+};
+
+subtest finalize_notifies_fifo_pipe => sub {
+    my $path = "$tmp/notify.fifo";
+    POSIX::mkfifo($path, 0700) or skip_all("mkfifo unavailable: $!");
+
+    # Reader opens first so the recorder's write-FIFO open does not block.
+    my $r = Atomic::Pipe->read_fifo($path, compression => 'zstd', keep_compressed => 1);
+
+    my $rec = Test2::Harness2::Collector::Recorder->new(
+        events_file => "$tmp/fifo-events.jsonl.zst",
+        pipes       => [{fifo => $path}],
+    );
+    $rec->finalize;
+
+    $r->blocking(0);
+    my $msg     = $r->read_message;
+    my $decoded = decode_json($msg);
+    ok($decoded->{facet_data}{harness_collector_finalized}, "finalization message sent over a fifo spec");
 };
 
 subtest finalize_is_idempotent => sub {

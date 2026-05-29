@@ -229,10 +229,20 @@ with a `control` facet carrying an `encoding`.
   record (drop, pass through, or expand). A processor that mutates an event
   must clear its `compressed_form`.
 - **Recorder** — `record_event($event)` persists one event; `finalize`
-  closes and, given a `touchfile`, touches it. The base recorder
-  (`Collector::Recorder`) writes every event to one `jsonl.zst` file. The
-  recorder is optional and there is no default: with none, events are still
-  parsed and audited but nothing is written.
+  closes its files and sends a finalization message to its notification
+  pipes. The base recorder (`Collector::Recorder`) writes every event to one
+  `jsonl.zst` file. The recorder is optional and there is no default: with
+  none, events are still parsed and audited but nothing is written.
+
+  A recorder may also be given a `pipes` arrayref of notification targets.
+  Only important occurrences — not every event — are sent to every pipe as a
+  single zstd-compressed atomic message (the base recorder sends the
+  finalization; the test recorder also sends each transition and the final
+  state). Each entry is either a live `Atomic::Pipe` (in-process or post-fork
+  only) or a `{ fifo => $path }` spec the recorder opens itself (survives
+  `exec`; the portable choice where pipe handles are not inheritable, e.g.
+  Windows). A listener opens the read end and any number of collectors write
+  to it.
 
 **Functional interface.** `Test2::Harness2::Collector` exports `collect`
 (run in the current process; returns `{exit => {...}, final_state => ...}`
@@ -254,9 +264,10 @@ sub-auditor, tracks per-phase timing (startup / events / cleanup / total via
 events (starting / failing / diagnosing / completed) plus a
 `harness_final_state` event (with the top-level subtest summary and phase
 times) on exit. The test recorder
-(`Collector::Recorder::Test`) routes those out of the events file into a
-transitions file and a state file respectively. `scripts/t2h2_collector`
-wires this together for a single test file and exits 0 (pass) / 1 (fail).
+(`Collector::Recorder::Test`) keeps those out of the events file: the final
+state goes to a state file and to the pipes, and transitions go only to the
+pipes. `scripts/t2h2_collector` wires this together for a single test file
+and exits 0 (pass) / 1 (fail).
 
 **Failure modes.** The engine returns `0` on a clean pipeline run and `255`
 on an internal collector failure, independent of the child's exit. The

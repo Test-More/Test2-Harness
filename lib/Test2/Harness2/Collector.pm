@@ -12,6 +12,8 @@ use Time::HiRes qw/sleep time/;
 use Atomic::Pipe;
 use Scope::Guard ();
 
+use Importer Importer => 'import';
+
 use Test2::Harness2::Util::IPC qw/
     swap_io
     parse_exit
@@ -21,8 +23,10 @@ use Test2::Harness2::Util::IPC qw/
     atomic_pipe_compression_args
 /;
 use Test2::Harness2::Util::JSON qw/decode_json encode_json/;
-use Test2::Harness2::Util::Zstd qw/open_zstd_writer/;
 use Test2::Harness2::Event;
+use Test2::Harness2::Collector::Recorder;
+
+our @EXPORT_OK = qw/collect spawn_collector/;
 
 # Child memory (peak RSS) is read from getrusage(RUSAGE_CHILDREN) when
 # BSD::Resource is available. It is an optional dependency (Suggests) -- when
@@ -45,9 +49,11 @@ use Object::HashBase qw{
     <is_test
     <exec_command
     <run_sub
+    <child_env
     <events_file
     <parser
     <processor
+    <recorder
     <orphan_timeout
     <silence_timeout
     <lifetime_timeout
@@ -60,7 +66,6 @@ use Object::HashBase qw{
     -pipes
     -by_fh
     -sel
-    -events_writer
     -start_time
     -last_activity
     -last_flush
@@ -129,10 +134,26 @@ then calls C<run_collector> on it.
 
 =over 4
 
-=item events_file (required)
+=item events_file
 
-Path to the multi-frame zstd events file the collector writes. Opened for
-append in the parent after the fork.
+Path to a multi-frame zstd events file. A convenience for the common case:
+when no C<recorder> is supplied, the collector builds a base
+L<Test2::Harness2::Collector::Recorder> that writes to this path. One of
+C<events_file> or C<recorder> must be supplied.
+
+=item recorder => $instance_or_class
+
+The pipeline sink: a L<Test2::Harness2::Collector::Role::Recorder> implementer
+(blessed instance, class name, or C<[class =E<gt> @args]>). When omitted, a
+base recorder is built from C<events_file>. The recorder receives every event
+the pipeline produces, including the synthetic process-exit event.
+
+=item child_env => \%vars
+
+Optional environment overrides applied in the child before C<exec> (the
+functional interface accepts this as C<env>). The harness's own variables
+(the pipe count, and C<T2_FORMATTER> for test jobs) are set afterward, so
+they take precedence.
 
 =item exec_command => \@argv
 
@@ -152,14 +173,14 @@ exclusive with C<exec_command>.
 L<Test2::Harness2::Collector::Role::Parser> implementer. When omitted, a
 test job (C<is_test> true) defaults to
 L<Test2::Harness2::Collector::Parser::TAPParser> and a non-test job defaults
-to L<Test2::Harness2::Collector::Parser::IOParser>. A bare class name is
-constructed with no arguments.
+to L<Test2::Harness2::Collector::Parser::IOParser>. A bare class name (or a
+C<[class =E<gt> @args]> arrayref) is constructed accordingly.
 
 =item processor => $instance_or_class
 
-Optional L<Test2::Harness2::Collector::Role::Processor> implementer. A bare
-class name is constructed with no arguments. When absent, parsed events are
-written straight through.
+Optional L<Test2::Harness2::Collector::Role::Processor> implementer (blessed
+instance, class name, or C<[class =E<gt> @args]>). When absent, parsed events
+are passed straight through to the recorder.
 
 =item is_test => 0 | 1
 
@@ -205,6 +226,68 @@ C<0> disables the periodic flush. Ignored when C<buffering> is false.
 
 =back
 
+=head1 EXPORTS
+
+Nothing is exported by default. The polished functional interface is
+available on request:
+
+    use Test2::Harness2::Collector qw/collect spawn_collector/;
+
+=over 4
+
+=item collect
+
+=item $info = collect(%args)
+
+Run a collector in the current process: fork the child, drive the pipeline,
+and return once the child has exited and the pipeline has drained. C<%args>
+are the L</ATTRIBUTES> below, except that C<exec>, C<run>, and C<env> may be
+used as aliases for C<exec_command>, C<run_sub>, and C<child_env>. Returns an
+info hashref:
+
+    $info = {
+        exit => {
+            code => $raw_wait_status,    # the child's raw wait status ($?)
+            err  => $exit_code,          # decoded exit code (WEXITSTATUS)
+            sig  => $signal,             # terminating signal, 0 if none
+        },
+        # final_state => {...}           # present when the processor (e.g. the
+        #                                # auditor) exposes a final_state
+    };
+
+When the collector killed the child itself, C<exit> also carries
+C<orphaned>, C<timed_out>, or C<parent_exited> as applicable.
+
+=item spawn_collector
+
+=item $pid = spawn_collector(%args)
+
+Fork a dedicated collector process (which in turn forks and collects the
+child) and return its pid to the caller. The collector process runs
+L</collect> and exits C<0> when the run passed and C<1> when it failed (from
+the processor's verdict, or the child's own exit code when there is no
+verdict). Two processes are created in total: the collector and its child.
+
+=back
+
+=cut
+
+sub collect (%args) {
+    my $self = Test2::Harness2::Collector->new(__PACKAGE__->_normalize_args(%args));
+    $self->run_collector;
+    return $self->_build_info;
+}
+
+sub spawn_collector (%args) {
+    my $class = __PACKAGE__;
+    my %norm  = $class->_normalize_args(%args);
+
+    my $pid = fork // croak "Could not fork collector process: $!";
+    return $pid if $pid;
+
+    $class->_run_spawned(\%norm);    # never returns
+}
+
 =head1 PUBLIC METHODS
 
 =cut
@@ -214,6 +297,8 @@ C<0> disables the periodic flush. Ignored when C<buffering> is false.
 =item $exit = Test2::Harness2::Collector->start(%args)
 
 Convenience constructor + driver: C<< $class->new(%args)->run_collector >>.
+Returns the raw C<run_collector> status (C<0> clean, C<255> on internal
+failure); callers wanting the structured info hash should use L</collect>.
 
 =back
 
@@ -232,8 +317,9 @@ sub init ($self) {
     croak "exec_command and run_sub are mutually exclusive"
         if $self->{+EXEC_COMMAND} && $self->{+RUN_SUB};
 
-    croak "events_file is a required attribute"
-        unless defined $self->{+EVENTS_FILE} && length $self->{+EVENTS_FILE};
+    croak "recorder or events_file is a required attribute"
+        unless $self->{+RECORDER}
+        || (defined $self->{+EVENTS_FILE} && length $self->{+EVENTS_FILE});
 
     $self->{+ORPHAN_TIMEOUT}   //= DEFAULT_ORPHAN_TIMEOUT;
     $self->{+SILENCE_TIMEOUT}  //= 0;
@@ -243,6 +329,7 @@ sub init ($self) {
 
     $self->{+PARSER}    = $self->_coerce_parser($self->{+PARSER});
     $self->{+PROCESSOR} = $self->_coerce_processor($self->{+PROCESSOR});
+    $self->{+RECORDER}  = $self->_coerce_recorder($self->{+RECORDER});
 
     $self->{+ORPHANED}  = 0;
     $self->{+TIMED_OUT} = 0;
@@ -297,11 +384,10 @@ sub run_collector ($self) {
     $out_w->close;
     $err_w->close;
 
-    $self->{+CHILD_PID}     = $child;
-    $self->{+FORK_STAMP}    = time;
-    $self->{+OUT_PIPE}      = $out_r;
-    $self->{+ERR_PIPE}      = $err_r;
-    $self->{+EVENTS_WRITER} = open_zstd_writer($self->{+EVENTS_FILE});
+    $self->{+CHILD_PID}  = $child;
+    $self->{+FORK_STAMP} = time;
+    $self->{+OUT_PIPE}   = $out_r;
+    $self->{+ERR_PIPE}   = $err_r;
 
     $self->_set_procname;
 
@@ -333,46 +419,66 @@ sub run_collector ($self) {
 
 =item $obj = $self->_coerce_processor($thing)
 
-Turn an attribute that may be a blessed object, a bare class name, or
-(parser only) C<undef> into an instance. An omitted parser defaults to
-L<Test2::Harness2::Collector::Parser::TAPParser> for a test job
+=item $obj = $self->_coerce_recorder($thing)
+
+Coerce a pipeline-part attribute into an instance via L</_coerce_class_arg>,
+applying the part's default when C<$thing> is C<undef>: the parser defaults
+to L<Test2::Harness2::Collector::Parser::TAPParser> for a test job
 (C<is_test> true) and L<Test2::Harness2::Collector::Parser::IOParser>
-otherwise; the processor stays C<undef> when not supplied.
+otherwise; the processor stays C<undef>; the recorder defaults to a base
+L<Test2::Harness2::Collector::Recorder> over C<events_file>.
+
+=item _coerce_class_arg
+
+=item $obj = $self->_coerce_class_arg($thing, $label)
+
+Turn a blessed object (returned as-is), a class name (constructed with no
+arguments), or a C<[class =E<gt> @args]> arrayref (constructed with those
+arguments) into an instance. Croaks for anything else, naming C<$label>.
 
 =back
 
 =cut
 
 sub _coerce_parser ($self, $thing) {
-    return $thing if blessed($thing);
+    return $self->_coerce_class_arg($thing, 'parser') if defined $thing;
 
-    if (!defined $thing) {
-        my $class =
-              $self->{+IS_TEST}
-            ? 'Test2::Harness2::Collector::Parser::TAPParser'
-            : 'Test2::Harness2::Collector::Parser::IOParser';
-        $self->_require_class($class);
-        return $class->new;
-    }
-
-    if (!ref($thing)) {
-        $self->_require_class($thing);
-        return $thing->new;
-    }
-
-    croak "'parser' must be a class name or an object, not a " . ref($thing);
+    my $class =
+          $self->{+IS_TEST}
+        ? 'Test2::Harness2::Collector::Parser::TAPParser'
+        : 'Test2::Harness2::Collector::Parser::IOParser';
+    $self->_require_class($class);
+    return $class->new;
 }
 
 sub _coerce_processor ($self, $thing) {
     return undef unless defined $thing;
+    return $self->_coerce_class_arg($thing, 'processor');
+}
+
+sub _coerce_recorder ($self, $thing) {
+    return $self->_coerce_class_arg($thing, 'recorder') if defined $thing;
+
+    # No recorder supplied: default to the base recorder writing the
+    # events_file the caller named (init guaranteed one of the two is set).
+    return Test2::Harness2::Collector::Recorder->new(events_file => $self->{+EVENTS_FILE});
+}
+
+sub _coerce_class_arg ($self, $thing, $label) {
     return $thing if blessed($thing);
+
+    if (ref($thing) eq 'ARRAY') {
+        my ($class, @args) = @$thing;
+        $self->_require_class($class);
+        return $class->new(@args);
+    }
 
     if (!ref($thing)) {
         $self->_require_class($thing);
         return $thing->new;
     }
 
-    croak "'processor' must be a class name or an object, not a " . ref($thing);
+    croak "'$label' must be a class name, [class => \@args], or an object, not a " . ref($thing);
 }
 
 sub _require_class ($self, $class) {
@@ -386,10 +492,12 @@ sub _require_class ($self, $class) {
 =item $self->_run_child($guard, $out_w, $err_w)
 
 Child-side bootstrap: replace STDOUT / STDERR with the mixed-mode pipe
-writers, mark the environment so a Test2 stream formatter recognises it is
-inside a collector, and for test jobs select that formatter via
-C<T2_FORMATTER> and place the process in a fresh process group. Finally
-either C<exec> the requested command or invoke the callback.
+writers, apply the caller's C<env> overrides, mark the environment so a
+Test2 stream formatter recognises it is inside a collector, and for test
+jobs select that formatter via C<T2_FORMATTER> and place the process in a
+fresh process group. The harness's own variables are set after the caller's
+C<env> so they always win. Finally either C<exec> the requested command or
+invoke the callback.
 
 =back
 
@@ -404,6 +512,10 @@ sub _run_child ($self, $guard, $out_w, $err_w) {
 
     STDOUT->autoflush(1);
     STDERR->autoflush(1);
+
+    if (my $env = $self->{+CHILD_ENV}) {
+        $ENV{$_} = $env->{$_} for keys %$env;
+    }
 
     $ENV{T2_HARNESS2_PIPE_COUNT} = 2;
 
@@ -979,14 +1091,9 @@ sub _flush_buffer ($self, %params) {
 
 =item $self->_dispatch_event($event)
 
-Route one event through the optional processor and write each resulting event
-to the events file.
-
-=item $self->_write_event($event)
-
-Write a single event to the events file. When the event still carries its
-on-wire C<compressed_form> frame, that frame is appended verbatim; otherwise
-the event is JSON-encoded and compressed into a fresh frame.
+Route one event through the optional processor and hand each resulting event
+to the recorder. The recorder owns the on-disk format (and the
+C<compressed_form> fast path).
 
 =back
 
@@ -995,22 +1102,13 @@ the event is JSON-encoded and compressed into a fresh frame.
 sub _dispatch_event ($self, $event) {
     my $processor = $self->{+PROCESSOR};
     my @events    = $processor ? $processor->process_event($event) : ($event);
-    $self->_write_event($_) for @events;
-    return;
-}
 
-sub _write_event ($self, $event) {
-    my $writer     = $self->{+EVENTS_WRITER};
-    my $compressed = $event->{compressed_form};
-
-    if (defined $compressed) {
-        warn "events file write (raw frame) failed: $@\n"
-            unless eval { $writer->print_raw_frame($compressed); 1 };
-        return;
+    my $recorder = $self->{+RECORDER};
+    for my $e (@events) {
+        warn "recorder record_event failed: $@\n"
+            unless eval { $recorder->record_event($e); 1 };
     }
 
-    warn "events file write failed: $@\n"
-        unless eval { $writer->print(encode_json($event), "\n"); 1 };
     return;
 }
 
@@ -1169,7 +1267,7 @@ sub _safe_kill ($self) {
 =item $self->_finalize
 
 Tail of the parent path: synthesize the C<harness_process_exit> event,
-dispatch it through the pipeline, and close the events file. The event
+dispatch it through the pipeline, and finalize the recorder. The event
 carries the decoded wait status (C<sig> / C<err> / C<dmp> / C<all>), any
 C<orphaned> / C<timed_out> / C<parent_exited> flags, the child's CPU and
 wall-clock timing, and -- when L<BSD::Resource> is available -- its peak
@@ -1190,8 +1288,8 @@ sub _finalize ($self) {
     );
     $self->_dispatch_event($event);
 
-    my $writer = $self->{+EVENTS_WRITER} or return;
-    warn "events file close failed: $@\n" unless eval { $writer->close; 1 };
+    my $recorder = $self->{+RECORDER} or return;
+    warn "recorder finalize failed: $@\n" unless eval { $recorder->finalize; 1 };
     return;
 }
 
@@ -1225,6 +1323,79 @@ sub _exit_facet ($self) {
         if defined $self->{+CHILD_MAXRSS};
 
     return \%facet;
+}
+
+=over 4
+
+=item $info = $self->_build_info
+
+Assemble the info hashref L</collect> returns from the collector's post-run
+state: the decoded exit status, any orphan / timeout / parent-exit flag, and
+the processor's C<final_state> when it exposes one.
+
+=item $class->_run_spawned(\%args)
+
+Child side of L</spawn_collector>: construct and run a collector, then
+C<_exit> with the code from L</_spawn_exit_code>. Never returns.
+
+=item _spawn_exit_code
+
+=item $code = $class->_spawn_exit_code($info)
+
+Map a L</collect> info hashref to a process exit code: C<0> when the verdict
+passed (or the child exited cleanly with no verdict), C<1> otherwise.
+
+=item %args = $class->_normalize_args(%args)
+
+Translate the functional interface's C<exec> / C<run> argument names to the
+constructor's C<exec_command> / C<run_sub> attributes.
+
+=back
+
+=cut
+
+sub _build_info ($self) {
+    my $px = parse_exit($self->{+WAIT_STATUS} // 0);
+
+    my %info = (
+        exit => {
+            code => $px->{all},
+            err  => $px->{err},
+            sig  => $px->{sig},
+        },
+    );
+
+    $info{exit}{orphaned}      = 1                   if $self->{+ORPHANED};
+    $info{exit}{timed_out}     = $self->{+TIMED_OUT} if $self->{+TIMED_OUT};
+    $info{exit}{parent_exited} = 1                   if $self->{+PARENT_EXITED};
+
+    if (my $processor = $self->{+PROCESSOR}) {
+        $info{final_state} = $processor->final_state
+            if $processor->can('final_state');
+    }
+
+    return \%info;
+}
+
+sub _run_spawned ($class, $args) {
+    my $self = $class->new(%$args);
+    $self->run_collector;
+    POSIX::_exit($class->_spawn_exit_code($self->_build_info));
+}
+
+sub _normalize_args ($class, %args) {
+    $args{exec_command} = delete $args{exec} if exists $args{exec};
+    $args{run_sub}      = delete $args{run}  if exists $args{run};
+    $args{child_env}    = delete $args{env}  if exists $args{env};
+    return %args;
+}
+
+sub _spawn_exit_code ($class, $info) {
+    if (my $fs = $info->{final_state}) {
+        return $fs->{pass} ? 0 : 1;
+    }
+
+    return $info->{exit}{err} ? 1 : 0;
 }
 
 1;

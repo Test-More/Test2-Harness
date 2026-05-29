@@ -6,16 +6,17 @@ use File::Temp qw/tempdir/;
 use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
 use Test2::Harness2::Util::JSON qw/decode_json/;
 
-# The t2h2_collector script runs a single test file under the collector,
-# filling in the output filenames, the TAP parser, the auditor processor, and
-# the test recorder. It exits 0 when the test passed and 1 when it failed.
+# The t2h2_collector script spawns a collector for a single test file, loops
+# over the notification messages it sends over an Atomic::Pipe, and prints a
+# basic line for the start, each transition, and the final result. It exits 0
+# when the test passed and 1 when it failed.
 
 my $script = 'scripts/t2h2_collector';
 
+# Returns ($exit_code, $stdout).
 sub run_script ($test_file, $dir) {
-    my @cmd = ($^X, '-Ilib', $script, $test_file, $dir);
-    system(@cmd);
-    return $? >> 8;
+    my $out = qx{$^X -Ilib \Q$script\E \Q$test_file\E \Q$dir\E};
+    return ($? >> 8, $out);
 }
 
 sub final_state ($dir) {
@@ -32,8 +33,8 @@ subtest script_present => sub {
 };
 
 subtest passing_test => sub {
-    my $dir  = tempdir(CLEANUP => 1);
-    my $code = run_script('t/AI/scripts/collector_pass.pl', $dir);
+    my $dir = tempdir(CLEANUP => 1);
+    my ($code, $out) = run_script('t/AI/scripts/collector_pass.pl', $dir);
 
     is($code, 0, "script exits 0 for a passing test");
 
@@ -41,15 +42,21 @@ subtest passing_test => sub {
     ok(-e "$dir/state.jsonl.zst",  "state file produced");
     ok(!-e "$dir/transitions.jsonl.zst", "no transitions file (transitions go to pipes)");
 
+    like($out, qr/^transition: starting$/m,  "printed the start transition");
+    like($out, qr/^transition: completed$/m, "printed the completed transition");
+    like($out, qr/^result: PASS$/m,          "printed a PASS result");
+
     my $fs = final_state($dir);
     is($fs->{pass}, 1, "state file records a pass");
 };
 
 subtest failing_test => sub {
-    my $dir  = tempdir(CLEANUP => 1);
-    my $code = run_script('t/AI/scripts/collector_fail.pl', $dir);
+    my $dir = tempdir(CLEANUP => 1);
+    my ($code, $out) = run_script('t/AI/scripts/collector_fail.pl', $dir);
 
     is($code, 1, "script exits 1 for a failing test");
+
+    like($out, qr/^result: FAIL$/m, "printed a FAIL result");
 
     my $fs = final_state($dir);
     is($fs->{pass}, 0, "state file records a fail");

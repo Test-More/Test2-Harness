@@ -27,7 +27,11 @@ that on the `collector-redirect` branch and recorded the direction change in
 - `Test2::Harness2::Collector` gained the exported `collect` /
   `spawn_collector` functions and a recorder sink in place of the hard-coded
   events-file writer.
-- `scripts/t2h2_collector` — runs one test file, exits 0/1 by verdict.
+- `scripts/t2h2_collector` — runs one test file: creates an `Atomic::Pipe`,
+  `spawn_collector`s the collector (middle process) with the recorder holding
+  the write end, loops over the notification messages printing a basic line
+  per start / transition / final result, and exits 0/1 by the collector's
+  verdict.
 
 ## Decisions and alternatives
 

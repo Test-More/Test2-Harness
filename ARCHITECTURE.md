@@ -266,8 +266,11 @@ events (starting / failing / diagnosing / completed) plus a
 times) on exit. The test recorder
 (`Collector::Recorder::Test`) keeps those out of the events file: the final
 state goes to a state file and to the pipes, and transitions go only to the
-pipes. `scripts/t2h2_collector` wires this together for a single test file
-and exits 0 (pass) / 1 (fail).
+pipes. `scripts/t2h2_collector` wires this together for a single test file:
+it creates an `Atomic::Pipe`, `spawn_collector`s the collector (the middle
+process) with the recorder holding the write end, loops over the notification
+messages printing a basic line per start / transition / final result, and
+exits 0 (pass) / 1 (fail) from the collector's verdict.
 
 **Failure modes.** The engine returns `0` on a clean pipeline run and `255`
 on an internal collector failure, independent of the child's exit. The

@@ -3,21 +3,26 @@ use v5.38;
 
 use Config qw/%Config/;
 use File::Path qw/make_path/;
+use Atomic::Pipe;
 
-use Test2::Harness2::Collector qw/collect/;
+use Test2::Harness2::Collector qw/spawn_collector/;
 use Test2::Harness2::Collector::Auditor;
 use Test2::Harness2::Collector::Recorder::Test;
+use Test2::Harness2::Util::IPC qw/atomic_pipe_compression_args/;
+use Test2::Harness2::Util::JSON qw/decode_json/;
 
-# t2h2_collector - run one test file under the collector, writing its logs to
-# an output directory, and exit 0 (pass) or 1 (fail).
+# t2h2_collector - run one test file under the collector and report progress.
 #
 # Usage: t2h2_collector TEST_FILE OUTPUT_DIR
 #
-# The script process itself is the collector: collect() forks the test file as
-# its child via exec, so only two processes exist (this one and the test). The
+# Three processes: this script, the collector it spawns (the middle process,
+# which owns the recorder), and the test child the collector forks/execs. This
+# script hands the recorder one end of an Atomic::Pipe and loops over the
+# notification messages the recorder sends -- the start, each state
+# transition, and the final result -- printing a basic line for each. The
 # output directory receives events.jsonl.zst (the full event stream) and
-# state.jsonl.zst (the final verdict). This runner attaches no notification
-# pipes, so state transitions are not captured here.
+# state.jsonl.zst (the final verdict). Exits 0 (pass) or 1 (fail) from the
+# collector's own verdict-derived exit.
 
 my ($test_file, $out_dir) = @ARGV;
 
@@ -31,10 +36,12 @@ make_path($out_dir) unless -d $out_dir;
 # The collected test runs with the stream formatter selected (is_test), so it
 # needs this harness's libraries on its include path. Propagate our own @INC
 # to the child so it can load them regardless of how we were invoked.
-my $sep = $Config{path_sep} || ':';
+my $sep      = $Config{path_sep} || ':';
 my $perl5lib = join($sep, grep { defined && length } @INC, $ENV{PERL5LIB});
 
-my $info = collect(
+my ($read, $write) = Atomic::Pipe->pair(atomic_pipe_compression_args());
+
+my $pid = spawn_collector(
     is_test   => 1,
     exec      => [$^X, $test_file],
     env       => {PERL5LIB => $perl5lib},
@@ -42,11 +49,26 @@ my $info = collect(
     recorder  => Test2::Harness2::Collector::Recorder::Test->new(
         events_file => "$out_dir/events.jsonl.zst",
         state_file  => "$out_dir/state.jsonl.zst",
+        pipes       => [$write],
     ),
 );
 
-my $passed =
-      $info->{final_state} ? $info->{final_state}{pass}
-    :                        !$info->{exit}{err};
+# This process never writes; close our copy so the read end reaches EOF if the
+# collector dies without a clean finalization.
+$write->close;
 
-exit($passed ? 0 : 1);
+while (defined(my $msg = $read->read_message)) {
+    my $fd = decode_json($msg)->{facet_data};
+
+    if (my $transition = $fd->{harness_state_transition}) {
+        say "transition: $transition->{state}";
+    }
+    elsif (my $state = $fd->{harness_final_state}) {
+        say "result: " . ($state->{pass} ? 'PASS' : 'FAIL');
+    }
+
+    last if $fd->{harness_collector_finalized};
+}
+
+waitpid($pid, 0);
+exit($? ? 1 : 0);

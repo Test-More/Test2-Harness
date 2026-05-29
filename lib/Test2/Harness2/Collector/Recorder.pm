@@ -4,21 +4,21 @@ use v5.38;
 our $VERSION = '2.000000';
 
 use Carp qw/croak/;
-use Scalar::Util qw/blessed/;
 use Time::HiRes qw/time/;
 
-use Test2::Harness2::Util::Zstd qw/open_zstd_writer/;
-use Test2::Harness2::Util::IPC qw/atomic_pipe_compression_args apply_atomic_pipe_compression/;
+use Test2::Harness2::Util::Zstd qw/open_zstd_writer compress_blob/;
+use Test2::Harness2::Util::Socket qw/connect_unix write_frame/;
 use Test2::Harness2::Util::JSON qw/encode_json/;
 
 use Object::HashBase qw{
     <events_file
-    <pipes
+    <transition_sockets
     -collector_uuid
     -collector_name
     -collector_try
     -collector_run_uuid
     -events_writer
+    -sockets
     -finalized
 };
 
@@ -41,14 +41,16 @@ produces is handed to L</record_event>, which appends it to the
 C<events_file> as a multi-frame zstd file -- one self-contained frame per
 event.
 
-The recorder may also be given one or more notification C<pipes>
-(L<Atomic::Pipe> objects). Important occurrences -- not every event, only the
-ones a monitor cares about -- are sent to every pipe as a single
-zstd-compressed atomic message. The base recorder sends one such message when
-the collector finishes (L</finalize>); subclasses
+The recorder may also be given one or more C<transition_sockets> (paths to
+unix-domain stream sockets a listener is accepting on). Important occurrences
+-- not every event, only the ones a monitor cares about -- are sent to every
+socket as a single zstd-compressed frame wrapping a
+C<< {type =E<gt> "transition", payload =E<gt> {...}} >> envelope. The recorder
+C<connect()>s to each socket at construction. The base recorder sends one such
+message when the collector finishes (L</finalize>); subclasses
 (L<Test2::Harness2::Collector::Recorder::Test>) send more, e.g. one per state
-transition. A listener opens the read end (an in-process pipe or an on-disk
-FIFO) and any number of collectors can write to it.
+transition. Each collector gets its own connection, so a listener never sees
+two collectors' frames interleaved on one stream.
 
 This base class enforces nothing about the filename it is handed; the caller
 chooses the path. Subclasses override L</record_event> to route some events
@@ -57,13 +59,10 @@ to additional files.
 =head1 SYNOPSIS
 
     use Test2::Harness2::Collector::Recorder;
-    use Atomic::Pipe;
-
-    my ($r, $w) = Atomic::Pipe->pair;
 
     my $rec = Test2::Harness2::Collector::Recorder->new(
-        events_file => "$dir/events.jsonl.zst",
-        pipes       => [$w],                       # optional, any number
+        events_file        => "$dir/events.jsonl.zst",
+        transition_sockets => ["$dir/transitions.sock"],   # optional, any number
     );
 
     $rec->record_event($event);
@@ -78,14 +77,13 @@ to additional files.
 Path to the multi-frame zstd events file. Opened for append the first time an
 event is recorded.
 
-=item pipes => \@pipes
+=item transition_sockets => \@paths
 
-Optional arrayref of notification targets. Each entry is either a live
-L<Atomic::Pipe> object (only usable when the collector shares memory with the
-listener -- in-process or post-C<fork>) or a C<< { fifo => $path } >> spec,
-which the recorder opens as a write-FIFO itself (usable across an C<exec>,
-and the portable choice on platforms without inheritable pipe handles). All
-pipes receive the same messages.
+Optional arrayref of unix-domain socket paths. The recorder C<connect()>s to
+each at construction (failing fast if one is not present / not accepting) and
+sends every notification message to all of them. A listener -- typically a
+L<Test2::Harness2::Collector::Monitor> in C<listen> mode -- accepts the
+connections and reads the framed messages.
 
 =back
 
@@ -97,11 +95,11 @@ sub init ($self) {
 
     $self->{+FINALIZED} = 0;
 
-    if (my $pipes = $self->{+PIPES}) {
-        my @coerced = map { $self->_coerce_pipe($_) } @$pipes;
-        apply_atomic_pipe_compression($_) for @coerced;
-        $self->{+PIPES} = \@coerced;
+    my @handles;
+    if (my $paths = $self->{+TRANSITION_SOCKETS}) {
+        push @handles => connect_unix($_) for @$paths;
     }
+    $self->{+SOCKETS} = \@handles;
 
     return;
 }
@@ -166,7 +164,13 @@ sub finalize ($self) {
         warn "events file close failed: $@\n" unless eval { $writer->close; 1 };
     }
 
-    $self->_notify_pipes({harness_collector_finalized => {stamp => time}});
+    $self->_notify_sockets({harness_collector_finalized => {stamp => time}});
+
+    if (my $sockets = delete $self->{+SOCKETS}) {
+        for my $sock (@$sockets) {
+            eval { close($sock); 1 };
+        }
+    }
 
     return;
 }
@@ -182,20 +186,18 @@ sub finalize ($self) {
 Lazily open (and cache) the zstd writer for the events file, so a recorder
 that records nothing never creates the file.
 
-=item $pipe = $self->_coerce_pipe($thing)
+=item $self->_notify_sockets($facet_data)
 
-Turn a C<pipes> entry into a live L<Atomic::Pipe>: a blessed object is used
-as-is; a C<< { fifo => $path } >> spec is opened as a write-FIFO.
+=item $self->_notify_sockets($facet_data, %collector_extra)
 
-=item $self->_notify_pipes($facet_data)
-
-=item $self->_notify_pipes($facet_data, %collector_extra)
-
-Send one atomic message to every notification pipe: the JSON of an event
-whose facets are C<$facet_data> plus a C<harness_collector> facet carrying the
-collector C<uuid> and any C<%collector_extra> (the start message adds C<name>,
-C<events_file>, and C<try> via L</_start_extra>). A no-op when no pipes were
-supplied. Shared with subclasses that notify on other occasions.
+Send one message to every connected transition socket: a
+C<< {type =E<gt> "transition", payload =E<gt> {...}} >> envelope whose payload is
+an event with facets C<$facet_data> plus a C<harness_collector> facet carrying
+the collector C<uuid> and any C<%collector_extra> (the start message adds
+C<name>, C<events_file>, and C<try> via L</_start_extra>). The envelope is
+JSON-encoded and zstd-compressed once, then the same frame is written to each
+socket. A no-op when no transition sockets were supplied. Shared with
+subclasses that notify on other occasions.
 
 =item _collector_extra
 
@@ -222,30 +224,25 @@ sub _events_writer ($self) {
     return $self->{+EVENTS_WRITER} //= open_zstd_writer($self->{+EVENTS_FILE});
 }
 
-sub _coerce_pipe ($self, $thing) {
-    return $thing if blessed($thing);
+sub _notify_sockets ($self, $facet_data, %collector_extra) {
+    my $sockets = $self->{+SOCKETS};
+    return unless $sockets && @$sockets;
 
-    if (ref($thing) eq 'HASH' && defined $thing->{fifo}) {
-        require Atomic::Pipe;
-        return Atomic::Pipe->write_fifo($thing->{fifo}, atomic_pipe_compression_args());
-    }
-
-    croak "recorder pipe must be an Atomic::Pipe object or a { fifo => \$path } spec";
-}
-
-sub _notify_pipes ($self, $facet_data, %collector_extra) {
-    my $pipes = $self->{+PIPES} or return;
-
-    my $message = encode_json({
-        facet_data => {
-            %$facet_data,
-            harness_collector => {uuid => $self->{+COLLECTOR_UUID}, %collector_extra},
+    my $envelope = encode_json({
+        type    => 'transition',
+        payload => {
+            facet_data => {
+                %$facet_data,
+                harness_collector => {uuid => $self->{+COLLECTOR_UUID}, %collector_extra},
+            },
         },
     });
 
-    for my $pipe (@$pipes) {
-        warn "recorder pipe notify failed: $@\n"
-            unless eval { $pipe->write_message($message); 1 };
+    my $frame = compress_blob($envelope);
+
+    for my $sock (@$sockets) {
+        warn "recorder transition socket write failed: $@\n"
+            unless eval { write_frame($sock, $frame); 1 };
     }
 
     return;

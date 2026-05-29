@@ -12,26 +12,26 @@ use parent 'Test2::Harness2::Collector::Recorder';
 =head1 NAME
 
 Test2::Harness2::Collector::Recorder::Test - Test-aware recorder that routes
-transitions and the final state to the notification pipes.
+transitions and the final state to the transition sockets.
 
 =head1 DESCRIPTION
 
 A L<Test2::Harness2::Collector::Recorder> subclass for test jobs. The auditor
 (L<Test2::Harness2::Collector::Auditor>) injects state-transition events and a
 final-state event into the stream; this recorder keeps them out of the events
-file and sends them to the notification pipes instead:
+file and sends them to the transition sockets instead:
 
 =over 4
 
 =item *
 
 An event carrying a C<harness_state_transition> facet is sent only to the
-pipes. The C<starting> one also carries the collector C<name>, events file,
+sockets. The C<starting> one also carries the collector C<name>, events file,
 and C<try>; the others carry only the collector C<uuid>.
 
 =item *
 
-An event carrying a C<harness_final_state> facet is sent only to the pipes,
+An event carrying a C<harness_final_state> facet is sent only to the sockets,
 carrying the verdict (and, like every message, the collector C<uuid>). The
 identity fields are not repeated -- they rode the start message.
 
@@ -42,7 +42,7 @@ Every other event is written to the events file by the base recorder.
 =back
 
 There is no separate state or transitions file; the verdict reaches consumers
-through the pipes (and, for an in-process run, the info hash
+through the sockets (and, for an in-process run, the info hash
 L<Test2::Harness2::Collector/collect> returns).
 
 =head1 SYNOPSIS
@@ -50,8 +50,8 @@ L<Test2::Harness2::Collector/collect> returns).
     use Test2::Harness2::Collector::Recorder::Test;
 
     my $rec = Test2::Harness2::Collector::Recorder::Test->new(
-        events_file => "$dir/events.jsonl.zst",
-        pipes       => [$pipe],                  # optional, any number
+        events_file        => "$dir/events.jsonl.zst",
+        transition_sockets => ["$dir/transitions.sock"],   # optional, any number
     );
 
 =head1 PUBLIC METHODS
@@ -63,9 +63,9 @@ L<Test2::Harness2::Collector/collect> returns).
 =item $rec->record_event($event)
 
 Route C<$event> by facet: a C<harness_state_transition> goes only to the
-notification pipes (the C<starting> one also carries the collector C<name>,
+transition sockets (the C<starting> one also carries the collector C<name>,
 events file, and C<try> -- the only message that does); a
-C<harness_final_state> goes only to the pipes; everything else goes to the
+C<harness_final_state> goes only to the sockets; everything else goes to the
 events file via the base recorder.
 
 =back
@@ -77,12 +77,12 @@ sub record_event ($self, $event) {
 
     if (my $transition = $f->{harness_state_transition}) {
         my @extra = $transition->{state} eq 'starting' ? $self->_start_extra : ();
-        $self->_notify_pipes($f, @extra);
+        $self->_notify_sockets($f, @extra);
         return;
     }
 
     if ($f->{harness_final_state}) {
-        $self->_notify_pipes($f);
+        $self->_notify_sockets($f);
         return;
     }
 

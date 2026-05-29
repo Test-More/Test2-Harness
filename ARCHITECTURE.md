@@ -195,7 +195,57 @@ Subsections will be numbered `4.1`, `4.2`, … in the order they are
 designed. Numbering is stable once assigned; if a subsystem is
 removed, its number is retired, not reused.
 
-*(No subsystems are committed to this document yet.)*
+### 4.1 Collector
+
+**Responsibility.** The collector runs one child process and turns its
+output into a recorded stream of events. It lives in
+`lib/Test2/Harness2/Collector.pm` (engine + functional façade) with the
+pipeline parts under `lib/Test2/Harness2/Collector/`.
+
+**Pipeline.** A single child is forked; its STDOUT and STDERR are wired to
+mixed-mode `Atomic::Pipe`s (zstd on the wire). The collector parent runs:
+
+    bytes  ->  parser  ->  optional processor  ->  recorder
+
+The parser turns lines and pre-decoded message bursts into
+`Test2::Harness2::Event` objects. The optional processor sees one event at a
+time and returns zero or more events. The recorder is the sink. When a child
+exits, the collector drains both pipes, then dispatches a synthetic
+`harness_process_exit` event through the pipeline — so the exit event is
+always recorded **after** all of the child's output.
+
+**Stage contracts** (each a `Role::Tiny` role under
+`Collector/Role/`):
+
+- **Parser** — `parse_io(stream => ..., line|event => ...)` returns one event
+  or undef.
+- **Processor** — `process_event($event)` returns the list of events to
+  record (drop, pass through, or expand). A processor that mutates an event
+  must clear its `compressed_form`.
+- **Recorder** — `record_event($event)` persists one event; `finalize`
+  closes and, given a `touchfile`, touches it. The base recorder
+  (`Collector::Recorder`) writes every event to one `jsonl.zst` file.
+
+**Functional interface.** `Test2::Harness2::Collector` exports `collect`
+(run in the current process; returns `{exit => {code, err, sig}, final_state
+=> ...}`) and `spawn_collector` (fork a collector process; return its pid;
+exit 0/1 by verdict). `parser` / `processor` / `recorder` each accept a
+blessed instance, a class name, or `[class => @args]`.
+
+**Test jobs.** A test job (`is_test`) runs with the stream formatter selected
+and uses the auditor (`Collector::Auditor::Test`) as its processor. The
+auditor passes events through, tracks the verdict, and injects
+`harness_state_transition` events (starting / failing / diagnosing /
+completed) plus a `harness_final_state` event on exit. The test recorder
+(`Collector::Recorder::Test`) routes those out of the events file into a
+transitions file and a state file respectively. `scripts/t2h2_collector`
+wires this together for a single test file and exits 0 (pass) / 1 (fail).
+
+**Failure modes.** The engine returns `0` on a clean pipeline run and `255`
+on an internal collector failure, independent of the child's exit. The
+child's exit, any timeout / orphan / watched-parent-death, and the verdict
+all surface as recorded events (and, for `collect`, in the returned info
+hashref).
 
 ## 5. Cross-cutting concerns
 

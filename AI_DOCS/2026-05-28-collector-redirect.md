@@ -35,7 +35,8 @@ that on the `collector-redirect` branch and recorded the direction change in
   file): creates an `Atomic::Pipe`, `spawn_collector`s the collector (middle
   process) with the recorder holding the write end, loops over the
   notification messages printing a basic line per start / transition / final
-  result, and exits 0/1 by the collector's verdict.
+  result, and exits 0/1 by the collector's verdict. With `-v` it also
+  pretty-prints each message's full JSON payload after its line.
 
 ## Decisions and alternatives
 

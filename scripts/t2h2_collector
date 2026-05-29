@@ -10,23 +10,27 @@ use Test2::Harness2::Collector qw/spawn_collector/;
 use Test2::Harness2::Collector::Auditor;
 use Test2::Harness2::Collector::Recorder::Test;
 use Test2::Harness2::Util::IPC qw/atomic_pipe_compression_args/;
-use Test2::Harness2::Util::JSON qw/decode_json/;
+use Test2::Harness2::Util::JSON qw/decode_json encode_pretty_json/;
 
 # t2h2_collector - run one test file under the collector and report progress.
 #
-# Usage: t2h2_collector TEST_FILE EVENTS_FILE
+# Usage: t2h2_collector [-v] TEST_FILE EVENTS_FILE
 #
 # Three processes: this script, the collector it spawns (the middle process,
 # which owns the recorder), and the test child the collector forks/execs. This
 # script hands the recorder one end of an Atomic::Pipe and loops over the
 # notification messages the recorder sends -- the start, each state
-# transition, and the final result -- printing a basic line for each. The full
-# event stream is written to EVENTS_FILE; the verdict comes over the pipe.
-# Exits 0 (pass) or 1 (fail) from the collector's own verdict-derived exit.
+# transition, and the final result -- printing a basic line for each. With
+# -v it also pretty-prints the full JSON payload of each message just after
+# its line. The full event stream is written to EVENTS_FILE; the verdict comes
+# over the pipe. Exits 0 (pass) or 1 (fail) from the collector's own
+# verdict-derived exit.
+
+my $verbose = @ARGV && $ARGV[0] eq '-v' ? shift @ARGV : 0;
 
 my ($test_file, $events_file) = @ARGV;
 
-die "Usage: $0 TEST_FILE EVENTS_FILE\n"
+die "Usage: $0 [-v] TEST_FILE EVENTS_FILE\n"
     unless defined $test_file && defined $events_file;
 
 die "No such test file: $test_file\n" unless -f $test_file;
@@ -59,7 +63,8 @@ my $pid = spawn_collector(
 $write->close;
 
 while (defined(my $msg = $read->read_message)) {
-    my $fd = decode_json($msg)->{facet_data};
+    my $payload = decode_json($msg);
+    my $fd      = $payload->{facet_data};
 
     if (my $transition = $fd->{harness_state_transition}) {
         say "transition: $transition->{state}";
@@ -67,6 +72,8 @@ while (defined(my $msg = $read->read_message)) {
     elsif (my $state = $fd->{harness_final_state}) {
         say "result: " . ($state->{pass} ? 'PASS' : 'FAIL');
     }
+
+    print encode_pretty_json($payload) if $verbose;
 
     last if $fd->{harness_collector_finalized};
 }

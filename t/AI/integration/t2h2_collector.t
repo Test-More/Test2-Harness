@@ -46,6 +46,20 @@ subtest failing_test => sub {
     like($out, qr/^result: FAIL$/m, "printed a FAIL result");
 };
 
+subtest verbose_pretty_print => sub {
+    my $dir = tempdir(CLEANUP => 1);
+    my $ef  = "$dir/events.jsonl.zst";
+    my $out = qx{$^X -Ilib \Q$script\E -v t/AI/scripts/collector_pass.pl \Q$ef\E};
+
+    is($? >> 8, 0, "-v run still exits 0");
+
+    # The simple line is still there, now followed by a multi-line JSON dump.
+    like($out, qr/^transition: starting$/m,    "simple line still printed under -v");
+    like($out, qr/^\{\n\s+"facet_data"\s*:/m,  "pretty-printed (multi-line) JSON follows");
+    like($out, qr/"harness_state_transition"/, "the JSON payload is dumped");
+    like($out, qr/"uuid"/,                     "the dumped payload includes the collector uuid");
+};
+
 subtest usage_error => sub {
     system($^X, '-Ilib', $script);
     isnt($? >> 8, 0, "missing arguments is an error");

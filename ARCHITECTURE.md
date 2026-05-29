@@ -364,6 +364,51 @@ assumption; recorded here so they are not relitigated.
   complexity is not worth the benefit, so the recorder writes one zstd
   frame per event, immediately, with no buffer.
 
+### 5.2 Transition channel: unix sockets
+
+The collector recorder notifies interested listeners about a small set of
+per-collector occurrences -- the C<starting> message, each state transition
+(C<failing> / C<diagnosing> / C<completed>), the final state, and
+C<harness_collector_finalized>. These are low-frequency, high-value messages,
+distinct from the high-volume per-event stream that goes to the events file.
+
+The transition channel is **unix-domain stream sockets** (C<SOCK_STREAM>), not
+C<Atomic::Pipe>. The earlier iteration multiplexed all collectors over one
+shared pipe; the current design gives each collector its own connection. The
+contract:
+
+- **One connection per collector.** A listener (typically a
+  L<Test2::Harness2::Collector::Monitor> in C<listen> mode) accepts one
+  connection per collector. Frames from different collectors land on separate
+  file descriptors and can never interleave -- atomicity by construction,
+  rather than relying on each message fitting in C<PIPE_BUF>.
+- **The recorder connects out.** A recorder is given C<transition_sockets>
+  (socket paths); it C<connect()>s to each at construction and writes to all
+  of them. It makes no assumption about what is on the other end.
+- **Message shape.** Each message is a
+  C<< {type =E<gt> "transition", payload =E<gt> {...}} >> envelope, JSON-encoded
+  and zstd-compressed once into one self-contained frame, then written to each
+  socket with a blocking C<syswrite> (retried on C<EINTR>, C<SIGPIPE> ignored
+  so a vanished reader surfaces as a trappable error). The C<type> field
+  exists because a socket may carry other message kinds later; only
+  C<transition> is produced and consumed today. Readers split a connection's
+  byte stream on zstd frame boundaries (the shared
+  L<Test2::Harness2::Util::Zstd::FrameBuffer>, also used by the events-file
+  reader).
+- **uuid in every payload.** The collector C<uuid> rides on every message (not
+  just the first). Per-connection identity would allow sending it once, but the
+  monitor's proxy fan-out and unmanaged-feed paths multiplex collectors and
+  have no per-connection context; keeping the uuid everywhere lets all paths
+  demultiplex identically. The uuid is cheap on these rare messages.
+- **Monitor modes.** Managed: the monitor owns the listening socket, accepts
+  connections, and reads framed messages in a non-blocking C<poll()>; it
+  exposes its file descriptors for an external C<IO::Select> loop. Unmanaged:
+  some other component owns the socket(s) and feeds the monitor already-decoded
+  payloads.
+- **Proxy fan-out** forwards the verbatim cached compressed frame (no
+  recompression) to downstream sockets, preserving the global / C<run_uuid>
+  filtering.
+
 ## 6. Open questions
 
 Reserved for architectural questions that have been raised but not yet

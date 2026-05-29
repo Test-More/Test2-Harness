@@ -67,15 +67,21 @@ sub init ($self) {
 
 =over 4
 
+=item push_bytes
+
 =item $b->push_bytes($bytes)
 
 Append raw bytes to the internal buffer. Returns nothing.
+
+=item next_frame
 
 =item $rec = $b->next_frame
 
 Return the next complete frame as C<< { frame => $raw, payload => $decoded } >>,
 removing it from the buffer, or C<undef> when the buffer does not yet hold a
 complete frame. Croaks if a complete frame fails to decompress.
+
+=item drain
 
 =item @recs = $b->drain
 

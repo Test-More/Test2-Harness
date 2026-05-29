@@ -166,10 +166,14 @@ before the close). Context-sensitive: in list context returns the decoded
 transition payloads (in arrival order); in scalar context returns the number of
 messages processed; in void context returns nothing.
 
+=item socket_path
+
 =item $path = $mon->socket_path
 
 Managed mode: the path of the listening socket (the one given, or the one the
 monitor picked for C<< listen =E<gt> 1 >>). C<undef> in unmanaged mode.
+
+=item io_handles
 
 =item @handles = $mon->io_handles
 
@@ -178,11 +182,15 @@ plus every live accepted connection -- so a caller can add them to its own
 L<IO::Select>. The set changes as connections come and go, so re-fetch it each
 loop. Empty in unmanaged mode.
 
+=item feed
+
 =item $mon->feed($payload)
 
 Unmanaged mode: fold one already-decoded transition C<$payload> (the envelope's
 C<payload>, i.e. C<< {facet_data =E<gt> ...} >>) into state. Does not forward to
 proxies (there is no frame to forward).
+
+=item feed_frame
 
 =item $payload = $mon->feed_frame($frame)
 
@@ -326,6 +334,8 @@ named state since the previous call to that method, then forgets them.
 C<new_collectors> reports collectors seen for the first time (their events
 file is available by then); C<new_test_exits> reports tests whose process has
 exited (the C<completed> transition), which the scheduler uses to free a slot.
+
+=item close
 
 =item $mon->close
 

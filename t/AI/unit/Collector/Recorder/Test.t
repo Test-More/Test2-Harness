@@ -2,18 +2,19 @@ use Test2::V0;
 use v5.38;
 
 use File::Temp qw/tempdir/;
-use Atomic::Pipe;
+use IO::Select;
 
 use Test2::Harness2::Event;
 use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
+use Test2::Harness2::Util::Zstd::FrameBuffer;
+use Test2::Harness2::Util::Socket qw/open_unix_listen/;
 use Test2::Harness2::Util::JSON qw/decode_json/;
 
 use Test2::Harness2::Collector::Recorder::Test;
 
-# The test recorder extends the base recorder. It writes the final-state event
-# to a state file, sends state transitions and the final state to the
-# notification pipes (transitions are no longer written to any file), and
-# leaves everything else in the events file.
+# The test recorder extends the base recorder. It sends state transitions and
+# the final state to the transition sockets (these are no longer written to any
+# file), and leaves everything else in the events file.
 
 my $tmp = tempdir(CLEANUP => 1);
 my $n   = 0;
@@ -30,14 +31,19 @@ sub read_jsonl_zst ($path) {
     return \@out;
 }
 
-# Drain every message currently available on a pipe read-end.
-sub drain ($pipe) {
-    $pipe->blocking(0);    # read_message returns undef once drained
-    my @out;
-    while (defined(my $msg = $pipe->read_message)) {
-        push @out => decode_json($msg);
+# Accept the recorder's connection and return the decoded transition payloads
+# (the {type,payload} envelopes' payloads) it wrote.
+sub drain ($conn) {
+    $conn->blocking(0);
+    my $fb  = Test2::Harness2::Util::Zstd::FrameBuffer->new;
+    my $sel = IO::Select->new($conn);
+    while ($sel->can_read(2)) {
+        my $buf = '';
+        my $bytes = sysread($conn, $buf, 65536);
+        last unless $bytes;
+        $fb->push_bytes($buf);
     }
-    return \@out;
+    return [map { decode_json($_->{payload})->{payload} } $fb->drain];
 }
 
 sub event_ev ($tag)   { return Test2::Harness2::Event->new(facet_data => {info                     => [{tag => $tag}]}) }
@@ -60,8 +66,10 @@ subtest does_role => sub {
 };
 
 subtest routes_events_by_facet => sub {
-    my ($r, $w) = Atomic::Pipe->pair(compression => 'zstd', keep_compressed => 1);
-    my $rec = new_recorder(pipes => [$w]);
+    my $path   = "$tmp/$n-transitions.sock";
+    my $listen = open_unix_listen($path);
+    my $rec    = new_recorder(transition_sockets => [$path]);
+    my $conn   = $listen->accept;    # recorder connected at construction
     $rec->set_collector_info(uuid => 'UUID-9', name => 'some/test.t', try => 1);
 
     $rec->record_event(event_ev('A'));
@@ -76,16 +84,16 @@ subtest routes_events_by_facet => sub {
     is(scalar(@$events),                                  2,          "only the two plain events landed in the events file");
     is([map { $_->{facet_data}{info}[0]{tag} } @$events], ['A', 'B'], "plain events kept; transitions/state routed away");
 
-    # The pipe sees the transitions, the final state, and the finalization.
-    my $msgs   = drain($r);
+    # The socket sees the transitions, the final state, and the finalization.
+    my $msgs   = drain($conn);
     my @states = map { $_->{facet_data}{harness_state_transition}{state} }
         grep { $_->{facet_data}{harness_state_transition} } @$msgs;
-    is(\@states, ['starting', 'failing'], "transitions delivered on the pipe in order");
+    is(\@states, ['starting', 'failing'], "transitions delivered on the socket in order");
 
     my ($final) = grep { $_->{facet_data}{harness_final_state} } @$msgs;
-    ok($final, "final state delivered on the pipe");
+    ok($final, "final state delivered on the socket");
     is($final->{facet_data}{harness_final_state}{pass}, 0, "final state carries the verdict");
-    ok((grep { $_->{facet_data}{harness_collector_finalized} } @$msgs), "finalization delivered on the pipe");
+    ok((grep { $_->{facet_data}{harness_collector_finalized} } @$msgs), "finalization delivered on the socket");
 
     # Every message carries the collector uuid.
     ok((!grep { ($_->{facet_data}{harness_collector}{uuid} // '') ne 'UUID-9' } @$msgs), "every message carries the collector uuid");

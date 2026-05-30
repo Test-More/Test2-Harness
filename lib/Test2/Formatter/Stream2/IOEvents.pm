@@ -31,8 +31,9 @@ layer until then. Outside a subtest the tie passes prints straight through to
 the real handle, so top-level output, forks, and C<exec>'d commands are
 unaffected.
 
-This is off by default. L<Test2::Formatter::Stream2> calls L</enable> when the
-collector sets C<T2_HARNESS2_IO_EVENTS> in the test child.
+This is B<on by default>. L<Test2::Formatter::Stream2> calls L</enable> at
+C<init> unless C<T2_HARNESS2_IO_EVENTS> is set to a false value (C<0> or empty)
+in the test child.
 
 =head1 SYNOPSIS
 

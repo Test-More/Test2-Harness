@@ -106,10 +106,11 @@ sub init ($self) {
 
     $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->std;
 
-    # Arm in-subtest STDOUT/STDERR-to-event conversion when the collector asked
-    # for it. The emitter above already captured its pipe via a raw fd, so the
-    # tie this installs (lazily, on the first subtest) cannot intercept it.
-    if ($ENV{T2_HARNESS2_IO_EVENTS}) {
+    # Arm in-subtest STDOUT/STDERR-to-event conversion. On by default; a test
+    # job opts out by setting T2_HARNESS2_IO_EVENTS to a false value (0/empty).
+    # The emitter above already captured its pipe via a raw fd, so the tie this
+    # installs (lazily, on the first subtest) cannot intercept it.
+    unless (defined($ENV{T2_HARNESS2_IO_EVENTS}) && !$ENV{T2_HARNESS2_IO_EVENTS}) {
         require Test2::Formatter::Stream2::IOEvents;
         Test2::Formatter::Stream2::IOEvents->enable;
     }

@@ -23,13 +23,13 @@ sub read_events ($path) {
     return @events;
 }
 
-sub run_job ($io_events) {
+sub run_job (%opts) {
     my $dir = tempdir(CLEANUP => 1);
     my $ef  = "$dir/events.jsonl.zst";
 
     Test2::Harness2::Collector->start(
         name         => "io-events", is_test => 1, run_uuid => "RUN",
-        io_events    => $io_events,
+        (exists $opts{io_events} ? (io_events => $opts{io_events}) : ()),
         processor    => ['Test2::Harness2::Collector::Assembler', 'Test2::Harness2::Collector::Auditor'],
         recorder     => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
         exec_command => [$^X, '-Ilib', 't/AI/scripts/io_events_job.pl'],
@@ -59,8 +59,8 @@ sub top_stream_lines ($events) {
         grep { $_->{facet_data}{from_stream} } @$events;
 }
 
-subtest io_events_on_folds_prints_into_subtest => sub {
-    my $events = run_job(1);
+subtest on_by_default_folds_prints_into_subtest => sub {
+    my $events = run_job();    # no io_events attr: on by default
 
     my @inside = subtest_info($events, 'outer');
     ok((grep { $_ eq "inside-stdout\n" } @inside), "STDOUT print folded into the subtest");
@@ -72,8 +72,8 @@ subtest io_events_on_folds_prints_into_subtest => sub {
     ok((grep { $_ eq "top-stdout" } top_stream_lines($events)), "top-level print stays a raw stream line");
 };
 
-subtest io_events_off_leaves_prints_loose => sub {
-    my $events = run_job(0);
+subtest disabled_via_attr_leaves_prints_loose => sub {
+    my $events = run_job(io_events => 0);    # explicit off
 
     my @inside = subtest_info($events, 'outer');
     ok((!grep { $_ eq "inside-stdout\n" } @inside), "STDOUT print NOT folded when disabled");

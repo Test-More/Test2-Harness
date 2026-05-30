@@ -242,10 +242,11 @@ lifetime timeouts apply.
 
 =item io_events => 0 | 1
 
-Test jobs only. When true, the child sets C<T2_HARNESS2_IO_EVENTS> so
-L<Test2::Formatter::Stream2> turns prints and warnings made inside a subtest
-into events that fold into that subtest, instead of leaving them as loose
-top-level output. Off by default.
+Test jobs only. Controls whether L<Test2::Formatter::Stream2> turns prints and
+warnings made inside a subtest into events that fold into that subtest (rather
+than loose top-level output). B<On by default>; pin it explicitly to force a
+single job on (C<1>) or off (C<0>) via C<T2_HARNESS2_IO_EVENTS>. Leave it unset
+to take the child's default (on).
 
 =item orphan_timeout => $seconds
 
@@ -615,8 +616,11 @@ sub _run_child ($self, $guard, $out_w, $err_w) {
     if ($self->{+IS_TEST}) {
         $ENV{T2_FORMATTER} = 'Stream2';
 
-        # Stream2 reads this to turn in-subtest prints/warnings into events.
-        $ENV{T2_HARNESS2_IO_EVENTS} = 1 if $self->{+IO_EVENTS};
+        # Stream2 turns in-subtest prints/warnings into events by default; set
+        # this only when the caller pinned io_events explicitly (1 forces on, 0
+        # forces off), otherwise leave the child's default in place.
+        $ENV{T2_HARNESS2_IO_EVENTS} = $self->{+IO_EVENTS} ? 1 : 0
+            if defined $self->{+IO_EVENTS};
 
         setpgid(0, 0);
     }

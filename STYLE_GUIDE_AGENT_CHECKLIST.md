@@ -46,6 +46,11 @@ verification. Open the file, look, confirm.
 - [ ] `perl agent_scripts/audit-methods-not-functions lib` — every reported hit
       is a violation of the "named subs in object modules must be methods"
       rule. Resolve all hits.
+- [ ] `perl agent_scripts/audit-readonly-attrs lib` — every reported hit is a
+      read-only `Object::HashBase` attribute declared with `-` instead of `<`
+      (a dead throwing setter). Convert to `<`, or add a `-attr-ok` comment if
+      the throwing setter is genuinely intended. Both audits scan the whole
+      tree, not just touched files, so a partial edit cannot hide a hit.
 - [ ] `perl agent_scripts/find-long-subs` on every touched `.pm`. Resolve hits
       where a sub exceeds 75 lines (excluding comments/POD).
 - [ ] `perl agent_scripts/find-large-modules` on every touched `.pm`. Resolve hits

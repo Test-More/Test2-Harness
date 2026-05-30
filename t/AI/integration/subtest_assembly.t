@@ -58,8 +58,10 @@ subtest default_authoritative_only => sub {
     ok($outer, "outer subtest recorded as one authoritative event");
     is(scalar(@{$outer->{facet_data}{parent}{children}}), 4, "outer holds its 4 children (child a, child b, inner, plan)");
 
-    # The inner subtest is nested INSIDE outer, not standalone.
-    my ($inner_child) = grep { $_->{facet_data}{parent} && ($_->{facet_data}{assert}{details} // '') eq 'inner' }
+    # The inner subtest is nested INSIDE outer, not standalone. Children inside
+    # parent.children are raw facet hashes, not Event objects -- access their
+    # facets directly (no facet_data wrapper).
+    my ($inner_child) = grep { $_->{parent} && ($_->{assert}{details} // '') eq 'inner' }
         @{$outer->{facet_data}{parent}{children}};
     ok($inner_child, "inner subtest is nested inside outer's children");
     ok($inner_child->{parent}{children}, "inner carries its own nested children (grandchild + plan)");
@@ -111,8 +113,8 @@ subtest info_inside_subtest_survives => sub {
 
     my $info_seen = sub ($re) {
         return scalar grep {
-            my $info = $_->{facet_data}{info} or return 0;
-            grep { ($_->{details} // '') =~ $re } @$info;
+            my $info = $_->{facet_data}{info};
+            $info && grep { ($_->{details} // '') =~ $re } @$info;
         } @events;
     };
 

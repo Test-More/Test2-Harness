@@ -23,9 +23,11 @@ use Test2::Util::UUID qw/gen_uuid/;
 # socket path to the recorder; the recorder connects back and sends the start,
 # each state transition, and the final result. The script loops over those
 # messages, printing a basic line for each. With -v it also pretty-prints the
-# full JSON payload of each message just after its line. The full event stream
-# is written to EVENTS_FILE; the verdict comes over the socket. Exits 0 (pass)
-# or 1 (fail) from the collector's own verdict-derived exit.
+# full JSON payload of each message just after its line, and turns on the
+# assembler's stray-event copies so nested subtest events show up in the
+# events file too. The full event stream is written to EVENTS_FILE; the
+# verdict comes over the socket. Exits 0 (pass) or 1 (fail) from the
+# collector's own verdict-derived exit.
 
 my $verbose = @ARGV && $ARGV[0] eq '-v' ? shift @ARGV : 0;
 
@@ -61,7 +63,10 @@ my $pid = spawn_collector(
     run_uuid  => $uuid,
     exec      => [$^X, $test_file],
     env       => {PERL5LIB => $perl5lib},
-    processor => ['Test2::Harness2::Collector::Assembler', 'Test2::Harness2::Collector::Auditor'],
+    processor => [
+        ['Test2::Harness2::Collector::Assembler', emit_stray => $verbose ? 1 : 0],
+        'Test2::Harness2::Collector::Auditor',
+    ],
     recorder  => Test2::Harness2::Collector::Recorder::Test->new(
         events_file        => $events_file,
         transition_sockets => [$sock_path],

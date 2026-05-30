@@ -505,7 +505,7 @@ C<$thing> is C<undef>: the parser defaults to
 L<Test2::Harness2::Collector::Parser::TAPParser> for a test job (C<is_test>
 true) and L<Test2::Harness2::Collector::Parser::IOParser> otherwise; the
 recorder stays C<undef> and the processor list stays empty.
-L</_coerce_processors> treats a top-level arrayref as a list of processor
+C<_coerce_processors> treats a top-level arrayref as a list of processor
 specs run in order, and a bare class name / object as a single processor.
 
 =item _coerce_class_arg

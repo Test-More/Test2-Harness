@@ -8,8 +8,8 @@ use Test2::Harness2::Event;
 
 use Object::HashBase qw{
     <emit_stray
-    -nested
-    -subtests
+    <nested
+    <subtests
 };
 
 use Role::Tiny::With;
@@ -105,21 +105,35 @@ sub process_event ($self, $event) {
 
     my $nested = $hf->{nested} || 0;
 
-    return $event if $hf->{buffered};
-
-    my $is_ours = $nested == $self->{+NESTED};
-
-    return $event unless $is_ours || $f->{from_tap};
-
+    # STDERR is plain output, never subtest structure -- pass it through.
     return $event if $f->{from_tap}    && $f->{from_tap}{source} eq 'STDERR';
     return $event if $f->{from_stream} && $f->{from_stream}{source} eq 'STDERR';
+
+    # TAP subtests arrive as flat depth-stamped events (the parser does not
+    # nest); assemble them by depth.
+    return $self->_tap_process_event($event, $f, $nested) if $f->{from_tap};
+
+    # Stream2 (and any non-TAP source): Test2 already nests every subtest event
+    # inside the top-level closing event's parent.children. A nested event is
+    # therefore a redundant realtime copy -- suppress it by default, or emit a
+    # stray-marked copy when realtime display is wanted. Top-level events (a
+    # plain event, or the self-nested closing subtest event) are authoritative
+    # and pass straight through.
+    if ($nested > $self->{+NESTED}) {
+        return $self->{+EMIT_STRAY} ? $self->_stray_copy($event) : ();
+    }
+
+    return $event;
+}
+
+sub _tap_process_event ($self, $event, $f, $nested) {
+    my $is_ours = $nested == $self->{+NESTED};
 
     return $self->_subtest_start($event, $f, $nested, $is_ours)
         if $f->{harness} && $f->{harness}{subtest_start};
 
     ($event, $f) = $self->_orphan_subtest_end_recovery($event, $f)
-        if $f->{from_tap}
-        && $f->{harness}
+        if $f->{harness}
         && $f->{harness}{subtest_end}
         && !keys %{$self->{+SUBTESTS}};
 
@@ -135,8 +149,8 @@ sub process_event ($self, $event) {
         return @out;
     }
 
-    # A child event of an open subtest: buffer a clean copy for assembly, and
-    # -- only when stray emission is enabled -- emit a marked realtime copy.
+    # A child of an open subtest: buffer a clean copy for assembly, and -- only
+    # when stray emission is enabled -- emit a marked realtime copy.
     my $st = $self->{+SUBTESTS}{$nested} ||= {};
     push @{$st->{children}} => {%$f};
 
@@ -152,11 +166,18 @@ sub process_event ($self, $event) {
 
 =over 4
 
+=item @events = $self->_tap_process_event($event, $f, $nested)
+
+Assemble a TAP-sourced event by depth: register a C<subtest_start> opening,
+buffer deeper children, and on C<subtest_end> (or a shallower event) roll the
+buffered children into one nested C<parent.children> event. TAP children are
+flat -- the parser does not nest them -- so they must be stitched here.
+
 =item @events = $self->_subtest_start($event, $f, $nested, $is_ours)
 
 Begin buffering a subtest: store its opening event at C<depth + 1>. Returns the
-synthetic C<harness.subtest_started> announcement (only for our own level), or
-nothing.
+synthetic C<harness.subtest_started> announcement (only for our own level when
+stray emission is enabled), or nothing.
 
 =item $copy = $self->_stray_copy($event)
 

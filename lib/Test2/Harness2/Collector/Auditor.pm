@@ -22,12 +22,8 @@ use Object::HashBase qw{
     -_sub_failures
     -_plans
     <nested
-    <subtests
     <numbers
     <halt
-    <failed_subtest_tree
-    <passing_subtests
-    <failing_subtests
     <top_level_subtests
     <started
     <times
@@ -118,9 +114,6 @@ sub init ($self) {
     $self->{+ASSERTION_COUNT} = 0;
 
     $self->{+NUMBERS}            = {};
-    $self->{+SUBTESTS}           = {};
-    $self->{+PASSING_SUBTESTS}   = [];
-    $self->{+FAILING_SUBTESTS}   = [];
     $self->{+TOP_LEVEL_SUBTESTS} = [];
 
     $self->{+NESTED} //= 0;
@@ -315,9 +308,9 @@ sub subtest_fail_error_facet_list ($self) {
 sub fail_error_facet_list ($self) {
     my @out;
 
-    my $incomplete = values %{$self->{+SUBTESTS}};
-    push @out => $self->_reason("One or more incomplete subtests (Count: $incomplete)")
-        if $incomplete;
+    # Incomplete subtests no longer surface as leftover auditor state -- the
+    # assembler force-closes any unclosed subtest at exit, and the resulting
+    # abrupt-end reason is attached during _subtest_process_parent.
 
     if (defined(my $wstat = $self->{+EXIT})) {
         if ($wstat == -1) {
@@ -461,10 +454,13 @@ sub _subtest_process_parent ($self, $f, $closer) {
         $name = $frame ? "unnamed subtest ($frame->[1] line $frame->[2])" : 'unnamed subtest';
     }
 
+    # Audit the children independently; the sub-auditor's full verdict is what
+    # the children actually prove, regardless of what the producer claimed for
+    # the parent assert.
     my $subauditor = blessed($self)->new(nested => $self->{+NESTED} + 1);
     $subauditor->_subtest_process($_) for @{$f->{parent}{children}};
-    my @errors = $subauditor->subtest_fail_error_facet_list;
 
+    # An opened-but-not-cleanly-closed subtest is a structural failure.
     if ($f->{harness} && $f->{harness}{subtest_start}) {
         if ($closer && $closer->facet_data->{harness} && $closer->facet_data->{harness}{subtest_end}) {
             $f->{harness}{subtest_closed} = 1;
@@ -474,25 +470,45 @@ sub _subtest_process_parent ($self, $f, $closer) {
         }
     }
 
-    my $fail = 0;
-    if (@errors) {
-        push @{$f->{errors}} => @errors;
-        $fail = 1;
-    }
-    else {
-        $fail ||= $f->{assert}  && !$f->{assert}{pass} && !($f->{amnesty} && @{$f->{amnesty}});
-        $fail ||= $f->{control} && ($f->{control}{halt} || $f->{control}{terminate});
-        $fail ||= $f->{errors}  && first { $_->{fail} } @{$f->{errors}};
+    # derived: what the children prove (the sub-auditor's full verdict, which
+    # includes direct child assertion failures the producer's parent flag might
+    # hide). Attach the structural failure reasons to the recorded event.
+    my @errors = $subauditor->subtest_fail_error_facet_list;
+    push @{$f->{errors}} => @errors if @errors;
+
+    my $derived = $subauditor->fail ? 1 : 0;
+    $derived ||= $f->{errors} && first { $_->{fail} } @{$f->{errors}};
+    $derived = $derived ? 1 : 0;
+
+    my $reported = 0;
+    $reported ||= $f->{assert}  && !$f->{assert}{pass};
+    $reported ||= $f->{control} && ($f->{control}{halt} || $f->{control}{terminate});
+    $reported = $reported ? 1 : 0;
+
+    # Amnesty on the subtest's own parent assert covers the whole subtree.
+    my $amnestied = ($f->{amnesty} && @{$f->{amnesty}}) ? 1 : 0;
+
+    # A producer whose claim disagrees with its own children is misbehaving;
+    # record a diagnostic. A reported pass with failing children flips to fail
+    # (via the fail => 1 facet); a reported fail with clean children stays
+    # failing, the diagnostic just explains it.
+    unless ($amnestied) {
+        if (!$reported && $derived) {
+            push @{$f->{errors}} => $self->_reason("Subtest reported pass but child failures were found (producer mismatch)");
+        }
+        elsif ($reported && !$derived) {
+            push @{$f->{errors}} => $self->_reason("Subtest reported fail but no child failures were found (producer mismatch)");
+        }
     }
 
-    if ($fail) {
-        $self->{+_SUB_FAILURES}++;
-        push @{$self->{+FAILED_SUBTEST_TREE} //= []} => [$name, $subauditor->{+FAILED_SUBTEST_TREE} // []];
-        push @{$self->{+FAILING_SUBTESTS}}           => $name;
-    }
-    else {
-        push @{$self->{+PASSING_SUBTESTS}} => $name;
-    }
+    my $fail = ($reported || $derived) ? 1 : 0;
+    $fail = 0 if $amnestied;
+
+    # Keep the recorded subtest event's own verdict consistent with ours, so a
+    # producer-reported pass that we flip to fail reads as failed downstream.
+    $f->{assert}{pass} = 0 if $fail && $f->{assert};
+
+    $self->{+_SUB_FAILURES}++ if $fail;
 
     push @{$self->{+TOP_LEVEL_SUBTESTS}} => {
         name       => $name,

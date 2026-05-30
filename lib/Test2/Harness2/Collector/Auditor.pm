@@ -213,12 +213,19 @@ sub process_event ($self, $event) {
 
     my $is_exit = $f->{harness_process_exit} ? 1 : 0;
 
-    for my $se ($self->_audit($event)) {
-        next unless ref $se;
-        my $sf = $se->facet_data;
-        delete $sf->{harness}{closed_by} if $sf->{harness};
-        push @out => $se;
-    }
+    # Events arrive already assembled (the assembler coalesced subtests into
+    # nested parent.children events upstream). Tally each authoritative event
+    # belonging to our level; pass stray realtime copies and subtest-start
+    # announcements through untallied.
+    my $nested     = hub_truth($f)->{nested} || 0;
+    my $skip_tally = ($f->{harness_auditor} && $f->{harness_auditor}{stray})
+        || ($f->{harness} && $f->{harness}{subtest_started});
+
+    $self->_subtest_process($f, $event)
+        if !$skip_tally && $nested == $self->{+NESTED};
+
+    delete $f->{harness}{closed_by} if $f->{harness};
+    push @out => $event;
 
     $self->{+TIMES}->process($event, $self->{+ASSERTION_COUNT}) if $self->{+TIMES};
 
@@ -344,12 +351,6 @@ sub fail_error_facet_list ($self) {
 
 Build a harness failure-reason error facet.
 
-=item @events = $self->_audit($event)
-
-Core auditing of one event: identify its nesting via the hub-truth facet,
-buffer the children of streaming subtests, reassemble and process closed
-subtests, and tally events that belong to this auditor's level.
-
 =item $event = $self->_transition($state)
 
 =item $event = $self->_final_state_event
@@ -362,20 +363,6 @@ Build a state-transition / final-state event.
 
 Whether an event's facets indicate a failure / diagnostic output (for the
 transition latches).
-
-=item @events = $self->_audit_subtest_start($event, $f, $nested, $is_ours)
-
-Begin buffering a streaming subtest; for our own level, return a
-C<subtest_started> announcement event.
-
-=item ($event, $f) = $self->_audit_orphan_subtest_end_recovery($event, $f)
-
-Rewrite a stray TAP subtest-end with no open subtest into an info-only event.
-
-=item @events = $self->_audit_close_deeper_subtests($event, $nested)
-
-Close any buffered subtests deeper than C<$nested>, rolling each into a
-buffered parent event and (at our level) processing it.
 
 =item $self->_subtest_process($f, $event = undef)
 
@@ -444,120 +431,6 @@ sub _event_is_diagnostic ($self, $f) {
     }
 
     return 0;
-}
-
-sub _audit ($self, $event) {
-    my $f  = $event->facet_data;
-    my $hf = hub_truth($f);
-
-    my $nested = $hf->{nested} || 0;
-
-    return $event if $hf->{buffered};
-
-    my $is_ours = $nested == $self->{+NESTED};
-
-    return $event unless $is_ours || $f->{from_tap};
-
-    return $event if $f->{from_tap}    && $f->{from_tap}{source} eq 'STDERR';
-    return $event if $f->{from_stream} && $f->{from_stream}{source} eq 'STDERR';
-
-    return $self->_audit_subtest_start($event, $f, $nested, $is_ours)
-        if $f->{harness} && $f->{harness}{subtest_start};
-
-    ($event, $f) = $self->_audit_orphan_subtest_end_recovery($event, $f)
-        if $f->{from_tap}
-        && $f->{harness}
-        && $f->{harness}{subtest_end}
-        && !keys %{$self->{+SUBTESTS}};
-
-    my @out;
-    push @out => $event
-        unless $f->{harness} && $f->{harness}{subtest_end};
-
-    push @out => $self->_audit_close_deeper_subtests($event, $nested);
-
-    unless ($is_ours) {
-        my $st = $self->{+SUBTESTS}{$nested} ||= {};
-        push @{$st->{children}} => {%$f};
-        return @out;
-    }
-
-    $self->_subtest_process($f, $event);
-    return @out;
-}
-
-sub _audit_subtest_start ($self, $event, $f, $nested, $is_ours) {
-    my $st = $self->{+SUBTESTS}{$nested + 1} ||= {};
-    $st->{event} = $event;
-    $f->{harness_auditor}{no_render} = 1;
-    $event->clear_compressed_form;
-
-    return unless $is_ours;
-
-    return Test2::Harness2::Event->new(
-        facet_data => {
-            harness => {subtest_started => 1, nested => $nested},
-            (defined $f->{trace} ? (trace => {%{$f->{trace}}}) : ()),
-        },
-    );
-}
-
-sub _audit_orphan_subtest_end_recovery ($self, $event, $f) {
-    $f->{harness_auditor}{no_render} = 1;
-    $event->clear_compressed_form;
-
-    $f = {
-        %$f,
-        harness_auditor => {added_by_auditor => 1},
-        parent          => undef,
-        trace           => undef,
-        harness         => {%{$f->{harness} || {}}, subtest_end => undef},
-        info            => [
-            @{$f->{info} || []},
-            {
-                details      => $f->{from_tap}{details},
-                tag          => $f->{from_tap}{source} || 'STDOUT',
-                from_harness => 1,
-            },
-        ],
-    };
-
-    return (Test2::Harness2::Event->new(facet_data => $f), $f);
-}
-
-sub _audit_close_deeper_subtests ($self, $event, $nested) {
-    my $sts = $self->{+SUBTESTS};
-
-    my @close = sort { $b <=> $a } grep { $_ > $nested } keys %$sts;
-    return unless @close;
-
-    my @out;
-    for my $n (@close) {
-        my $st = delete $sts->{$n};
-        my $se = $st->{event} || $event;
-
-        my $fd = $se->facet_data;
-        delete $fd->{harness_auditor}{no_render} if $fd->{harness_auditor};
-        $fd->{parent}{hid}      ||= $n;
-        $fd->{parent}{children} ||= $st->{children};
-        $fd->{harness}{closed_by} = $event;
-        $se->clear_compressed_form;
-
-        my $pn = $n - 1;
-
-        if ($st->{event}) {
-            push @{$sts->{$pn}{children}} => $fd if $pn > $self->{+NESTED};
-            if ($pn == $self->{+NESTED}) {
-                $self->_subtest_process($fd, $se);
-                push @out => $se;
-            }
-        }
-        else {
-            push @out => $se if $self->{+NESTED} && $pn == $self->{+NESTED};
-        }
-    }
-
-    return @out;
 }
 
 sub _subtest_process ($self, $f, $event = undef) {

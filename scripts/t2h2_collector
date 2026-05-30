@@ -61,7 +61,7 @@ my $pid = spawn_collector(
     run_uuid  => $uuid,
     exec      => [$^X, $test_file],
     env       => {PERL5LIB => $perl5lib},
-    processor => 'Test2::Harness2::Collector::Auditor',
+    processor => ['Test2::Harness2::Collector::Assembler', 'Test2::Harness2::Collector::Auditor'],
     recorder  => Test2::Harness2::Collector::Recorder::Test->new(
         events_file        => $events_file,
         transition_sockets => [$sock_path],

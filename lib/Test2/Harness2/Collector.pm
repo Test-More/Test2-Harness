@@ -56,6 +56,7 @@ use Object::HashBase qw{
     <parser
     <processor
     <recorder
+    -processors
     <encoding
     <orphan_timeout
     <silence_timeout
@@ -390,9 +391,9 @@ sub init ($self) {
     $self->{+BUFFERING}        //= 1;
     $self->{+FLUSH_INTERVAL}   //= DEFAULT_FLUSH_INTERVAL;
 
-    $self->{+PARSER}    = $self->_coerce_parser($self->{+PARSER});
-    $self->{+PROCESSOR} = $self->_coerce_processor($self->{+PROCESSOR});
-    $self->{+RECORDER}  = $self->_coerce_recorder($self->{+RECORDER});
+    $self->{+PARSER}     = $self->_coerce_parser($self->{+PARSER});
+    $self->{+PROCESSORS} = $self->_coerce_processors($self->{+PROCESSOR});
+    $self->{+RECORDER}   = $self->_coerce_recorder($self->{+RECORDER});
 
     # Hand the recorder this collector's identity so the messages it sends to
     # its notification pipes can say which collector they came from and what
@@ -494,15 +495,18 @@ sub run_collector ($self) {
 
 =item $obj = $self->_coerce_parser($thing)
 
-=item $obj = $self->_coerce_processor($thing)
+=item $arrayref = $self->_coerce_processors($thing)
 
 =item $obj = $self->_coerce_recorder($thing)
 
-Coerce a pipeline-part attribute into an instance via L</_coerce_class_arg>,
-applying the part's default when C<$thing> is C<undef>: the parser defaults
-to L<Test2::Harness2::Collector::Parser::TAPParser> for a test job
-(C<is_test> true) and L<Test2::Harness2::Collector::Parser::IOParser>
-otherwise; the processor and recorder both stay C<undef>.
+Coerce a pipeline-part attribute into an instance (or, for processors, a list
+of instances) via L</_coerce_class_arg>, applying the part's default when
+C<$thing> is C<undef>: the parser defaults to
+L<Test2::Harness2::Collector::Parser::TAPParser> for a test job (C<is_test>
+true) and L<Test2::Harness2::Collector::Parser::IOParser> otherwise; the
+recorder stays C<undef> and the processor list stays empty.
+L</_coerce_processors> treats a top-level arrayref as a list of processor
+specs run in order, and a bare class name / object as a single processor.
 
 =item _coerce_class_arg
 
@@ -527,9 +531,14 @@ sub _coerce_parser ($self, $thing) {
     return $class->new;
 }
 
-sub _coerce_processor ($self, $thing) {
-    return undef unless defined $thing;
-    return $self->_coerce_class_arg($thing, 'processor');
+sub _coerce_processors ($self, $thing) {
+    return [] unless defined $thing;
+
+    # A top-level arrayref is always a LIST of processor specs; a bare class
+    # name or object is a single processor. To pass constructor args, use a
+    # list holding one [class => @args] spec: processor => [[ $class, @args ]].
+    my @specs = ref($thing) eq 'ARRAY' ? @$thing : ($thing);
+    return [map { $self->_coerce_class_arg($_, 'processor') } @specs];
 }
 
 sub _coerce_recorder ($self, $thing) {
@@ -1204,8 +1213,18 @@ C<compressed_form> fast path).
 =cut
 
 sub _dispatch_event ($self, $event) {
-    my $processor = $self->{+PROCESSOR};
-    my @events    = $processor ? $processor->process_event($event) : ($event);
+    my @events = ($event);
+
+    for my $proc (@{$self->{+PROCESSORS}}) {
+        my @next;
+        for my $in (@events) {
+            my @out;
+            warn "processor process_event failed: $@\n"
+                unless eval { @out = $proc->process_event($in); 1 };
+            push @next => grep { ref } @out;
+        }
+        @events = @next;
+    }
 
     my $recorder = $self->{+RECORDER} or return;
     for my $e (@events) {
@@ -1468,9 +1487,9 @@ sub _build_info ($self) {
     $info{exit}{timed_out}     = $self->{+TIMED_OUT} if $self->{+TIMED_OUT};
     $info{exit}{parent_exited} = 1                   if $self->{+PARENT_EXITED};
 
-    if (my $processor = $self->{+PROCESSOR}) {
-        $info{final_state} = $processor->final_state
-            if $processor->can('final_state');
+    for my $processor (@{$self->{+PROCESSORS}}) {
+        next unless $processor->can('final_state');
+        $info{final_state} = $processor->final_state;
     }
 
     return \%info;

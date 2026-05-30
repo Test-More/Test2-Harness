@@ -113,17 +113,31 @@ sub process_event ($self, $event) {
     # nest); assemble them by depth.
     return $self->_tap_process_event($event, $f, $nested) if $f->{from_tap};
 
-    # Stream2 (and any non-TAP source): Test2 already nests every subtest event
-    # inside the top-level closing event's parent.children. A nested event is
-    # therefore a redundant realtime copy -- suppress it by default, or emit a
-    # stray-marked copy when realtime display is wanted. Top-level events (a
-    # plain event, or the self-nested closing subtest event) are authoritative
-    # and pass straight through.
-    if ($nested > $self->{+NESTED}) {
+    # Stream2 (and any non-TAP source): Test2 folds a subtest's structural
+    # events -- assertions, plans, and nested subtest closes -- into the
+    # top-level closing event's parent.children. A nested *structural* event is
+    # therefore a redundant realtime copy: suppress it by default, or emit a
+    # stray-marked copy when realtime display is wanted. Info-only output
+    # (note/diag and raw stream lines) is NOT folded into parent.children, so it
+    # must pass through or it would be lost from the log entirely. Top-level
+    # events (plain events, or the self-nested close) are always authoritative.
+    #
+    # This is safe only because a test job's structural events reach us either
+    # pre-nested (Stream2, the default formatter) or as from_tap (handled
+    # above). A non-TAP, non-nesting parser feeding a test job would drop
+    # depth > 0 structural events here -- do not wire one without revisiting.
+    if ($nested > $self->{+NESTED} && $self->_is_subtest_structure($f)) {
         return $self->{+EMIT_STRAY} ? $self->_stray_copy($event) : ();
     }
 
     return $event;
+}
+
+sub _is_subtest_structure ($self, $f) {
+    return 1 if $f->{assert};
+    return 1 if $f->{parent};
+    return 1 if $f->{plan};
+    return 0;
 }
 
 sub _tap_process_event ($self, $event, $f, $nested) {
@@ -165,6 +179,12 @@ sub _tap_process_event ($self, $event, $f, $nested) {
 =cut
 
 =over 4
+
+=item $bool = $self->_is_subtest_structure($f)
+
+True when a facet-set is structural subtest content Test2 folds into a parent's
+C<children> (an C<assert>, C<parent>, or C<plan>). Info-only output (note /
+diag / raw stream lines) is not folded, so it must not be suppressed.
 
 =item @events = $self->_tap_process_event($event, $f, $nested)
 

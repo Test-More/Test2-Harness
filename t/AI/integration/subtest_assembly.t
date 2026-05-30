@@ -93,6 +93,41 @@ subtest emit_stray_adds_realtime_copies => sub {
     }
 };
 
+subtest info_inside_subtest_survives => sub {
+    # note()/diag() inside a subtest are NOT folded into Test2's parent.children,
+    # so the assembler must NOT suppress them -- otherwise they vanish from the
+    # log entirely (neither standalone nor nested).
+    my $dir = tempdir(CLEANUP => 1);
+    my $ef  = "$dir/events.jsonl.zst";
+
+    Test2::Harness2::Collector->start(
+        name         => "subtest-info", is_test => 1, run_uuid => "RUN",
+        processor    => ['Test2::Harness2::Collector::Assembler', 'Test2::Harness2::Collector::Auditor'],
+        recorder     => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
+        exec_command => [$^X, '-Ilib', 't/AI/scripts/subtest_diag_job.pl'],
+    );
+
+    my @events = read_events($ef);
+
+    my $info_seen = sub ($re) {
+        return scalar grep {
+            my $info = $_->{facet_data}{info} or return 0;
+            grep { ($_->{details} // '') =~ $re } @$info;
+        } @events;
+    };
+
+    ok($info_seen->(qr/NOTE inside the subtest/), "note() inside a subtest survives to the log");
+    ok($info_seen->(qr/DIAG inside the subtest/), "diag() inside a subtest survives to the log");
+
+    # Structural children are still de-duplicated (no standalone copies).
+    my @dupes = grep {
+        $_->{facet_data}{assert}
+            && ($_->{facet_data}{assert}{details} // '') =~ /^child [ab]$/
+            && !($_->{facet_data}{harness_auditor} && $_->{facet_data}{harness_auditor}{stray})
+    } @events;
+    is(scalar(@dupes), 0, "structural subtest children still de-duplicated");
+};
+
 subtest verdict_still_correct => sub {
     # The assembler must not disturb the auditor's verdict: an all-pass nested
     # job exits 0.

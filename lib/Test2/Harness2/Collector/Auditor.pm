@@ -45,22 +45,25 @@ test job's event stream and decides pass/fail.
 
 =head1 DESCRIPTION
 
-The auditor sits in the processor slot of the collector pipeline. It consumes
-one L<Test2::Harness2::Event> at a time via L</process_event> and:
+The auditor sits in the processor slot of the collector pipeline, after the
+L<Test2::Harness2::Collector::Assembler> (which coalesces scattered subtest
+events into one nested C<parent.children> event per subtest). It consumes one
+already-assembled L<Test2::Harness2::Event> at a time via L</process_event>
+and:
 
 =over 4
 
 =item *
 
-passes events through (transforming subtest streams into buffered parent
-events, recovering malformed TAP, and synthesizing subtest-start
-announcements);
+passes events through unchanged (stray realtime copies and subtest-start
+announcements are passed through untallied);
 
 =item *
 
 tracks the running test's verdict -- assertions, assertion numbering, plans,
-nested subtests (recursively, via a fresh sub-auditor per subtest), errors,
-bail-outs, and the child's exit status;
+nested subtests (audited recursively via a fresh sub-auditor per subtest, whose
+verdict is derived independently and compared against the producer's reported
+result), errors, bail-outs, and the child's exit status;
 
 =item *
 
@@ -494,7 +497,7 @@ sub _subtest_process_parent ($self, $f, $closer) {
     # failing, the diagnostic just explains it.
     unless ($amnestied) {
         if (!$reported && $derived) {
-            push @{$f->{errors}} => $self->_reason("Subtest reported pass but child failures were found (producer mismatch)");
+            push @{$f->{errors}} => $self->_reason("Subtest reported pass but " . $subauditor->fail_count . " child failure(s) were found (producer mismatch)");
         }
         elsif ($reported && !$derived) {
             push @{$f->{errors}} => $self->_reason("Subtest reported fail but no child failures were found (producer mismatch)");

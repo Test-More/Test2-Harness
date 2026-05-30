@@ -622,7 +622,7 @@ sub _run_child ($self, $guard, $out_w, $err_w) {
 =item $self->_run_parent
 
 Parent-side IO loop: select on both pipe read ends, decode message bursts to
-events through the parser, optionally route through the processor, write to
+events through the parser, route each through the processor chain, write to
 the events file. Continues until both pipes hit EOF, until one of the
 configured timeouts fires, or until the orphan watchdog gives up.
 

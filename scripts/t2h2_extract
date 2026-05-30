@@ -1,0 +1,54 @@
+#!/usr/bin/env perl
+use v5.38;
+
+use Test2::Harness2::Util::Zstd qw/open_zstd_reader ZSTD_FRAME_MAGIC/;
+use Test2::Harness2::Util::JSON qw/decode_json encode_pretty_json/;
+
+# t2h2_extract - dump a collector events file as human-readable JSON.
+#
+# Usage: t2h2_extract EVENTS_FILE
+#
+# EVENTS_FILE may be a plain jsonl file (one event per line) or a multi-frame
+# zstd file (one event per frame). The format is detected from the file's
+# leading bytes, not its name: a zstd frame magic means decompress, anything
+# else is read as plain text. Every event is collected and printed as a single
+# pretty-printed JSON array, one element per event.
+
+my ($events_file) = @ARGV;
+die "Usage: $0 EVENTS_FILE\n" unless defined $events_file;
+die "No such file: $events_file\n" unless -f $events_file;
+
+my @events;
+for my $line (_read_lines($events_file)) {
+    chomp $line;
+    next unless length $line;
+    push @events => decode_json($line);
+}
+
+print encode_pretty_json(\@events), "\n";
+
+exit 0;
+
+# Read the file as a list of JSON-text lines, transparently decompressing when
+# the leading bytes are a zstd frame magic.
+sub _read_lines ($path) {
+    if (_is_zstd($path)) {
+        my $reader = open_zstd_reader($path);
+        my @lines;
+        while (defined(my $line = $reader->readline)) {
+            push @lines => $line;
+        }
+        return @lines;
+    }
+
+    open(my $fh, '<', $path) or die "open '$path': $!\n";
+    return readline($fh);
+}
+
+# True when the file begins with the zstd frame magic.
+sub _is_zstd ($path) {
+    open(my $fh, '<:raw', $path) or die "open '$path': $!\n";
+    read($fh, my $head, length(ZSTD_FRAME_MAGIC));
+    close($fh);
+    return defined($head) && $head eq ZSTD_FRAME_MAGIC;
+}

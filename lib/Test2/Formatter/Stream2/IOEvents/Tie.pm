@@ -81,9 +81,12 @@ Standard C<tie> constructor; delegates to L</_build>.
 
 =item $self->PRINTF($format, @args)
 
-Convert the output to a Test2 C<info> event when L</_should_convert> is true,
-otherwise pass it through to the real handle. C<PRINT> joins C<@args> with C<$,>
-and appends C<$\> (matching C<print>); C<PRINTF> applies C<sprintf> first.
+Convert the output to a Test2 C<info> event when L</_should_convert> is true
+B<and> the text ends in a newline, otherwise pass it through to the real
+handle. C<PRINT> joins C<@args> with C<$,> and appends C<$\> (matching
+C<print>); C<PRINTF> applies C<sprintf> first. Output without a trailing
+newline is a partial line and is passed through so it is not emitted as a
+fragment event.
 
 =item FILENO
 
@@ -125,12 +128,18 @@ sub PRINT ($self, @args) {
     my $text = join($sep, @args);
     $text .= $\ if defined $\;
 
+    # Only whole lines become events. A print with no trailing newline is a
+    # partial line; pass it through so the collector's raw line-buffering can
+    # join it with the rest instead of emitting a fragment event.
+    return $self->_passthrough(@args) unless $text =~ /\n\z/;
+
     return $self->_emit($text);
 }
 
 sub PRINTF ($self, $format, @args) {
     my $text = sprintf($format, @args);
     return $self->_passthrough($text) unless $self->_should_convert;
+    return $self->_passthrough($text) unless $text =~ /\n\z/;
     return $self->_emit($text);
 }
 

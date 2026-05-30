@@ -73,7 +73,10 @@ sub enable ($class) {
 =item Test2::Formatter::Stream2::IOEvents->_install_ties
 
 Tie C<STDOUT> and C<STDERR> to L<Test2::Formatter::Stream2::IOEvents::Tie>.
-Idempotent: a handle already tied is left as-is.
+Idempotent: a handle already tied is left as-is. Run on every subtest start (by
+the L</enable> callback), so a tie dropped by an intervening reopen -- e.g.
+L<Capture::Tiny> or an explicit C<< open STDOUT, ... >> -- is refreshed before
+the next subtest.
 
 =item Test2::Formatter::Stream2::IOEvents->_uninstall_ties
 
@@ -84,6 +87,9 @@ Untie C<STDOUT> and C<STDERR> if they are tied. Used for cleanup / tests.
 =cut
 
 sub _install_ties ($class) {
+    # Called at every subtest start, so an untied handle (one whose tie an
+    # intervening reopen dropped) is re-tied here. A handle still tied -- to us
+    # or to another module -- is left alone so we never clobber a live tie.
     tie(*STDOUT, 'Test2::Formatter::Stream2::IOEvents::Tie', 'STDOUT') unless tied(*STDOUT);
     tie(*STDERR, 'Test2::Formatter::Stream2::IOEvents::Tie', 'STDERR') unless tied(*STDERR);
     return;

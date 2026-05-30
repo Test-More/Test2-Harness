@@ -83,6 +83,34 @@ subtest stderr_print_is_debug => sub {
     ok($info->{debug}, "STDERR info is marked debug");
 };
 
+subtest only_newline_terminated_prints_convert => sub {
+    my $tie = handler('STDOUT');
+    open(my $buf_fh, '>', \my $buf) or die "open buffer: $!";
+    $tie->{+TIE->REAL_FH} = $buf_fh;
+
+    my $events = intercept {
+        run_subtest('p', sub {
+            $tie->PRINT("partial-no-eol");      # no newline -> passthrough
+            ok(1, "ran");
+        }, {buffered => 1});
+    };
+
+    is($buf, "partial-no-eol", "a print without a trailing newline passes through to the real handle");
+    my @info = grep { ($_->{details} // '') =~ /partial-no-eol/ } printed_info($events);
+    is(scalar(@info), 0, "the partial-line print did not become an event");
+};
+
+subtest printf_without_newline_passes_through => sub {
+    my $tie = handler('STDOUT');
+    open(my $buf_fh, '>', \my $buf) or die "open buffer: $!";
+    $tie->{+TIE->REAL_FH} = $buf_fh;
+
+    intercept {
+        run_subtest('p', sub { $tie->PRINTF("%s", "nofmt-eol"); ok(1, "ran") }, {buffered => 1});
+    };
+    is($buf, "nofmt-eol", "PRINTF without a trailing newline passes through");
+};
+
 subtest printf_formats => sub {
     my $events = intercept {
         run_subtest('p', sub {

@@ -12,6 +12,7 @@ use Object::HashBase qw{
     <fd
     <pid
     active
+    pending
 };
 
 =pod
@@ -63,6 +64,14 @@ through rather than risking a Test2 context in a child.
 Reentrancy latch: set while a conversion is in progress so output produced
 during event emission cannot recurse back into conversion.
 
+=item pending
+
+True when this handle has an unterminated (no trailing newline) line
+outstanding on the real channel. While set, even newline-terminated prints pass
+through, so the partial line is completed on the same channel rather than split
+between the raw stream and an event. Per handle -- a partial on STDERR does not
+affect STDOUT.
+
 =back
 
 =cut
@@ -81,12 +90,10 @@ Standard C<tie> constructor; delegates to L</_build>.
 
 =item $self->PRINTF($format, @args)
 
-Convert the output to a Test2 C<info> event when L</_should_convert> is true
-B<and> the text ends in a newline, otherwise pass it through to the real
-handle. C<PRINT> joins C<@args> with C<$,> and appends C<$\> (matching
-C<print>); C<PRINTF> applies C<sprintf> first. Output without a trailing
-newline is a partial line and is passed through so it is not emitted as a
-fragment event.
+Route the output through L</_route>: a whole, newline-terminated line with no
+partial line outstanding on this handle becomes a Test2 C<info> event;
+everything else passes through to the real handle. C<PRINT> joins C<@args> with
+C<$,> and appends C<$\> (matching C<print>); C<PRINTF> applies C<sprintf> first.
 
 =item FILENO
 
@@ -122,25 +129,14 @@ Proxy autoflush to the real handle.
 sub TIEHANDLE ($class, $name) { return $class->_build($name) }
 
 sub PRINT ($self, @args) {
-    return $self->_passthrough(@args) unless $self->_should_convert;
-
     my $sep  = defined($,) ? $,         : '';
     my $text = join($sep, @args);
     $text .= $\ if defined $\;
-
-    # Only whole lines become events. A print with no trailing newline is a
-    # partial line; pass it through so the collector's raw line-buffering can
-    # join it with the rest instead of emitting a fragment event.
-    return $self->_passthrough(@args) unless $text =~ /\n\z/;
-
-    return $self->_emit($text);
+    return $self->_route($text);
 }
 
 sub PRINTF ($self, $format, @args) {
-    my $text = sprintf($format, @args);
-    return $self->_passthrough($text) unless $self->_should_convert;
-    return $self->_passthrough($text) unless $text =~ /\n\z/;
-    return $self->_emit($text);
+    return $self->_route(sprintf($format, @args));
 }
 
 sub FILENO ($self) { return $self->{+FD} }
@@ -179,6 +175,16 @@ sub autoflush ($self, @args) {
 =cut
 
 =over 4
+
+=item _route
+
+=item $self->_route($text)
+
+Decide what to do with one print's worth of C<$text>. Convert it to an event
+only when it ends in a newline, no partial line is outstanding on this handle
+(L</pending>), and L</_should_convert> agrees. Otherwise pass it through and
+update L</pending> to follow the real channel: cleared when C<$text> ends a
+line, set when it leaves one open. Empty text is a no-op.
 
 =item $self->_passthrough(@args)
 
@@ -224,8 +230,26 @@ sub _build ($class, $name) {
     $self->{+FD}      = CORE::fileno($glob);
     $self->{+PID}     = $$;
     $self->{+ACTIVE}  = 0;
+    $self->{+PENDING} = 0;
 
     return $self;
+}
+
+sub _route ($self, $text) {
+    return 1 unless length $text;
+
+    my $terminated = $text =~ /\n\z/ ? 1 : 0;
+
+    # Convert only a whole line that has no partial line outstanding before it.
+    # Emitting leaves the real channel untouched, so the pending state is
+    # unchanged (it was already clear).
+    return $self->_emit($text)
+        if $terminated && !$self->{+PENDING} && $self->_should_convert;
+
+    # Passthrough: the real channel now holds a complete line (terminated) or a
+    # still-open partial (not), so track that for the next print on this handle.
+    $self->{+PENDING} = $terminated ? 0 : 1;
+    return $self->_passthrough($text);
 }
 
 sub _passthrough ($self, @args) {

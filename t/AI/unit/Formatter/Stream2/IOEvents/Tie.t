@@ -111,6 +111,48 @@ subtest printf_without_newline_passes_through => sub {
     is($buf, "nofmt-eol", "PRINTF without a trailing newline passes through");
 };
 
+subtest unterminated_run_then_resume => sub {
+    my $tie = handler('STDOUT');
+    open(my $fh, '>', \my $buf) or die "open buffer: $!";
+    $tie->{+TIE->REAL_FH} = $fh;
+
+    my $events = intercept {
+        run_subtest('p', sub {
+            $tie->PRINT("A");       # partial -> passthrough, now pending
+            $tie->PRINT("B");       # still pending -> passthrough
+            $tie->PRINT("C\n");     # completes the line -> passthrough (NOT event)
+            $tie->PRINT("D\n");     # pending cleared -> converts
+            ok(1, "ran");
+        }, {buffered => 1});
+    };
+
+    is($buf, "ABC\n", "A, B, and the terminating C\\n all passed through");
+    my @abc = grep { ($_->{details} // '') =~ /^[ABC]/ } printed_info($events);
+    is(scalar(@abc), 0, "no event for the partial run or its terminator");
+    my @d = grep { ($_->{details} // '') eq "D\n" } printed_info($events);
+    is(scalar(@d), 1, "the next terminated print after completion converts");
+};
+
+subtest pending_is_tracked_per_handle => sub {
+    my $out = handler('STDOUT');
+    my $err = handler('STDERR');
+    open(my $ofh, '>', \my $obuf) or die; $out->{+TIE->REAL_FH} = $ofh;
+    open(my $efh, '>', \my $ebuf) or die; $err->{+TIE->REAL_FH} = $efh;
+
+    my $events = intercept {
+        run_subtest('p', sub {
+            $err->PRINT("partial-err");   # STDERR now pending
+            $out->PRINT("full-out\n");    # STDOUT not pending -> must still convert
+            ok(1, "ran");
+        }, {buffered => 1});
+    };
+
+    is($ebuf, "partial-err", "stderr partial passed through");
+    is($obuf // '', '', "stdout converted (nothing passed through)");
+    my @o = grep { ($_->{details} // '') eq "full-out\n" } printed_info($events);
+    is(scalar(@o), 1, "a stderr partial does not block a stdout conversion");
+};
+
 subtest printf_formats => sub {
     my $events = intercept {
         run_subtest('p', sub {

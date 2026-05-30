@@ -1222,8 +1222,7 @@ sub _dispatch_event ($self, $event) {
             warn "processor process_event failed: $@\n"
                 unless eval { @out = $proc->process_event($in); 1 };
 
-            # Why do we need the grep here?
-            push @next => grep { ref } @out;
+            push @next => @out;
         }
         @events = @next;
     }

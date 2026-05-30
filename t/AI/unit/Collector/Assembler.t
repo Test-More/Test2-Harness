@@ -96,6 +96,46 @@ subtest buffered_tap_assembled => sub {
     is(scalar(@{$asm->facet_data->{parent}{children}}), 1, "one child nested");
 };
 
+subtest emit_stray_off_by_default => sub {
+    my $as = Test2::Harness2::Collector::Assembler->new;
+    my @out = run(
+        $as,
+        {harness => {subtest_start => 1}, parent => {details => 'st'}, assert => {pass => 1, details => 'st', number => 1}, trace => {nested => 0}},
+        assert_f(1, number => 1, name => 'child a', nested => 1),
+        {plan => {count => 1}, trace => {nested => 0}},
+    );
+
+    my @stray = grep { $_->facet_data->{harness_auditor} && $_->facet_data->{harness_auditor}{stray} } @out;
+    is(scalar(@stray), 0, "no stray events emitted by default");
+
+    my @announce = grep { $_->facet_data->{harness}{subtest_started} } @out;
+    is(scalar(@announce), 0, "no subtest-start announcement by default");
+
+    ok(assembled(@out), "authoritative assembled event still emitted");
+};
+
+subtest emit_stray_on => sub {
+    my $as = Test2::Harness2::Collector::Assembler->new(emit_stray => 1);
+    my @out = run(
+        $as,
+        {harness => {subtest_start => 1}, parent => {details => 'st'}, assert => {pass => 1, details => 'st', number => 1}, trace => {nested => 0}},
+        assert_f(1, number => 1, name => 'child a', nested => 1),
+        {plan => {count => 1}, trace => {nested => 0}},
+    );
+
+    my @announce = grep { $_->facet_data->{harness}{subtest_started} } @out;
+    is(scalar(@announce), 1, "subtest-start announcement emitted with emit_stray");
+    ok($announce[0]->facet_data->{harness_auditor}{stray}, "announcement marked stray");
+
+    my @child_copies = grep { $_->facet_data->{assert} && ($_->facet_data->{assert}{details} // '') eq 'child a' } @out;
+    is(scalar(@child_copies), 1, "the streamed child appears standalone");
+    ok($child_copies[0]->facet_data->{harness_auditor}{stray}, "standalone child marked stray");
+
+    my $asm = assembled(@out);
+    ok($asm, "assembled event still emitted");
+    ok(!$asm->facet_data->{harness_auditor}{stray}, "assembled event NOT marked stray");
+};
+
 subtest nested_two_deep_assembled => sub {
     my $as = Test2::Harness2::Collector::Assembler->new;
 

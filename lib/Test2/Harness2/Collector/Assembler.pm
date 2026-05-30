@@ -123,18 +123,26 @@ sub process_event ($self, $event) {
         && $f->{harness}{subtest_end}
         && !keys %{$self->{+SUBTESTS}};
 
-    my @out;
-    push @out => $event
-        unless $f->{harness} && $f->{harness}{subtest_end};
+    my @closed = $self->_close_deeper_subtests($event, $nested);
 
-    push @out => $self->_close_deeper_subtests($event, $nested);
-
-    unless ($is_ours) {
-        my $st = $self->{+SUBTESTS}{$nested} ||= {};
-        push @{$st->{children}} => {%$f};
+    if ($is_ours) {
+        # Authoritative: emit the event itself (unless it is a closing brace),
+        # followed by any subtest events its arrival just closed.
+        my @out;
+        push @out => $event
+            unless $f->{harness} && $f->{harness}{subtest_end};
+        push @out => @closed;
         return @out;
     }
 
+    # A child event of an open subtest: buffer a clean copy for assembly, and
+    # -- only when stray emission is enabled -- emit a marked realtime copy.
+    my $st = $self->{+SUBTESTS}{$nested} ||= {};
+    push @{$st->{children}} => {%$f};
+
+    my @out;
+    push @out => $self->_stray_copy($event) if $self->{+EMIT_STRAY};
+    push @out => @closed;
     return @out;
 }
 
@@ -149,6 +157,12 @@ sub process_event ($self, $event) {
 Begin buffering a subtest: store its opening event at C<depth + 1>. Returns the
 synthetic C<harness.subtest_started> announcement (only for our own level), or
 nothing.
+
+=item $copy = $self->_stray_copy($event)
+
+Return a distinct copy of C<$event> marked C<harness_auditor.stray = 1>, the
+realtime-only standalone form of a subtest child event. A separate object so
+marking it never touches the clean copy buffered for assembly.
 
 =item ($event, $f) = $self->_orphan_subtest_end_recovery($event, $f)
 
@@ -171,14 +185,33 @@ sub _subtest_start ($self, $event, $f, $nested, $is_ours) {
     $st->{event} = $event;
     $event->clear_compressed_form;
 
-    return unless $is_ours;
+    # The subtest-start announcement is a realtime-only hint; emit it only when
+    # stray emission is enabled, and only at our own level.
+    return unless $is_ours && $self->{+EMIT_STRAY};
 
     return Test2::Harness2::Event->new(
         facet_data => {
-            harness => {subtest_started => 1, nested => $nested},
+            harness_auditor => {stray           => 1},
+            harness         => {subtest_started => 1, nested => $nested},
             (defined $f->{trace} ? (trace => {%{$f->{trace}}}) : ()),
         },
     );
+}
+
+sub _stray_copy ($self, $event) {
+    my $f = $event->facet_data;
+
+    # A distinct event so marking it stray never contaminates the clean copy
+    # already buffered as a subtest child.
+    my $copy = Test2::Harness2::Event->new(
+        facet_data => {
+            %$f,
+            harness_auditor => {%{$f->{harness_auditor} || {}}, stray => 1},
+        },
+    );
+    $copy->clear_compressed_form;
+
+    return $copy;
 }
 
 sub _orphan_subtest_end_recovery ($self, $event, $f) {

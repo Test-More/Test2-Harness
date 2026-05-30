@@ -106,6 +106,14 @@ sub init ($self) {
 
     $self->{+EMITTER} = Test2::Harness2::Util::EventEmitter->std;
 
+    # Arm in-subtest STDOUT/STDERR-to-event conversion when the collector asked
+    # for it. The emitter above already captured its pipe via a raw fd, so the
+    # tie this installs (lazily, on the first subtest) cannot intercept it.
+    if ($ENV{T2_HARNESS2_IO_EVENTS}) {
+        require Test2::Formatter::Stream2::IOEvents;
+        Test2::Formatter::Stream2::IOEvents->enable;
+    }
+
     if ($self->{check_tb}) {
         require Test::Builder::Formatter;
         $self->{+TB}         = Test::Builder::Formatter->new();

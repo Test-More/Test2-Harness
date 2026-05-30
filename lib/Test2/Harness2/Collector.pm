@@ -50,6 +50,7 @@ use Object::HashBase qw{
     <uuid
     <run_uuid
     <is_test
+    <io_events
     <exec_command
     <run_sub
     <child_env
@@ -238,6 +239,13 @@ are passed straight through to the recorder.
 When true, the child is placed in a fresh process group via C<setpgid(0, 0)>
 so the test cannot signal the collector tree, and the test-only silence /
 lifetime timeouts apply.
+
+=item io_events => 0 | 1
+
+Test jobs only. When true, the child sets C<T2_HARNESS2_IO_EVENTS> so
+L<Test2::Formatter::Stream2> turns prints and warnings made inside a subtest
+into events that fold into that subtest, instead of leaving them as loose
+top-level output. Off by default.
 
 =item orphan_timeout => $seconds
 
@@ -606,6 +614,10 @@ sub _run_child ($self, $guard, $out_w, $err_w) {
     # process group so the test cannot signal the collector tree.
     if ($self->{+IS_TEST}) {
         $ENV{T2_FORMATTER} = 'Stream2';
+
+        # Stream2 reads this to turn in-subtest prints/warnings into events.
+        $ENV{T2_HARNESS2_IO_EVENTS} = 1 if $self->{+IO_EVENTS};
+
         setpgid(0, 0);
     }
 

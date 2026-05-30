@@ -1,0 +1,69 @@
+#!/usr/bin/env perl
+use v5.38;
+use warnings;
+
+use File::Find ();
+
+# Flags Object::HashBase read-only attributes declared with the `-` prefix
+# (reader + a setter that exists only to throw "read-only") instead of `<`
+# (reader, no setter at all). `<` is the house style for read-only slots; `-`
+# leaves a dead throwing setter behind for no benefit. See STYLE_GUIDE.md
+# "Object orientation".
+#
+# `-attr` is allowed only in the rare case where the throwing setter is
+# genuinely wanted (e.g. a clearer error than "method not found" at a call
+# site that cannot be removed). Mark such a line with the exact token
+# `-attr-ok` in a comment to silence this check; a bare comment does NOT
+# exempt it, so the marker is deliberate and greppable.
+#
+# Scans the WHOLE tree (default lib/), not a touched-file subset, so an
+# incomplete edit set cannot let a `-attr` slip through.
+
+my @dirs = @ARGV ? @ARGV : ('lib');
+
+my @hits;
+File::Find::find(
+    sub {
+        return unless -f && /\.pm$/;
+        my $file = $File::Find::name;
+
+        open my $fh, '<', $_ or die "Could not open $file: $!";
+        my @lines = <$fh>;
+        close $fh;
+
+        my $in_hashbase = 0;
+        for my $i (0 .. $#lines) {
+            my $line = $lines[$i];
+
+            unless ($in_hashbase) {
+                next unless $line =~ /^\s*use\s+Object::HashBase\s+qw[\{\(\[]/;
+                $in_hashbase = 1;
+                next;
+            }
+
+            # End of the attribute list.
+            if ($line =~ /[\}\)\]]/) {
+                $in_hashbase = 0;
+                next;
+            }
+
+            # A `-`-prefixed read-only slot. An explicit `-attr-ok` marker is
+            # the only thing that exempts it.
+            next unless $line =~ /^\s*-\w/;
+            next if $line =~ /-attr-ok/;
+
+            (my $trimmed = $line) =~ s/^\s+|\s+$//g;
+            push @hits => sprintf("%s:%d: %s", $file, $i + 1, $trimmed);
+        }
+    },
+    @dirs,
+);
+
+if (@hits) {
+    print "Read-only HashBase attributes using '-' (use '<' instead; if the throwing setter is intentional, add a '-attr-ok' comment):\n";
+    print "  $_\n" for @hits;
+    exit 1;
+}
+
+print "OK: no unjustified '-' read-only HashBase attributes.\n";
+exit 0;

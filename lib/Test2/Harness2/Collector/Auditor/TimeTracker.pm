@@ -9,7 +9,7 @@ use Object::HashBase qw{
     <first
     <last
     <complete
-    -_totals
+    <_totals
 };
 
 =pod

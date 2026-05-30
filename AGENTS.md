@@ -94,11 +94,14 @@ from). Resolve anything they turn up, then re-run the test suite.
    Common slips: `eval` patterns (always check the return value,
    never raw `$@`), `croak` vs `die`, `//=` for defaults,
    `Time::HiRes::sleep` for sub-second waits, `Object::HashBase`
-   slot ordering, no trailing whitespace, and the "named subs in
-   object modules must be methods, not functions" rule (see
-   `STYLE_GUIDE.md` "Naming and structure"). Run
-   `perl agent_scripts/audit-methods-not-functions lib` and resolve
-   every reported hit.
+   slot ordering, read-only attributes using `<attr` not `-attr`, no
+   trailing whitespace, and the "named subs in object modules must be
+   methods, not functions" rule (see `STYLE_GUIDE.md` "Naming and
+   structure"). Run `perl agent_scripts/audit-methods-not-functions lib`
+   and `perl agent_scripts/audit-readonly-attrs lib` and resolve every
+   reported hit. These automated gates are mandatory because the
+   equivalent manual checklist items get skipped under pressure -- a hit
+   from either script is a hard stop, not a judgment call.
 
 2. **POD pass.** Verify the file follows the POD layout in
    `STYLE_GUIDE.md` ("POD" section): `NAME` / `DESCRIPTION` /

@@ -17,10 +17,10 @@ use Object::HashBase qw{
     <exit
     <plan
     +fail
-    -_errors
-    -_failures
-    -_sub_failures
-    -_plans
+    <_errors
+    <_failures
+    <_sub_failures
+    <_plans
     <nested
     <numbers
     <halt

@@ -56,7 +56,7 @@ use Object::HashBase qw{
     <parser
     <processor
     <recorder
-    -processors
+    <processors
     <encoding
     <orphan_timeout
     <silence_timeout
@@ -1221,6 +1221,8 @@ sub _dispatch_event ($self, $event) {
             my @out;
             warn "processor process_event failed: $@\n"
                 unless eval { @out = $proc->process_event($in); 1 };
+
+            # Why do we need the grep here?
             push @next => grep { ref } @out;
         }
         @events = @next;

@@ -95,39 +95,88 @@ subtest emit_stray_adds_realtime_copies => sub {
     }
 };
 
-subtest info_inside_subtest_survives => sub {
-    # note()/diag() inside a subtest are NOT folded into Test2's parent.children,
-    # so the assembler must NOT suppress them -- otherwise they vanish from the
-    # log entirely (neither standalone nor nested).
+sub run_diag_job (%opts) {
     my $dir = tempdir(CLEANUP => 1);
     my $ef  = "$dir/events.jsonl.zst";
 
+    my $assembler = $opts{stray}
+        ? ['Test2::Harness2::Collector::Assembler', emit_stray => 1]
+        : 'Test2::Harness2::Collector::Assembler';
+
     Test2::Harness2::Collector->start(
         name         => "subtest-info", is_test => 1, run_uuid => "RUN",
-        processor    => ['Test2::Harness2::Collector::Assembler', 'Test2::Harness2::Collector::Auditor'],
+        processor    => [$assembler, 'Test2::Harness2::Collector::Auditor'],
         recorder     => Test2::Harness2::Collector::Recorder->new(events_file => $ef),
         exec_command => [$^X, '-Ilib', 't/AI/scripts/subtest_diag_job.pl'],
     );
 
-    my @events = read_events($ef);
+    return [read_events($ef)];
+}
 
-    my $info_seen = sub ($re) {
-        return scalar grep {
-            my $info = $_->{facet_data}{info};
-            $info && grep { ($_->{details} // '') =~ $re } @$info;
-        } @events;
-    };
+# A child facet-hash (inside parent.children) whose info matches $re.
+my $child_info_match = sub ($children, $re) {
+    return scalar grep {
+        my $info = $_->{info};
+        $info && grep { ($_->{details} // '') =~ $re } @$info;
+    } @$children;
+};
 
-    ok($info_seen->(qr/NOTE inside the subtest/), "note() inside a subtest survives to the log");
-    ok($info_seen->(qr/DIAG inside the subtest/), "diag() inside a subtest survives to the log");
+# A top-level recorded event whose info matches $re (optionally only stray /
+# only non-stray).
+my $top_info_match = sub ($events, $re, %f) {
+    return grep {
+        my $info  = $_->{facet_data}{info};
+        my $stray = $is_stray->($_) ? 1 : 0;
+        my $ok    = $info && grep { ($_->{details} // '') =~ $re } @$info;
+        $ok &&= $stray         if $f{stray};
+        $ok &&= !$stray        if $f{not_stray};
+        $ok;
+    } @$events;
+};
+
+subtest info_inside_subtest_folded_not_leaked => sub {
+    # note()/diag() inside a subtest ARE folded into Test2's parent.children, so
+    # like structural children they must appear ONLY inside the subtest by
+    # default -- never as standalone non-stray copies in the log.
+    my $events = run_diag_job();
+
+    my ($outer) = grep { ($details->($_) eq 'outer') && !$is_stray->($_) } @$events;
+    ok($outer, "outer subtest recorded as one authoritative event");
+
+    my $children = $outer->{facet_data}{parent}{children};
+    ok($child_info_match->($children, qr/NOTE inside the subtest/), "note() folded into the subtest's children");
+    ok($child_info_match->($children, qr/DIAG inside the subtest/), "diag() folded into the subtest's children");
+
+    # The bug: these used to leak as standalone non-stray events too.
+    my @leaked_note = $top_info_match->($events, qr/NOTE inside the subtest/, not_stray => 1);
+    my @leaked_diag = $top_info_match->($events, qr/DIAG inside the subtest/, not_stray => 1);
+    is(scalar(@leaked_note), 0, "note() does not leak as a standalone non-stray event");
+    is(scalar(@leaked_diag), 0, "diag() does not leak as a standalone non-stray event");
 
     # Structural children are still de-duplicated (no standalone copies).
     my @dupes = grep {
         $_->{facet_data}{assert}
             && ($_->{facet_data}{assert}{details} // '') =~ /^child [ab]$/
-            && !($_->{facet_data}{harness_auditor} && $_->{facet_data}{harness_auditor}{stray})
-    } @events;
+            && !$is_stray->($_)
+    } @$events;
     is(scalar(@dupes), 0, "structural subtest children still de-duplicated");
+};
+
+subtest info_inside_subtest_stray_copies => sub {
+    # With emit_stray, the folded note/diag also appear standalone, marked stray
+    # -- the same realtime duality structural children get.
+    my $events = run_diag_job(stray => 1);
+
+    my ($outer) = grep { ($details->($_) eq 'outer') && !$is_stray->($_) } @$events;
+    ok($outer, "authoritative outer event still present with emit_stray");
+    ok($child_info_match->($outer->{facet_data}{parent}{children}, qr/NOTE inside the subtest/),
+        "note() still folded into the subtest's children");
+
+    for my $tag (qw/NOTE DIAG/) {
+        my @copies = $top_info_match->($events, qr/$tag inside the subtest/);
+        ok(scalar(@copies) >= 1, "$tag appears standalone with emit_stray");
+        ok((!grep { !$is_stray->($_) } @copies), "every standalone $tag copy is marked stray");
+    }
 };
 
 subtest verdict_still_correct => sub {

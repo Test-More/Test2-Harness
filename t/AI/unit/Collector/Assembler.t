@@ -98,6 +98,21 @@ subtest buffered_stream2_passthrough => sub {
     ok($out[0]->facet_data->{parent}{children}, "children preserved");
 };
 
+subtest stream2_nested_info_suppressed => sub {
+    # A nested Stream2 info event (note/diag, or a converted print) is folded
+    # into its subtest's parent.children by Test2, so its realtime copy is
+    # redundant: dropped by default, strayed when emit_stray is on. Event type
+    # does not matter -- nesting alone makes it subtest-belonging.
+    my $info = {info => [{tag => 'STDOUT', details => 'inside'}], trace => {nested => 1}};
+
+    my @off = run(Test2::Harness2::Collector::Assembler->new, $info);
+    is(scalar(@off), 0, "nested info event suppressed by default");
+
+    my @on = run(Test2::Harness2::Collector::Assembler->new(emit_stray => 1), $info);
+    is(scalar(@on), 1, "nested info event emitted with emit_stray");
+    ok($on[0]->facet_data->{harness_auditor}{stray}, "the standalone copy is marked stray");
+};
+
 subtest streamed_tap_subtest_assembled => sub {
     my $as = Test2::Harness2::Collector::Assembler->new;
 

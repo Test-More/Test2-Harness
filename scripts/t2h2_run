@@ -1,0 +1,94 @@
+#!/usr/bin/env perl
+use v5.38;
+
+use File::Basename qw/basename/;
+use File::Temp     qw/tempdir/;
+use Time::HiRes    qw/sleep time/;
+
+use Test2::Harness2;
+use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
+use Test2::Harness2::Util::JSON qw/decode_json/;
+use Test2::Util::Term qw/term_size/;
+
+use App::Yath2::Renderer::Text::EventPainter;
+
+# t2h2_run - run a set of test files through a harness service.
+#
+# Usage: t2h2_run [-v|-vv] TEST_FILE...
+#
+# Starts a harness service, queues one run with all the given test files, and
+# tells the service no further runs are coming so it shuts down when done. State
+# changes for each test job are printed as they happen (like t2h2_collector).
+# With -v, the events of each job are painted once it finishes; -vv also records
+# and shows stray events. The events files are located from the monitor state,
+# not by assuming the service's on-disk layout.
+
+my $verbose = 0;
+while (@ARGV && $ARGV[0] =~ /\A-(v+)\z/) {
+    $verbose += length $1;
+    shift @ARGV;
+}
+
+my @files = @ARGV;
+die "Usage: $0 [-v|-vv] TEST_FILE...\n" unless @files;
+
+my $project = basename(Cwd::getcwd()) if eval { require Cwd; 1 };
+$project //= 'run';
+
+my $h = Test2::Harness2->new(project => $project, workdir => tempdir(CLEANUP => 1));
+$h->start;
+
+my $mon = $h->subscribe;
+
+my $resp = $h->queue_run(files => \@files, stray => $verbose >= 2 ? 1 : 0);
+die "failed to queue run: $resp->{error}\n" unless $resp->{ok};
+$h->no_more_runs;
+
+my %want = map { $_ => 1 } @{$resp->{job_uuids}};
+my $painter = App::Yath2::Renderer::Text::EventPainter->new(color => (-t STDOUT ? 1 : 0));
+my $width   = term_size() || 80;
+
+my $fail = 0;
+my $deadline = time + 3600;
+
+while (keys %want && time < $deadline) {
+    $h->poll_state;
+
+    say name($mon, $_) . ": starting"   for grep { $want{$_} } $mon->new_collectors;
+    say name($mon, $_) . ": diagnosing" for grep { $want{$_} } $mon->new_diagnosing;
+    say name($mon, $_) . ": failing"    for grep { $want{$_} } $mon->new_failing;
+    say name($mon, $_) . ": completed"  for grep { $want{$_} } $mon->new_completed;
+
+    for my $uuid ($mon->new_finalized) {
+        next unless delete $want{$uuid};
+        my $state = $mon->final_state($uuid);
+        my $pass  = $state && $state->{pass};
+        $fail ||= !$pass;
+        say name($mon, $uuid) . ": " . ($pass ? 'PASS' : 'FAIL');
+
+        paint_events($painter, $mon->events_file($uuid), $width) if $verbose;
+    }
+
+    sleep 0.02;
+}
+
+$h->shutdown;
+exit($fail ? 1 : 0);
+
+# A short label for a job (its test file name, falling back to the uuid).
+sub name ($mon, $uuid) {
+    my $c = $mon->collector($uuid) or return $uuid;
+    return $c->{name} // $uuid;
+}
+
+# Paint every event in a finished job's events file.
+sub paint_events ($painter, $path, $width) {
+    return unless $path && -e $path;
+    my $reader = open_zstd_reader($path);
+    while (defined(my $line = $reader->readline)) {
+        chomp $line;
+        next unless length $line;
+        say for $painter->paint(decode_json($line), tags => 1, left_pad => 2, max_width => $width);
+    }
+    return;
+}

@@ -126,15 +126,21 @@ subtest color_wraps_node_and_text => sub {
     is(Term::ANSIColor::colorstrip($line), '*  ok', "stripping color yields the plain line");
 };
 
-subtest stray_event_uses_arrow_node_at_no_indent => sub {
-    my @lines = $p->paint(
+subtest stray_event_uses_arrow_node_at_left_pad => sub {
+    # Strays keep the caller's left_pad but get no subtest indentation, and are
+    # never expanded as a subtest even if they carry a parent facet.
+    my @at_zero = $p->paint({harness_auditor => {stray => 1}, assert => {pass => 1, details => 'rt'}});
+    is(\@at_zero, ['>  rt'], "stray uses '>' at the default left_pad 0");
+
+    my @at_two = $p->paint(
         {
             harness_auditor => {stray => 1},
-            assert          => {pass => 1, details => 'realtime copy'},
+            assert          => {pass => 1, details => 'rt'},
+            parent          => {children => [{assert => {pass => 1, details => 'child'}}]},
         },
-        left_pad => 4,    # ignored for stray: rendered as though top level
+        left_pad => 2,
     );
-    is(\@lines, ['>  realtime copy'], "stray event uses '>' and no indentation");
+    is(\@at_two, ['  >  rt'], "stray honors left_pad and is not expanded");
 };
 
 subtest stray_event_is_dark_grey => sub {

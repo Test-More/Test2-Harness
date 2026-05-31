@@ -119,7 +119,7 @@ if ($verbose && -e $events_file) {
     while (defined(my $line = $reader->readline)) {
         chomp $line;
         next unless length $line;
-        say for $painter->paint(decode_json($line), max_width => $width);
+        say for $painter->paint(decode_json($line), left_pad => 2, max_width => $width);
     }
 }
 

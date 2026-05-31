@@ -141,7 +141,8 @@ children at C<left_pad + 2>, then a C<^> terminator.
 
 A stray event (C<harness_auditor.stray>) is a realtime copy of a
 subtest-belonging event; it is painted flat with the C<:STRAY> node (C<E<gt>>),
-dark grey, at no indentation regardless of C<left_pad>, and is never expanded.
+dark grey, at C<left_pad> but without any subtest indentation, and is never
+expanded.
 
 =item $meta = $painter->parse_facet($facet_name, $facet_item)
 
@@ -168,10 +169,10 @@ sub paint ($self, $in, %opts) {
     my $color     = exists $opts{color} ? $opts{color} : $self->{+COLOR};
 
     # A stray event is a realtime copy of a subtest-belonging event: paint it
-    # with the stray node ('>'), dark grey, and at no indentation regardless of
-    # depth. It is flat -- never expand it as a subtest.
+    # with the stray node ('>'), dark grey, at the caller's left_pad but with no
+    # subtest indentation -- it is flat, so it is never expanded as a subtest
+    # and (being a top-level entry) never gains nesting depth.
     my $stray = $facets->{harness_auditor} && $facets->{harness_auditor}{stray} ? 1 : 0;
-    $pad = 0 if $stray;
 
     my @lines;
     for my $meta ($self->_ordered_metas($facets, $verbosity)) {

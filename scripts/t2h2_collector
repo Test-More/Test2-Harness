@@ -30,8 +30,9 @@ use App::Yath2::Renderer::Text::EventPainter;
 # EVENTS_FILE; the verdict comes over the socket.
 #
 # After the run, -v paints the events log (App::Yath2::Renderer::Text::Event
-# Painter) so the recorded events are shown as a subtest graph. -vv also turns
-# on the assembler's stray-event copies, which paint flat with a '>' node.
+# Painter) so the recorded events are shown as a subtest graph, each line
+# prefixed with a [TAG] column. -vv also turns on the assembler's stray-event
+# copies, which paint flat with a '>' node.
 #
 # Exits 0 (pass) or 1 (fail) from the collector's own verdict-derived exit.
 
@@ -119,7 +120,7 @@ if ($verbose && -e $events_file) {
     while (defined(my $line = $reader->readline)) {
         chomp $line;
         next unless length $line;
-        say for $painter->paint(decode_json($line), left_pad => 2, max_width => $width);
+        say for $painter->paint(decode_json($line), tags => 1, left_pad => 2, max_width => $width);
     }
 }
 

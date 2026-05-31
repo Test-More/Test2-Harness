@@ -8,6 +8,7 @@ use App::Yath2::Renderer::EventDisplay;
 use Object::HashBase qw{
     <theme
     <color
+    <tags
     <facets
 };
 
@@ -59,6 +60,12 @@ Constructor arguments other than C<color> are merged over the built-in default.
 
 Whether to emit ANSI color. Defaults off.
 
+=item tags
+
+Whether to prefix each line with the legacy-style C<[TAG]> column (the tag
+centered in an 8-wide field, white square brackets, the tag text in the node's
+color). Defaults off. The instance default is overridable per C<paint> call.
+
 =back
 
 =cut
@@ -107,14 +114,19 @@ my %DEFAULT_COLOR = (
 # Color for the graph structure itself (branch/terminator/overflow markers).
 use constant GRAPH_COLOR => 'bold bright_white';
 
+# Tag prefix: legacy-style centered tag in square brackets.
+use constant TAG_WIDTH        => 8;
+use constant TAG_BORDER_COLOR => 'bold bright_white';
+
 sub init ($self) {
     my %overrides;
     for my $key (keys %$self) {
-        next if $key eq +THEME || $key eq +COLOR || $key eq +FACETS;
+        next if $key eq +THEME || $key eq +COLOR || $key eq +FACETS || $key eq +TAGS;
         $overrides{$key} = delete $self->{$key};
     }
 
     $self->{+COLOR}  //= 0;
+    $self->{+TAGS}   //= 0;
     $self->{+FACETS} //= App::Yath2::Renderer::EventDisplay->new;
     $self->{+THEME} = $self->_build_theme(\%overrides);
 
@@ -135,9 +147,16 @@ L<Test2::Harness2::Event> or a raw facet_data hashref. Options: C<left_pad>
 C<''>), C<verbosity> (the highest facet level to show -- C<1> (default) shows
 normal facets, C<2> also shows verbose-only facets such as plans; see
 L<App::Yath2::Renderer::EventDisplay/facet_metas>), C<max_width> (wrap threshold,
-default none), and C<color> (override the instance default). A subtest event (one with
-C<parent.children>) renders its own facets, then a C<\> branch marker, its
-children at C<left_pad + 2>, then a C<^> terminator.
+default none), C<color> (override the instance default), and C<tags> (override
+the instance C<tags> default). A subtest event (one with C<parent.children>)
+renders its own facets, then a C<\> branch marker, its children at
+C<left_pad + 2>, then a C<^> terminator.
+
+When C<tags> is on, each line is prefixed with a C<[TAG]> column (centered,
+white brackets, tag text in the node color; graph markers get a spaces-only
+column, no brackets), and
+C<left_pad> defaults to C<2> instead of C<0> -- the pad sits between the tag
+column and the graph.
 
 A stray event (C<harness_auditor.stray>) is a realtime copy of a
 subtest-belonging event; it is painted flat with the C<:STRAY> node (C<E<gt>>),
@@ -156,7 +175,8 @@ verbose-only) is filtered against the C<verbosity> option there.
 sub paint ($self, $in, %opts) {
     my $facets = $self->{+FACETS};
 
-    my $pad       = $opts{left_pad}  // 0;
+    my $tags      = exists $opts{tags} ? $opts{tags} : $self->{+TAGS};
+    my $pad       = $opts{left_pad}  // ($tags ? 2 : 0);
     my $prefix    = $opts{prefix}    // '';
     my $verbosity = $opts{verbosity} // 1;
     my $max_width = $opts{max_width};
@@ -170,15 +190,15 @@ sub paint ($self, $in, %opts) {
 
     my @lines;
     for my $meta ($facets->facet_metas($in, verbosity => $verbosity)) {
-        push @lines => $self->_render_meta($meta, $pad, $prefix, $max_width, $color, $stray);
+        push @lines => $self->_render_meta($meta, $pad, $prefix, $max_width, $color, $stray, $tags);
     }
 
     if (!$stray && $facets->is_subtest($in)) {
-        push @lines => $self->_graph_marker('\\', $pad + 1, $prefix, $color);
+        push @lines => $self->_graph_marker('\\', $pad + 1, $prefix, $color, $tags);
         for my $child ($facets->subtest_children($in)) {
-            push @lines => $self->paint($child, %opts, left_pad => $pad + 2);
+            push @lines => $self->paint($child, %opts, tags => $tags, left_pad => $pad + 2);
         }
-        push @lines => $self->_graph_marker('^', $pad + 2, $prefix, $color);
+        push @lines => $self->_graph_marker('^', $pad + 2, $prefix, $color, $tags);
     }
 
     return @lines;
@@ -195,10 +215,17 @@ sub paint ($self, $in, %opts) {
 Render one meta to one or more lines: a node-prefixed line per text line when
 it fits, or a C<+>-delimited block of flush-left text when a line is too wide.
 
-=item $line = $self->_graph_marker($char, $pad, $prefix, $color)
+=item $line = $self->_graph_marker($char, $pad, $prefix, $color, $tags)
 
 A structure-only line (branch C<\>, terminator C<^>, overflow C<+>) at the
-given pad, colored with the graph color.
+given pad, colored with the graph color. With C<$tags> it is prefixed with a
+spaces-only tag column (no brackets) so it lines up under tagged lines.
+
+=item $field = $self->_tag($tag_text, $color_key, $color)
+
+Build the C<[TAG]> column: C<$tag_text> uppercased and centered (or truncated)
+to C<TAG_WIDTH>, in white square brackets, the tag text colored with
+C<$color_key>'s node color.
 
 =item $node = $self->_theme_node($key) / $val = $self->_theme_attr($key, $attr)
 
@@ -212,37 +239,67 @@ Merge user overrides over the built-in node/color defaults into a per-key theme.
 
 =cut
 
-sub _render_meta ($self, $meta, $pad, $prefix, $max_width, $color, $stray = 0) {
+sub _render_meta ($self, $meta, $pad, $prefix, $max_width, $color, $stray = 0, $tags = 0) {
     my $key    = $stray ? ':STRAY' : $meta->{key};
     my $node   = $self->_theme_node($key);
     my $indent = ' ' x $pad;
 
+    # Tag text is the semantic key; its color matches the node ($key).
+    my $tag = $tags ? $self->_tag($meta->{key}, $key, $color) : '';
+
     my @text_lines = split /\n/, ($meta->{text} // ''), -1;
     @text_lines = ('') unless @text_lines;
 
-    my $base_width = length($prefix) + $pad + length($node) + 2;
+    my $base_width = ($tags ? TAG_WIDTH + 2 : 0) + length($prefix) + $pad + length($node) + 2;
 
     if (defined $max_width) {
         for my $line (@text_lines) {
             next unless $base_width + length($line) > $max_width;
 
-            # Too wide: dump the text flush-left between '+' markers.
+            # Too wide: dump the text flush-left between '+' markers (no tag).
             return (
-                $self->_graph_marker('+', $pad, $prefix, $color),
+                $self->_graph_marker('+', $pad, $prefix, $color, $tags),
                 (map { $self->_paint_text($_, $key, $color) } @text_lines),
-                $self->_graph_marker('+', $pad, $prefix, $color),
+                $self->_graph_marker('+', $pad, $prefix, $color, $tags),
             );
         }
     }
 
-    my $start = $prefix . $indent . $self->_paint_node($node, $key, $color) . '  ';
+    my $start = $tag . $prefix . $indent . $self->_paint_node($node, $key, $color) . '  ';
     return map { $start . $self->_paint_text($_, $key, $color) } @text_lines;
 }
 
-sub _graph_marker ($self, $char, $pad, $prefix, $color) {
+sub _graph_marker ($self, $char, $pad, $prefix, $color, $tags = 0) {
+    # Blank the tag column with spaces (no empty brackets) so markers still line
+    # up under the tagged lines.
+    my $tag    = $tags ? (' ' x (TAG_WIDTH + 2)) : '';
     my $indent = ' ' x $pad;
     my $mark   = $color ? $self->_ansi($char, GRAPH_COLOR) : $char;
-    return $prefix . $indent . $mark;
+    return $tag . $prefix . $indent . $mark;
+}
+
+sub _tag ($self, $tag_text, $color_key, $color) {
+    my $tag = uc($tag_text // '');
+    my $len = length $tag;
+
+    if ($len > TAG_WIDTH) {
+        $tag = substr($tag, 0, TAG_WIDTH);
+    }
+    elsif ($len < TAG_WIDTH) {
+        my $pad  = int((TAG_WIDTH - $len) / 2);
+        my $padl = $pad + ((TAG_WIDTH - $len) % 2);
+        $tag = (' ' x $padl) . $tag . (' ' x $pad);
+    }
+
+    return "[$tag]" unless $color;
+
+    require Term::ANSIColor;
+    my $reset      = Term::ANSIColor::color('reset');
+    my $border     = Term::ANSIColor::color(TAG_BORDER_COLOR);
+    my $name       = $color_key ? $self->_theme_attr($color_key, 'node_color') : undef;
+    my $text_color = $name ? Term::ANSIColor::color($name) : '';
+
+    return "${border}[${reset}${text_color}${tag}${reset}${border}]${reset}";
 }
 
 sub _theme_node ($self, $key) {

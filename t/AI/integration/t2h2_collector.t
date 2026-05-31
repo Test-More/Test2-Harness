@@ -54,10 +54,10 @@ subtest verbose_paints_the_log => sub {
 
     is($? >> 8, 0, "-v run still exits 0");
 
-    like($out, qr/^transition: starting$/m,            "transition lines still printed under -v");
-    like($out, qr/^  \*  a passing assertion$/m,       "the events log is painted as a graph (2-space pad)");
-    like($out, qr/^  \*  another passing assertion$/m, "every recorded assertion is painted");
-    unlike($out, qr/"facet_data"/,                     "no raw JSON dump under -v");
+    like($out, qr/^transition: starting$/m,                       "transition lines still printed under -v");
+    like($out, qr/^\[  PASS  \]  \*  a passing assertion$/m,       "the events log is painted as a graph with a [TAG] column");
+    like($out, qr/^\[  PASS  \]  \*  another passing assertion$/m, "every recorded assertion is painted");
+    unlike($out, qr/"facet_data"/,                                "no raw JSON dump under -v");
 };
 
 subtest double_verbose_adds_stray_nodes => sub {
@@ -68,8 +68,8 @@ subtest double_verbose_adds_stray_nodes => sub {
     my $v  = qx{$^X -Ilib \Q$script\E -v  t/AI/scripts/paint_job.pl \Q$ef_v\E};
     my $vv = qx{$^X -Ilib \Q$script\E -vv t/AI/scripts/paint_job.pl \Q$ef_vv\E};
 
-    unlike($v, qr/^\s*>  /m,         "-v paints no stray '>' nodes");
-    like($vv,  qr/^  >  child ok$/m, "-vv paints stray copies flat with a '>' node at the 2-space pad");
+    unlike($v, qr/\]  >  /m,                       "-v paints no stray '>' nodes");
+    like($vv,  qr/^\[  PASS  \]  >  child ok$/m,   "-vv paints stray copies flat with a '>' node and its tag");
 };
 
 subtest usage_error => sub {

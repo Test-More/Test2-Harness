@@ -7,6 +7,7 @@ use Time::HiRes    qw/sleep time/;
 
 use Test2::Harness2;
 use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
+use Test2::Harness2::Util::Zstd::FrameBuffer;
 use Test2::Harness2::Util::JSON qw/decode_json/;
 use Test2::Util::Term qw/term_size/;
 
@@ -51,8 +52,12 @@ my $width   = term_size() || 80;
 my $fail = 0;
 my $deadline = time + 3600;
 
+# Tail state for the service's own events file (located from the harness).
+my ($svc_fh, $svc_fb);
+
 while (keys %want && time < $deadline) {
     $h->poll_state;
+    tail_service_events($h);
 
     say name($mon, $_) . ": starting"   for grep { $want{$_} } $mon->new_collectors;
     say name($mon, $_) . ": diagnosing" for grep { $want{$_} } $mon->new_diagnosing;
@@ -73,7 +78,39 @@ while (keys %want && time < $deadline) {
 }
 
 $h->shutdown;
+tail_service_events($h);    # flush any remaining captured service output
 exit($fail ? 1 : 0);
+
+# Print newly-captured lines from the service's own events file as they appear.
+# The path comes from the harness, not an assumed layout.
+sub tail_service_events ($h) {
+    my $path = $h->service_events_file;
+    return unless defined $path;
+
+    unless ($svc_fh) {
+        return unless -e $path;
+        open($svc_fh, '<:raw', $path) or return;
+        $svc_fb = Test2::Harness2::Util::Zstd::FrameBuffer->new;
+    }
+
+    while (1) {
+        my $buf = '';
+        my $n = sysread($svc_fh, $buf, 65536);
+        last unless $n;
+        $svc_fb->push_bytes($buf);
+    }
+
+    for my $rec ($svc_fb->drain) {
+        my $f = decode_json($rec->{payload})->{facet_data};
+        for my $info (@{$f->{info} // []}) {
+            my $text = $info->{details} // '';
+            $text =~ s/\s+\z//;
+            say "service: $text" if length $text;
+        }
+    }
+
+    return;
+}
 
 # A short label for a job (its test file name, falling back to the uuid).
 sub name ($mon, $uuid) {

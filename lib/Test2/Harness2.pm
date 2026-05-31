@@ -23,6 +23,7 @@ use Object::HashBase qw{
     <service_class
     <service_name
     <service_pid
+    <service_events_file
     <sub_sock
     <sub_buffer
     <monitor
@@ -163,15 +164,27 @@ Ask the service to stop and reap its process.
 =cut
 
 sub start ($self) {
-    my $pid = fork // croak "fork: $!";
-    unless ($pid) {
-        require Test2::Harness2::Service::Harness;
-        my $class = $self->{+SERVICE_CLASS};
-        eval "require $class; 1" or die $@;
-        my $svc = $class->new(workdir => $self->{+WORKDIR}, name => $self->{+SERVICE_NAME});
-        $svc->run;
-        POSIX::_exit(0);
-    }
+    require Test2::Harness2::Collector;
+    require Test2::Harness2::Collector::Recorder;
+
+    my $class = $self->{+SERVICE_CLASS};
+    eval "require $class; 1" or croak $@;
+
+    my $wd     = $self->{+WORKDIR};
+    my $name   = $self->{+SERVICE_NAME};
+    my $events = File::Spec->catfile($wd, "$name.jsonl.zst");
+    $self->{+SERVICE_EVENTS_FILE} = $events;
+
+    # Every service runs under a collector so its output is captured to the
+    # service events file. The collector forks the service, which binds the
+    # request socket and runs its loop.
+    my $pid = Test2::Harness2::Collector::spawn_collector(
+        is_test  => 0,
+        name     => $name,
+        uuid     => gen_uuid(),
+        run      => sub { $class->new(workdir => $wd, name => $name)->run },
+        recorder => Test2::Harness2::Collector::Recorder->new(events_file => $events),
+    );
 
     $self->{+SERVICE_PID} = $pid;
 

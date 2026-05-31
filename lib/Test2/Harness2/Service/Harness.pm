@@ -94,6 +94,12 @@ pending jobs, and stop the service once the scheduler reports everything done.
 
 =cut
 
+sub service_on_start ($self) {
+    # Captured by the service's collector into the service events file.
+    say "harness service '" . $self->{+NAME} . "' started (pid $$)";
+    return;
+}
+
 sub service_tick ($self) {
     my $mon = $self->{+MONITOR};
     $mon->poll;

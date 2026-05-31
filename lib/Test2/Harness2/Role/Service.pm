@@ -47,7 +47,8 @@ back as the response. The built-in C<request_handler_stop> ends the loop.
 =head2 Required / optional consumer methods
 
 C<workdir> and C<name> are required. Optional: C<run_ord> (a per-run numeric
-subdir), C<service_tick> (called each loop iteration), and
+subdir), C<service_on_start> (called once after the socket binds),
+C<service_tick> (called each loop iteration), and
 C<service_on_reap($pid, $status)>.
 
 =head1 PUBLIC METHODS
@@ -106,6 +107,7 @@ sub start_service ($self) {
 
 sub run ($self) {
     $self->start_service unless $self->{service_listen};
+    $self->service_on_start if $self->can('service_on_start');
 
     until ($self->{service_stopped}) {
         $self->reap_children;

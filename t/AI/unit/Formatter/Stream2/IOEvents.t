@@ -1,5 +1,22 @@
-use Test2::V0;
 use v5.38;
+
+# This test introspects io_events' process-global state (the enable flag, the
+# pre_subtest callback, and whether STDOUT/STDERR are tied), so it needs a
+# pristine interpreter with the feature OFF. Under the harness, the collector
+# runs us with T2_FORMATTER=Stream2 and io_events on by default, which ties the
+# handles and registers the callback before our assertions run. Re-exec
+# ourselves once with the feature disabled; this stays under our collector
+# (exec replaces the process in place), so output is still captured.
+BEGIN {
+    my $disabled = defined($ENV{T2_HARNESS2_IO_EVENTS}) && !$ENV{T2_HARNESS2_IO_EVENTS};
+    if (($ENV{T2_FORMATTER} // '') =~ /Stream2/ && !$disabled) {
+        $ENV{T2_HARNESS2_IO_EVENTS} = 0;
+        exec($^X, (map { "-I$_" } grep { !ref } @INC), $0)
+            or die "re-exec to disable io_events failed: $!";
+    }
+}
+
+use Test2::V0;
 
 use Test2::API qw/test2_list_pre_subtest_callbacks/;
 use Test2::Formatter::Stream2::IOEvents;

@@ -10,30 +10,40 @@ use Test2::Harness2::Collector qw/spawn_collector/;
 use Test2::Harness2::Collector::Auditor;
 use Test2::Harness2::Collector::Recorder::Test;
 use Test2::Harness2::Collector::Monitor;
-use Test2::Harness2::Util::JSON qw/encode_pretty_json/;
+use Test2::Harness2::Util::Zstd qw/open_zstd_reader/;
+use Test2::Harness2::Util::JSON qw/decode_json/;
+use Test2::Util::Term qw/term_size/;
 use Test2::Util::UUID qw/gen_uuid/;
+
+use App::Yath2::Renderer::Text::EventPainter;
 
 # t2h2_collector - run one test file under the collector and report progress.
 #
-# Usage: t2h2_collector [-v] TEST_FILE EVENTS_FILE
+# Usage: t2h2_collector [-v|-vv] TEST_FILE EVENTS_FILE
 #
 # Three processes: this script, the collector it spawns (the middle process,
 # which owns the recorder), and the test child the collector forks/execs. This
 # script creates a managed Monitor that listens on a unix socket and hands the
 # socket path to the recorder; the recorder connects back and sends the start,
 # each state transition, and the final result. The script loops over those
-# messages, printing a basic line for each. With -v it also pretty-prints the
-# full JSON payload of each message just after its line, and turns on the
-# assembler's stray-event copies so nested subtest events show up in the
-# events file too. The full event stream is written to EVENTS_FILE; the
-# verdict comes over the socket. Exits 0 (pass) or 1 (fail) from the
-# collector's own verdict-derived exit.
+# messages, printing a basic line for each. The full event stream is written to
+# EVENTS_FILE; the verdict comes over the socket.
+#
+# After the run, -v paints the events log (App::Yath2::Renderer::Text::Event
+# Painter) so the recorded events are shown as a subtest graph. -vv also turns
+# on the assembler's stray-event copies, which paint flat with a '>' node.
+#
+# Exits 0 (pass) or 1 (fail) from the collector's own verdict-derived exit.
 
-my $verbose = @ARGV && $ARGV[0] eq '-v' ? shift @ARGV : 0;
+my $verbose = 0;
+while (@ARGV && $ARGV[0] =~ /\A-(v+)\z/) {
+    $verbose += length $1;
+    shift @ARGV;
+}
 
 my ($test_file, $events_file) = @ARGV;
 
-die "Usage: $0 [-v] TEST_FILE EVENTS_FILE\n"
+die "Usage: $0 [-v|-vv] TEST_FILE EVENTS_FILE\n"
     unless defined $test_file && defined $events_file;
 
 die "No such test file: $test_file\n" unless -f $test_file;
@@ -64,7 +74,7 @@ my $pid = spawn_collector(
     exec      => [$^X, $test_file],
     env       => {PERL5LIB => $perl5lib},
     processor => [
-        ['Test2::Harness2::Collector::Assembler', emit_stray => $verbose ? 1 : 0],
+        ['Test2::Harness2::Collector::Assembler', emit_stray => $verbose >= 2 ? 1 : 0],
         'Test2::Harness2::Collector::Auditor',
     ],
     recorder  => Test2::Harness2::Collector::Recorder::Test->new(
@@ -93,9 +103,24 @@ until ($done) {
         say "result: " . ($state && $state->{pass} ? 'PASS' : 'FAIL');
         $done = 1;
     }
-
-    print encode_pretty_json($_) for $verbose ? @payloads : ();
 }
 
 waitpid($pid, 0);
-exit($? ? 1 : 0);
+my $exit = $? ? 1 : 0;
+
+# With -v, paint the recorded events as a subtest graph. The recorder routed
+# transitions and the final state to the socket, so the events file holds just
+# the test's own events.
+if ($verbose && -e $events_file) {
+    my $painter = App::Yath2::Renderer::Text::EventPainter->new(color => (-t STDOUT ? 1 : 0));
+    my $width   = term_size() || 80;
+    my $reader  = open_zstd_reader($events_file);
+
+    while (defined(my $line = $reader->readline)) {
+        chomp $line;
+        next unless length $line;
+        say for $painter->paint(decode_json($line), max_width => $width);
+    }
+}
+
+exit $exit;

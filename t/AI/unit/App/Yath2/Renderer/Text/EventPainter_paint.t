@@ -126,6 +126,27 @@ subtest color_wraps_node_and_text => sub {
     is(Term::ANSIColor::colorstrip($line), '*  ok', "stripping color yields the plain line");
 };
 
+subtest stray_event_uses_arrow_node_at_no_indent => sub {
+    my @lines = $p->paint(
+        {
+            harness_auditor => {stray => 1},
+            assert          => {pass => 1, details => 'realtime copy'},
+        },
+        left_pad => 4,    # ignored for stray: rendered as though top level
+    );
+    is(\@lines, ['>  realtime copy'], "stray event uses '>' and no indentation");
+};
+
+subtest stray_event_is_dark_grey => sub {
+    my $cp = App::Yath2::Renderer::Text::EventPainter->new(color => 1);
+    my ($line) = $cp->paint({harness_auditor => {stray => 1}, info => [{tag => 'NOTE', details => 'n'}]});
+
+    require Term::ANSIColor;
+    my $grey = Term::ANSIColor::color('bright_black');
+    like($line, qr/\Q$grey\E/, "stray painted dark grey (bright_black)");
+    is(Term::ANSIColor::colorstrip($line), '>  n', "plain form is '>' node");
+};
+
 subtest theme_overrides => sub {
     my $tp = App::Yath2::Renderer::Text::EventPainter->new(
         color      => 0,

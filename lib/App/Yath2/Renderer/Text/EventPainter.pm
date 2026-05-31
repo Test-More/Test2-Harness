@@ -66,6 +66,7 @@ Whether to emit ANSI color. Defaults off.
 # Graph node characters for each tag/facet. ':DEFAULT' is the fallback.
 my %DEFAULT_NODE = (
     ':DEFAULT'  => '|',
+    ':STRAY'    => '>',
     PASS        => '*',
     FAIL        => 'X',
     '! PASS !'  => 'o',
@@ -86,6 +87,7 @@ my %DEFAULT_NODE = (
 
 # Term::ANSIColor names, echoing the legacy renderer's tag palette.
 my %DEFAULT_COLOR = (
+    ':STRAY'    => 'bright_black',
     PASS        => 'green',
     FAIL        => 'red',
     '! PASS !'  => 'cyan',
@@ -137,6 +139,10 @@ and C<color> (override the instance default). A subtest event (one with
 C<parent.children>) renders its own facets, then a C<\> branch marker, its
 children at C<left_pad + 2>, then a C<^> terminator.
 
+A stray event (C<harness_auditor.stray>) is a realtime copy of a
+subtest-belonging event; it is painted flat with the C<:STRAY> node (C<E<gt>>),
+dark grey, at no indentation regardless of C<left_pad>, and is never expanded.
+
 =item $meta = $painter->parse_facet($facet_name, $facet_item)
 
 Return a render-meta hash for one facet item, or C<undef> when the facet is not
@@ -161,12 +167,18 @@ sub paint ($self, $in, %opts) {
     my $max_width = $opts{max_width};
     my $color     = exists $opts{color} ? $opts{color} : $self->{+COLOR};
 
+    # A stray event is a realtime copy of a subtest-belonging event: paint it
+    # with the stray node ('>'), dark grey, and at no indentation regardless of
+    # depth. It is flat -- never expand it as a subtest.
+    my $stray = $facets->{harness_auditor} && $facets->{harness_auditor}{stray} ? 1 : 0;
+    $pad = 0 if $stray;
+
     my @lines;
     for my $meta ($self->_ordered_metas($facets, $verbosity)) {
-        push @lines => $self->_render_meta($meta, $pad, $prefix, $max_width, $color);
+        push @lines => $self->_render_meta($meta, $pad, $prefix, $max_width, $color, $stray);
     }
 
-    if ($facets->{parent} && $facets->{parent}{children}) {
+    if (!$stray && $facets->{parent} && $facets->{parent}{children}) {
         push @lines => $self->_graph_marker('\\', $pad + 1, $prefix, $color);
         for my $child (@{$facets->{parent}{children}}) {
             push @lines => $self->paint($child, %opts, left_pad => $pad + 2);
@@ -338,8 +350,9 @@ sub _ordered_metas ($self, $facets, $verbosity) {
     return @metas;
 }
 
-sub _render_meta ($self, $meta, $pad, $prefix, $max_width, $color) {
-    my $node   = $self->_theme_node($meta->{key});
+sub _render_meta ($self, $meta, $pad, $prefix, $max_width, $color, $stray = 0) {
+    my $key    = $stray ? ':STRAY' : $meta->{key};
+    my $node   = $self->_theme_node($key);
     my $indent = ' ' x $pad;
 
     my @text_lines = split /\n/, ($meta->{text} // ''), -1;
@@ -354,14 +367,14 @@ sub _render_meta ($self, $meta, $pad, $prefix, $max_width, $color) {
             # Too wide: dump the text flush-left between '+' markers.
             return (
                 $self->_graph_marker('+', $pad, $prefix, $color),
-                (map { $self->_paint_text($_, $meta->{key}, $color) } @text_lines),
+                (map { $self->_paint_text($_, $key, $color) } @text_lines),
                 $self->_graph_marker('+', $pad, $prefix, $color),
             );
         }
     }
 
-    my $start = $prefix . $indent . $self->_paint_node($node, $meta->{key}, $color) . '  ';
-    return map { $start . $self->_paint_text($_, $meta->{key}, $color) } @text_lines;
+    my $start = $prefix . $indent . $self->_paint_node($node, $key, $color) . '  ';
+    return map { $start . $self->_paint_text($_, $key, $color) } @text_lines;
 }
 
 sub _graph_marker ($self, $char, $pad, $prefix, $color) {

@@ -224,6 +224,11 @@ sub _build ($class, $name) {
     my $glob = $name eq 'STDOUT' ? \*STDOUT : \*STDERR;
     open(my $real_fh, '>&', $glob) or croak "dup $name: $!";
 
+    # Unbuffered, like the handle it stands in for (Stream2 autoflushes
+    # STDOUT/STDERR). Otherwise passthrough output buffered here is lost when a
+    # test exits hard (e.g. POSIX::_exit) before Perl flushes.
+    $real_fh->autoflush(1);
+
     # NB: HashBase constants only evaluate inside {} subscripts, not before a
     # fat comma -- build the object with subscript assignments, not a literal.
     my $self = bless {}, $class;

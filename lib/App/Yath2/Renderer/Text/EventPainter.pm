@@ -39,7 +39,7 @@ L<Term::ANSIColor> names.
 
     my @lines = $painter->paint(
         $event,            # a Test2::Harness2::Event or raw facet_data hashref
-        verbosity => 1,    # 0 hides 2-only facets, 2 shows everything
+        verbosity => 1,    # max facet level to show: 1 = normal, 2 = also verbose-only facets (plans, etc.)
         left_pad  => 0,
         prefix    => '',
         max_width => 120,
@@ -134,8 +134,10 @@ sub init ($self) {
 Paint one event into text lines. C<$event> may be a
 L<Test2::Harness2::Event> or a raw facet_data hashref. Options: C<left_pad>
 (indent columns, default 0), C<prefix> (string before every line, default
-C<''>), C<verbosity> (default 1), C<max_width> (wrap threshold, default none),
-and C<color> (override the instance default). A subtest event (one with
+C<''>), C<verbosity> (the highest facet level to show -- C<1> (default) shows
+normal facets, C<2> also shows verbose-only facets such as plans; see
+L</parse_facet>), C<max_width> (wrap threshold, default none), and C<color>
+(override the instance default). A subtest event (one with
 C<parent.children>) renders its own facets, then a C<\> branch marker, its
 children at C<left_pad + 2>, then a C<^> terminator.
 
@@ -143,6 +145,8 @@ A stray event (C<harness_auditor.stray>) is a realtime copy of a
 subtest-belonging event; it is painted flat with the C<:STRAY> node (C<E<gt>>),
 dark grey, at C<left_pad> but without any subtest indentation, and is never
 expanded.
+
+=item parse_facet
 
 =item $meta = $painter->parse_facet($facet_name, $facet_item)
 

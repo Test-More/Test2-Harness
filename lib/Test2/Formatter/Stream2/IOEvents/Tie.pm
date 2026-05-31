@@ -194,7 +194,9 @@ Write C<@args> to the real handle with ordinary C<print> semantics.
 
 Send C<$text> as a Test2 C<info> event (tagged with the handle name, C<debug>
 for STDERR) through a fresh context, latching L</active> so output produced
-during emission cannot recurse. A no-op for empty text.
+during emission cannot recurse. The single trailing newline is chomped (the
+event holds the line, not its terminator); interior newlines are kept. A no-op
+for empty text.
 
 =item _build
 
@@ -259,6 +261,11 @@ sub _passthrough ($self, @args) {
 
 sub _emit ($self, $text) {
     return 1 unless length $text;
+
+    # The event carries the line, not the line terminator: drop the single
+    # trailing newline (the one that made this a whole line). Interior newlines
+    # in a multi-line print are kept.
+    chomp $text;
 
     local $self->{+ACTIVE} = 1;
 

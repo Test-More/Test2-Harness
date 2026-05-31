@@ -63,10 +63,22 @@ subtest print_inside_subtest_emits_info => sub {
         }, {buffered => 1});
     };
 
-    my ($info) = grep { ($_->{details} // '') eq "hello\n" } printed_info($events);
+    my ($info) = grep { ($_->{details} // '') eq "hello" } printed_info($events);
     ok($info, "STDOUT print became an info event");
     is($info->{tag}, 'STDOUT', "tagged STDOUT");
     ok(!$info->{debug}, "STDOUT info is not debug");
+};
+
+subtest only_the_final_newline_is_chomped => sub {
+    my $events = intercept {
+        run_subtest('p', sub {
+            TIE->_build('STDOUT')->PRINT("line one\nline two\n");
+            ok(1, "ran");
+        }, {buffered => 1});
+    };
+
+    my ($info) = grep { ($_->{details} // '') =~ /line one/ } printed_info($events);
+    is($info->{details}, "line one\nline two", "interior newline kept, only the trailing one chomped");
 };
 
 subtest stderr_print_is_debug => sub {
@@ -77,7 +89,7 @@ subtest stderr_print_is_debug => sub {
         }, {buffered => 1});
     };
 
-    my ($info) = grep { ($_->{details} // '') eq "oops\n" } printed_info($events);
+    my ($info) = grep { ($_->{details} // '') eq "oops" } printed_info($events);
     ok($info, "STDERR print became an info event");
     is($info->{tag}, 'STDERR', "tagged STDERR");
     ok($info->{debug}, "STDERR info is marked debug");
@@ -129,7 +141,7 @@ subtest unterminated_run_then_resume => sub {
     is($buf, "ABC\n", "A, B, and the terminating C\\n all passed through");
     my @abc = grep { ($_->{details} // '') =~ /^[ABC]/ } printed_info($events);
     is(scalar(@abc), 0, "no event for the partial run or its terminator");
-    my @d = grep { ($_->{details} // '') eq "D\n" } printed_info($events);
+    my @d = grep { ($_->{details} // '') eq "D" } printed_info($events);
     is(scalar(@d), 1, "the next terminated print after completion converts");
 };
 
@@ -149,7 +161,7 @@ subtest pending_is_tracked_per_handle => sub {
 
     is($ebuf, "partial-err", "stderr partial passed through");
     is($obuf // '', '', "stdout converted (nothing passed through)");
-    my @o = grep { ($_->{details} // '') eq "full-out\n" } printed_info($events);
+    my @o = grep { ($_->{details} // '') eq "full-out" } printed_info($events);
     is(scalar(@o), 1, "a stderr partial does not block a stdout conversion");
 };
 
@@ -160,7 +172,7 @@ subtest printf_formats => sub {
             ok(1, "ran");
         }, {buffered => 1});
     };
-    my ($info) = grep { ($_->{details} // '') eq "x=7\n" } printed_info($events);
+    my ($info) = grep { ($_->{details} // '') eq "x=7" } printed_info($events);
     ok($info, "PRINTF formatted then emitted as info");
 };
 

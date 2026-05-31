@@ -63,9 +63,9 @@ subtest on_by_default_folds_prints_into_subtest => sub {
     my $events = run_job();    # no io_events attr: on by default
 
     my @inside = subtest_info($events, 'outer');
-    ok((grep { $_ eq "inside-stdout\n" } @inside), "STDOUT print folded into the subtest");
-    ok((grep { $_ eq "inside-stderr\n" } @inside), "STDERR print folded into the subtest");
-    ok((grep { $_ eq "inside-warn\n" }   @inside), "warning folded into the subtest");
+    ok((grep { $_ eq "inside-stdout" } @inside), "STDOUT print folded into the subtest");
+    ok((grep { $_ eq "inside-stderr" } @inside), "STDERR print folded into the subtest");
+    ok((grep { $_ eq "inside-warn" }   @inside), "warning folded into the subtest");
 
     # The top-level print still arrives as a raw stream line, not converted.
     # (Raw stream lines are chomped by the collector.)
@@ -76,7 +76,7 @@ subtest disabled_via_attr_leaves_prints_loose => sub {
     my $events = run_job(io_events => 0);    # explicit off
 
     my @inside = subtest_info($events, 'outer');
-    ok((!grep { $_ eq "inside-stdout\n" } @inside), "STDOUT print NOT folded when disabled");
+    ok((!grep { $_ eq "inside-stdout" } @inside), "STDOUT print NOT folded when disabled");
 
     my @lines = top_stream_lines($events);
     ok((grep { $_ eq "inside-stdout" } @lines), "the inside print is a loose top-level stream line when disabled");

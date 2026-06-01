@@ -10,16 +10,19 @@ subtest queue_assigns_ords => sub {
     my $s = Test2::Harness2::Scheduler->new;
     my $run = $s->queue_run(files => ['a.t', 'b.t']);
 
-    is($run->{run_ord}, 1, "first run gets run_ord 1");
-    ok($run->{run_uuid}, "a run_uuid was assigned");
-    is(scalar(@{$run->{jobs}}), 2, "one job per file");
-    is($run->{jobs}[0]{job_ord}, 1, "job ords start at 1");
-    is($run->{jobs}[1]{job_ord}, 2, "and increment");
-    is($run->{jobs}[0]{file}, 'a.t', "carries the file");
-    is($run->{jobs}[0]{try}, 1, "first try is 1");
+    is($run->run_ord, 1, "first run gets run_ord 1");
+    ok($run->run_uuid, "a run_uuid was assigned");
+    is(scalar(@{$run->jobs}), 2, "one job per file");
+    is($run->jobs->[0]->job_ord, 1, "job ords start at 1");
+    is($run->jobs->[1]->job_ord, 2, "and increment");
+    is($run->jobs->[0]->relative, 'a.t', "carries the file");
+    is($run->jobs->[0]->run_uuid, $run->run_uuid, "job carries its run_uuid");
+    is($run->jobs->[0]->run_ord, $run->run_ord, "job carries its run_ord");
+    is($run->jobs->[0]->try, 1, "first try is 1");
+    is($run->jobs->[0]->state, 'pending', "first state is pending");
 
     my $run2 = $s->queue_run(files => ['c.t']);
-    is($run2->{run_ord}, 2, "second run gets run_ord 2");
+    is($run2->run_ord, 2, "second run gets run_ord 2");
 };
 
 subtest one_job_at_a_time => sub {
@@ -28,14 +31,16 @@ subtest one_job_at_a_time => sub {
 
     my $j1 = $s->next_job;
     ok($j1, "a job is ready to launch");
-    is($j1->{file}, 'a.t', "the first pending job");
+    is($j1->relative, 'a.t', "the first pending job");
 
     $s->mark_running($j1);
+    is($j1->state, 'running', "mark_running set the state");
     is($s->next_job, undef, "no second job while one is running (max 1)");
 
     $s->mark_done($j1);
+    is($j1->state, 'done', "mark_done set the state");
     my $j2 = $s->next_job;
-    is($j2->{file}, 'b.t', "next job available after the first finishes");
+    is($j2->relative, 'b.t', "next job available after the first finishes");
     $s->mark_running($j2);
     $s->mark_done($j2);
 
@@ -64,8 +69,8 @@ subtest done_detection => sub {
 subtest preassigned_uuids => sub {
     my $s = Test2::Harness2::Scheduler->new;
     my $run = $s->queue_run(run_uuid => 'RUN-X', files => ['a.t'], job_uuids => ['JOB-A']);
-    is($run->{run_uuid}, 'RUN-X', "honors a passed run_uuid");
-    is($run->{jobs}[0]{job_uuid}, 'JOB-A', "honors a passed job_uuid");
+    is($run->run_uuid, 'RUN-X', "honors a passed run_uuid");
+    is($run->jobs->[0]->job_uuid, 'JOB-A', "honors a passed job_uuid");
 };
 
 done_testing;

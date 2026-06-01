@@ -5,6 +5,9 @@ our $VERSION = '2.000000';
 
 use Test2::Util::UUID qw/gen_uuid/;
 
+use Test2::Harness2::Run;
+use Test2::Harness2::Run::Job;
+
 use Object::HashBase qw{
     <runs
     <run_ord_counter
@@ -26,17 +29,8 @@ Tracks queued runs and their jobs and decides what to launch next. The initial
 version runs a single run and a single job at a time; resources, custom
 launchers, and retries come later.
 
-Each queued run is a hashref:
-
-    {
-        run_uuid => $uuid,
-        run_ord  => $n,            # numeric, order queued, starting at 1
-        jobs     => [
-            { job_uuid => $uuid, job_ord => $n, file => $path, try => 1,
-              state => 'pending'|'running'|'done' },
-            ...
-        ],
-    }
+Each queued run is a L<Test2::Harness2::Run> owning one
+L<Test2::Harness2::Run::Job> per test file.
 
 =head1 ATTRIBUTES
 
@@ -44,7 +38,7 @@ Each queued run is a hashref:
 
 =item runs
 
-Arrayref of queued run hashrefs, in queue order.
+Arrayref of queued L<Test2::Harness2::Run> objects, in queue order.
 
 =item max_concurrent
 
@@ -63,7 +57,7 @@ sub init ($self) {
     $self->{+RUNS}            //= [];
     $self->{+RUN_ORD_COUNTER} //= 1;
     $self->{+MAX_CONCURRENT}  //= 1;
-    $self->{+NO_MORE}    //= 0;
+    $self->{+NO_MORE}         //= 0;
     return;
 }
 
@@ -76,14 +70,14 @@ sub init ($self) {
 =item $run = $self->queue_run(files => \@files, run_uuid => ..., job_uuids => [...])
 
 Queue a run. Assigns the next C<run_ord>, one job per file (numbered from 1),
-and vivifies a C<run_uuid> / C<job_uuid> when not supplied. Returns the run
-hashref.
+and vivifies a C<run_uuid> / C<job_uuid> when not supplied. Returns the
+L<Test2::Harness2::Run> object.
 
 =item $job = $self->next_job
 
-The next pending job to launch (a job hashref with its C<run> embedded under the
-C<run> key), or C<undef> when nothing should launch right now -- either the
-concurrency cap is reached or no job is pending.
+The next pending L<Test2::Harness2::Run::Job> to launch, or C<undef> when nothing
+should launch right now -- either the concurrency cap is reached or no job is
+pending.
 
 =item $self->mark_running($job) / $self->mark_done($job)
 
@@ -107,21 +101,20 @@ sub queue_run ($self, %args) {
     my $files     = $args{files}     || [];
     my $job_uuids = $args{job_uuids} || [];
 
-    my $run = {
+    my $run = Test2::Harness2::Run->new(
         run_uuid => $args{run_uuid} // gen_uuid(),
         run_ord  => $self->{+RUN_ORD_COUNTER}++,
-        jobs     => [],
-    };
+    );
 
     my $ord = 1;
     for my $file (@$files) {
-        push @{$run->{jobs}} => {
+        $run->add_job(Test2::Harness2::Run::Job->new(
+            run_uuid => $run->run_uuid,
+            run_ord  => $run->run_ord,
             job_uuid => $job_uuids->[$ord - 1] // gen_uuid(),
             job_ord  => $ord,
             file     => $file,
-            try      => 1,
-            state    => 'pending',
-        };
+        ));
         $ord++;
     }
 
@@ -138,9 +131,8 @@ sub next_job ($self) {
     return undef if $self->_running_count >= $self->{+MAX_CONCURRENT};
 
     for my $run (@{$self->{+RUNS}}) {
-        for my $job (@{$run->{jobs}}) {
-            next unless $job->{state} eq 'pending';
-            $job->{run} = $run;
+        for my $job (@{$run->jobs}) {
+            next unless $job->state eq 'pending';
             return $job;
         }
     }
@@ -155,8 +147,8 @@ sub all_done ($self) {
     return 0 unless $self->{+NO_MORE};
 
     for my $run (@{$self->{+RUNS}}) {
-        for my $job (@{$run->{jobs}}) {
-            return 0 unless $job->{state} eq 'done';
+        for my $job (@{$run->jobs}) {
+            return 0 unless $job->state eq 'done';
         }
     }
 
@@ -182,14 +174,14 @@ Set a job's C<state>.
 =cut
 
 sub _set_state ($self, $job, $state) {
-    $job->{state} = $state;
+    $job->set_state($state);
     return;
 }
 
 sub _running_count ($self) {
     my $n = 0;
     for my $run (@{$self->{+RUNS}}) {
-        $n++ for grep { $_->{state} eq 'running' } @{$run->{jobs}};
+        $n++ for grep { $_->state eq 'running' } @{$run->jobs};
     }
     return $n;
 }

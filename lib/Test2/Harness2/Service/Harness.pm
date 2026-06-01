@@ -147,13 +147,13 @@ sub request_handler_queue_run ($self, $payload, $conn = undef) {
         (defined $payload->{job_uuids} ? (job_uuids => $payload->{job_uuids}) : ()),
     );
 
-    $self->{+RUN_STRAY}{$run->{run_uuid}} = $payload->{stray} ? 1 : 0;
+    $self->{+RUN_STRAY}{$run->run_uuid} = $payload->{stray} ? 1 : 0;
 
     return {
-        ok       => 1,
-        run_uuid => $run->{run_uuid},
-        run_ord  => $run->{run_ord},
-        job_uuids => [map { $_->{job_uuid} } @{$run->{jobs}}],
+        ok        => 1,
+        run_uuid  => $run->run_uuid,
+        run_ord   => $run->run_ord,
+        job_uuids => $run->job_uuids,
     };
 }
 
@@ -189,17 +189,16 @@ created).
 =cut
 
 sub _launch_job ($self, $job) {
-    my $run      = $job->{run};
     my $events   = $self->_job_events_file($job);
-    my $stray    = $self->{+RUN_STRAY}{$run->{run_uuid}} ? 1 : 0;
+    my $stray    = $self->{+RUN_STRAY}{$job->run_uuid} ? 1 : 0;
     my $perl5lib = join($Config{path_sep} || ':', grep { defined && length } @INC, $ENV{PERL5LIB});
 
     my $pid = spawn_collector(
         is_test   => 1,
-        name      => $job->{file},
-        uuid      => $job->{job_uuid},
-        run_uuid  => $run->{run_uuid},
-        exec      => [$^X, $job->{file}],
+        name      => $job->relative,
+        uuid      => $job->job_uuid,
+        run_uuid  => $job->run_uuid,
+        exec      => [$^X, $job->absolute],
         env       => {PERL5LIB => $perl5lib},
         processor => [
             ['Test2::Harness2::Collector::Assembler', emit_stray => $stray],
@@ -212,16 +211,15 @@ sub _launch_job ($self, $job) {
     );
 
     $self->{+SCHEDULER}->mark_running($job);
-    $self->{+RUNNING}{$job->{job_uuid}} = {pid => $pid, job => $job, events_file => $events};
+    $self->{+RUNNING}{$job->job_uuid} = {pid => $pid, job => $job, events_file => $events};
 
     return;
 }
 
 sub _job_events_file ($self, $job) {
-    my $run = $job->{run};
-    my $dir = File::Spec->catdir($self->{+WORKDIR}, $run->{run_ord}, $job->{job_ord});
+    my $dir = File::Spec->catdir($self->{+WORKDIR}, $job->run_ord, $job->job_ord);
     make_path($dir) unless -d $dir;
-    return File::Spec->catfile($dir, "$job->{try}.jsonl.zst");
+    return File::Spec->catfile($dir, $job->try . ".jsonl.zst");
 }
 
 1;

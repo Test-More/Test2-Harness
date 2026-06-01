@@ -3,9 +3,9 @@ use v5.38;
 
 our $VERSION = '2.000000';
 
-use Config       qw/%Config/;
-use File::Spec   ();
-use File::Path   qw/make_path/;
+use Config qw/%Config/;
+use File::Spec ();
+use File::Path qw/make_path/;
 
 use Test2::Harness2::Collector qw/spawn_collector/;
 use Test2::Harness2::Collector::Recorder::Test;
@@ -48,9 +48,12 @@ or retries.
 
 =over 4
 
-=item queue_run => { files => [...], run_uuid?, stray? }
+=item queue_run => { files => [...] | jobs => [...], run_uuid?, stray? }
 
-Queue a run; returns C<< {ok, run_uuid, run_ord, job_uuids} >>.
+Queue a run; returns C<< {ok, run_uuid, run_ord, job_uuids} >>. C<files> is a
+list of paths (bare jobs); C<jobs> is a list of producer job specs (scanned and
+serialized via L<Test2::Harness2::Run::Job/TO_JSON>). When both are present
+C<jobs> wins.
 
 =item no_more_runs
 
@@ -74,7 +77,7 @@ sub init ($self) {
     $self->{+CLIENT_SEQ} //= 0;
 
     die "'workdir' is required\n" unless defined $self->{+WORKDIR} && length $self->{+WORKDIR};
-    make_path($self->{+WORKDIR}) unless -d $self->{+WORKDIR};
+    make_path($self->{+WORKDIR})  unless -d $self->{+WORKDIR};
 
     return;
 }
@@ -137,12 +140,18 @@ Request handlers; see L</REQUESTS>.
 =cut
 
 sub request_handler_queue_run ($self, $payload, $conn = undef) {
+    my $jobs  = $payload->{jobs};
     my $files = $payload->{files};
-    return {ok => 0, error => "'files' must be a non-empty arrayref"}
-        unless ref($files) eq 'ARRAY' && @$files;
+
+    my $have_jobs  = ref($jobs) eq 'ARRAY'  && @$jobs;
+    my $have_files = ref($files) eq 'ARRAY' && @$files;
+
+    return {ok => 0, error => "queue_run requires a non-empty 'jobs' or 'files' arrayref"}
+        unless $have_jobs || $have_files;
 
     my $run = $self->{+SCHEDULER}->queue_run(
-        files => $files,
+        ($have_jobs                    ? (jobs      => $jobs)                 : ()),
+        ($have_files                   ? (files     => $files)                : ()),
         (defined $payload->{run_uuid}  ? (run_uuid  => $payload->{run_uuid})  : ()),
         (defined $payload->{job_uuids} ? (job_uuids => $payload->{job_uuids}) : ()),
     );

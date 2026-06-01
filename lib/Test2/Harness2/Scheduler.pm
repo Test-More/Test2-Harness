@@ -69,9 +69,18 @@ sub init ($self) {
 
 =item $run = $self->queue_run(files => \@files, run_uuid => ..., job_uuids => [...])
 
-Queue a run. Assigns the next C<run_ord>, one job per file (numbered from 1),
-and vivifies a C<run_uuid> / C<job_uuid> when not supplied. Returns the
-L<Test2::Harness2::Run> object.
+=item $run = $self->queue_run(jobs => \@specs, run_uuid => ...)
+
+Queue a run. Assigns the next C<run_ord> and vivifies a C<run_uuid> when not
+supplied. Returns the L<Test2::Harness2::Run> object.
+
+Two job sources are accepted. The simple C<files> form builds one bare
+L<Test2::Harness2::Run::Job> per path (numbered from 1, C<job_uuid> vivified).
+The C<jobs> form takes a list of already-scanned job specs (the hashes a
+producer gets from L<Test2::Harness2::Run::Job/TO_JSON>) and rehydrates each
+into a Run::Job; the run-side identity (C<run_uuid> / C<run_ord>) is always
+reassigned authoritatively here, while a spec's C<job_uuid> / C<job_ord> are
+honored when present and vivified otherwise. When both are given C<jobs> wins.
 
 =item $job = $self->next_job
 
@@ -98,24 +107,16 @@ True when L</no_more_runs> is set and every queued job has finished.
 =cut
 
 sub queue_run ($self, %args) {
-    my $files     = $args{files}     || [];
-    my $job_uuids = $args{job_uuids} || [];
-
     my $run = Test2::Harness2::Run->new(
         run_uuid => $args{run_uuid} // gen_uuid(),
         run_ord  => $self->{+RUN_ORD_COUNTER}++,
     );
 
-    my $ord = 1;
-    for my $file (@$files) {
-        $run->add_job(Test2::Harness2::Run::Job->new(
-            run_uuid => $run->run_uuid,
-            run_ord  => $run->run_ord,
-            job_uuid => $job_uuids->[$ord - 1] // gen_uuid(),
-            job_ord  => $ord,
-            file     => $file,
-        ));
-        $ord++;
+    if (my $specs = $args{jobs}) {
+        $self->_add_spec_jobs($run, $specs);
+    }
+    else {
+        $self->_add_file_jobs($run, $args{files} || [], $args{job_uuids} || []);
     }
 
     push @{$self->{+RUNS}} => $run;
@@ -169,9 +170,51 @@ How many jobs are currently in the C<running> state.
 
 Set a job's C<state>.
 
+=item $self->_add_file_jobs($run, \@files, \@job_uuids)
+
+Build one bare Run::Job per file path and add it to C<$run>.
+
+=item $self->_add_spec_jobs($run, \@specs)
+
+Rehydrate each producer job spec into a Run::Job under C<$run>, reassigning the
+authoritative run identity and resetting lifecycle state to a fresh
+C<pending> / try 1.
+
 =back
 
 =cut
+
+sub _add_file_jobs ($self, $run, $files, $job_uuids) {
+    my $ord = 1;
+    for my $file (@$files) {
+        $run->add_job(Test2::Harness2::Run::Job->new(
+            run_uuid => $run->run_uuid,
+            run_ord  => $run->run_ord,
+            job_uuid => $job_uuids->[$ord - 1] // gen_uuid(),
+            job_ord  => $ord,
+            file     => $file,
+        ));
+        $ord++;
+    }
+    return;
+}
+
+sub _add_spec_jobs ($self, $run, $specs) {
+    my $ord = 1;
+    for my $spec (@$specs) {
+        $run->add_job(Test2::Harness2::Run::Job->new(
+            %$spec,
+            run_uuid => $run->run_uuid,
+            run_ord  => $run->run_ord,
+            job_uuid => $spec->{job_uuid} // gen_uuid(),
+            job_ord  => $spec->{job_ord}  // $ord,
+            try      => 1,
+            state    => 'pending',
+        ));
+        $ord++;
+    }
+    return;
+}
 
 sub _set_state ($self, $job, $state) {
     $job->set_state($state);

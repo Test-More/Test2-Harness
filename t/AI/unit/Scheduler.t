@@ -66,6 +66,49 @@ subtest done_detection => sub {
     ok($s2->all_done, "done once the last job finishes and no more runs are coming");
 };
 
+subtest queue_from_specs => sub {
+    my $s = Test2::Harness2::Scheduler->new;
+
+    # Specs as a producer would serialize them (provisional ids the harness
+    # must override, plus scan-derived state it must preserve).
+    my $specs = [
+        {
+            run_uuid => 'CLIENT-RUN', run_ord => 1,
+            job_uuid => 'JOB-A', job_ord => 1,
+            absolute => '/abs/a.t', relative => 'a.t',
+            category => 'isolation', duration => 'short',
+            conflicts => ['db'], switches => ['-w'],
+        },
+        {
+            run_uuid => 'CLIENT-RUN', run_ord => 1,
+            job_uuid => 'JOB-B', job_ord => 2,
+            absolute => '/abs/b.t', relative => 'b.t',
+        },
+    ];
+
+    my $run = $s->queue_run(run_uuid => 'CLIENT-RUN', jobs => $specs);
+
+    is($run->run_uuid, 'CLIENT-RUN', "honored the client run_uuid");
+    is($run->run_ord, 1, "assigned an authoritative run_ord");
+    is(scalar(@{$run->jobs}), 2, "one job per spec");
+
+    my $j = $run->jobs->[0];
+    is($j->job_uuid, 'JOB-A', "honored the spec job_uuid");
+    is($j->job_ord, 1, "honored the spec job_ord");
+    is($j->run_ord, $run->run_ord, "job run_ord matches the assigned run_ord");
+    is($j->relative, 'a.t', "preserved scan-derived relative");
+    is($j->category, 'isolation', "preserved scan-derived category");
+    is([$j->conflicts_list], ['db'], "preserved scan-derived conflicts");
+    is($j->state, 'pending', "queued fresh as pending");
+    is($j->try, 1, "queued at try 1");
+
+    # run_ord increments for the next run even when fed specs.
+    my $run2 = $s->queue_run(jobs => [{absolute => '/abs/c.t', relative => 'c.t'}]);
+    is($run2->run_ord, 2, "second run_ord increments");
+    ok($run2->jobs->[0]->job_uuid, "vivified a job_uuid when the spec omitted one");
+    is($run2->jobs->[0]->job_ord, 1, "vivified job_ord from position");
+};
+
 subtest preassigned_uuids => sub {
     my $s = Test2::Harness2::Scheduler->new;
     my $run = $s->queue_run(run_uuid => 'RUN-X', files => ['a.t'], job_uuids => ['JOB-A']);

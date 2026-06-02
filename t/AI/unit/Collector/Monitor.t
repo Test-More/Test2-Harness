@@ -347,4 +347,118 @@ subtest proxy_filter_replay_honors_filter => sub {
     is([$down->collectors], ['T1'], "replay to a filtered proxy only includes matching runs");
 };
 
+# --- runs + jobs ---
+
+sub feed_run ($mon, %f) { $mon->feed({facet_data => {harness_run => {%f}}}) }
+sub feed_job ($mon, %f) { $mon->feed({facet_data => {harness_job => {%f}}}) }
+
+subtest run_lifecycle_merge => sub {
+    my $mon = unmanaged_monitor();
+
+    feed_run($mon, run_uuid => 'R1', state => 'queued', job_uuids => ['J1', 'J2'], job_count => 2);
+    is($mon->run('R1')->{state}, 'queued', "run starts queued");
+    is($mon->run('R1')->{job_uuids}, ['J1', 'J2'], "job list recorded");
+    is([$mon->runs], ['R1'], "run is tracked");
+
+    feed_run($mon, run_uuid => 'R1', state => 'running');
+    is($mon->run('R1')->{state}, 'running', "merge updates state");
+    is($mon->run('R1')->{job_count}, 2, "merge keeps prior fields");
+
+    feed_run($mon, run_uuid => 'R1', state => 'complete', completed => 2, passed => 2, failed => 0, pass => 1);
+    is($mon->run('R1')->{state}, 'complete', "run completes");
+    is($mon->run('R1')->{pass}, 1, "aggregate pass recorded");
+    ok($mon->run('R1')->{done_stamp}, "completion stamped");
+};
+
+subtest job_announce_then_collector_folds => sub {
+    my $mon = unmanaged_monitor();
+
+    feed_job($mon, job_uuid => 'J1', run_uuid => 'R1', spec => {relative => 't/a.t', category => 'general'});
+    is([$mon->jobs], ['J1'], "job tracked from announce");
+    is($mon->job('J1')->{status}, 'queued', "job starts queued");
+    is($mon->job('J1')->{spec}{relative}, 't/a.t', "spec carried");
+
+    # The collector shares the job uuid; its messages fold into the job entry.
+    feed_start($mon, uuid => 'J1', name => 't/a.t', events_file => '/tmp/a', try => 1,
+        config => {is_test => 1, exec => ['perl', 't/a.t']});
+
+    is($mon->job('J1')->{status}, 'running', "collector start folds into the job");
+    is($mon->job('J1')->{events_file}, '/tmp/a', "job gains events_file from collector");
+    is($mon->job('J1')->{config}{exec}, ['perl', 't/a.t'], "spawn config folded into the job");
+    is($mon->job('J1')->{spec}{relative}, 't/a.t', "spec still present after fold");
+    is($mon->collector('J1'), $mon->job('J1'), "collector(uuid) resolves to the job entry");
+
+    feed_final($mon, 'J1', 1);
+    feed_fin($mon, 'J1');
+    is($mon->job('J1')->{status}, 'finalized', "job finalizes via collector message");
+    is($mon->final_state('J1')->{pass}, 1, "final state on the job");
+    ok($mon->job('J1')->{done_stamp}, "job finalization stamped");
+};
+
+subtest announce_forwards_runs_and_jobs => sub {
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/down.sock";
+    my $dlisten = open_unix_listen($dpath);
+
+    my $mon = unmanaged_monitor();
+    $mon->add_proxy(down => $dpath);
+    my $dconn = $dlisten->accept;
+
+    $mon->announce({harness_run => {run_uuid => 'R1', state => 'queued', job_uuids => ['J1'], job_count => 1}});
+    $mon->announce({harness_job => {job_uuid => 'J1', run_uuid => 'R1', spec => {relative => 't/a.t'}}});
+
+    my $down = downstream_from_conn($dconn);
+    is([$down->runs], ['R1'], "run forwarded to downstream");
+    is($down->run('R1')->{state}, 'queued', "downstream sees run state");
+    is([$down->jobs], ['J1'], "job forwarded to downstream");
+    is($down->job('J1')->{spec}{relative}, 't/a.t', "downstream sees job spec");
+};
+
+subtest announce_replays_inflight_to_late_proxy => sub {
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/down.sock";
+    my $dlisten = open_unix_listen($dpath);
+
+    my $mon = unmanaged_monitor();
+    $mon->announce({harness_run => {run_uuid => 'R1', state => 'running', job_count => 1}});
+    $mon->announce({harness_job => {job_uuid => 'J1', run_uuid => 'R1', spec => {relative => 't/a.t'}}});
+
+    # Proxy added after the announces: replay should catch it up.
+    $mon->add_proxy(down => $dpath);
+    my $dconn = $dlisten->accept;
+
+    my $down = downstream_from_conn($dconn);
+    is($down->run('R1')->{state}, 'running', "in-flight run replayed to late proxy");
+    is([$down->jobs], ['J1'], "in-flight job replayed to late proxy");
+};
+
+subtest sweep_removes_completed_after_ttl => sub {
+    my $mon = Test2::Harness2::Collector::Monitor->new(completed_ttl => 100);
+
+    feed_run($mon, run_uuid => 'R1', state => 'complete', completed => 1, passed => 1);
+    feed_job($mon, job_uuid => 'J1', run_uuid => 'R1');
+    feed_start($mon, uuid => 'J1', name => 't/a.t', try => 1);
+    feed_fin($mon, 'J1');
+
+    feed_run($mon, run_uuid => 'R2', state => 'running');    # in flight, no done_stamp
+
+    my $done = $mon->run('R1')->{done_stamp};
+
+    $mon->sweep($done + 50);     # within ttl
+    ok($mon->run('R1'),  "completed run kept within ttl");
+    ok($mon->job('J1'),  "finalized job kept within ttl");
+
+    $mon->sweep($done + 201);    # past ttl
+    ok(!$mon->run('R1'), "completed run reaped past ttl");
+    ok(!$mon->job('J1'), "finalized job reaped past ttl");
+    ok($mon->run('R2'),  "in-flight run never reaped");
+};
+
+subtest sweep_disabled_when_ttl_zero => sub {
+    my $mon = Test2::Harness2::Collector::Monitor->new(completed_ttl => 0);
+    feed_run($mon, run_uuid => 'R1', state => 'complete');
+    $mon->sweep($mon->run('R1')->{done_stamp} + 1_000_000);
+    ok($mon->run('R1'), "ttl 0 disables reaping");
+};
+
 done_testing;

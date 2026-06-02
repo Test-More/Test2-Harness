@@ -4,10 +4,10 @@ use v5.38;
 our $VERSION = '2.000000';
 
 use Carp qw/croak/;
-use File::Spec    ();
-use File::Path    qw/make_path/;
-use POSIX         ();
-use Time::HiRes   qw/sleep time/;
+use File::Spec ();
+use File::Path qw/make_path/;
+use POSIX ();
+use Time::HiRes qw/sleep time/;
 
 use Test2::Util::UUID qw/gen_uuid/;
 
@@ -233,6 +233,8 @@ sub poll_state ($self) {
     for my $rec ($fb->drain) {
         $self->{+MONITOR}->feed_frame($rec->{frame});
     }
+
+    $self->{+MONITOR}->sweep;
 
     return $self->{+MONITOR};
 }

@@ -6,6 +6,7 @@ our $VERSION = '2.000000';
 use Config qw/%Config/;
 use File::Spec ();
 use File::Path qw/make_path/;
+use Time::HiRes qw/time/;
 
 use Test2::Harness2::Collector qw/spawn_collector/;
 use Test2::Harness2::Collector::Recorder::Test;
@@ -104,23 +105,37 @@ sub service_on_start ($self) {
 }
 
 sub service_tick ($self) {
-    my $mon = $self->{+MONITOR};
+    my $mon   = $self->{+MONITOR};
+    my $sched = $self->{+SCHEDULER};
     $mon->poll;
+
+    # A run becomes 'running' once the scheduler starts considering its jobs.
+    for my $run_uuid ($sched->new_started_runs) {
+        $mon->announce({harness_run => {run_uuid => $run_uuid, state => 'running', stamp => time}});
+    }
 
     # Mark a job done only once its collector is finalized: by then the monitor
     # has already forwarded the job's final_state frame to subscribers, so we
     # will not stop the service out from under a client still reading it.
     for my $job_uuid ($mon->new_finalized) {
         my $entry = delete $self->{+RUNNING}{$job_uuid} or next;
-        $self->{+SCHEDULER}->mark_done($entry->{job});
+        $sched->mark_done($entry->{job});
+        $self->_announce_run_progress($entry->{job}->run_uuid);
+    }
+
+    # A run is 'complete' once all of its jobs have finalized.
+    for my $run_uuid ($sched->new_completed_runs) {
+        $self->_announce_run_complete($run_uuid);
     }
 
     # Launch as many pending jobs as the scheduler allows.
-    while (my $job = $self->{+SCHEDULER}->next_job) {
+    while (my $job = $sched->next_job) {
         $self->_launch_job($job);
     }
 
-    $self->stop_service if $self->{+SCHEDULER}->all_done;
+    $mon->sweep;
+
+    $self->stop_service if $sched->all_done;
 
     return;
 }
@@ -158,6 +173,8 @@ sub request_handler_queue_run ($self, $payload, $conn = undef) {
 
     $self->{+RUN_STRAY}{$run->run_uuid} = $payload->{stray} ? 1 : 0;
 
+    $self->_announce_run_queued($run);
+
     return {
         ok        => 1,
         run_uuid  => $run->run_uuid,
@@ -192,6 +209,28 @@ events file and reporting transitions to the monitor. Marks the job running.
 
 The job's events file: C<< $workdir/$run_ord/$job_ord/$try.jsonl.zst >> (dirs
 created).
+
+=item $self->_announce_run_queued($run)
+
+Announce a newly queued run (a C<harness_run> in state C<queued> with its job
+list and counts) and one C<harness_job> per job (carrying the Run::Job spec) to
+the monitor, so subscribers learn of the run before any collector starts.
+
+=item $self->_announce_run_progress($run_uuid)
+
+Announce updated completion/pass/fail counts for a run as its jobs finalize.
+
+=item $self->_announce_run_complete($run_uuid)
+
+Announce a run as C<complete> with final counts and an aggregate C<pass>.
+
+=item ($job_count, $completed, $passed, $failed) = $self->_run_counts($run)
+
+Tally a run's jobs from scheduler job state plus monitor final states.
+
+=item $run = $self->_find_run($run_uuid)
+
+The scheduler's L<Test2::Harness2::Run> with the given uuid, or C<undef>.
 
 =back
 
@@ -229,6 +268,95 @@ sub _job_events_file ($self, $job) {
     my $dir = File::Spec->catdir($self->{+WORKDIR}, $job->run_ord, $job->job_ord);
     make_path($dir) unless -d $dir;
     return File::Spec->catfile($dir, $job->try . ".jsonl.zst");
+}
+
+sub _announce_run_queued ($self, $run) {
+    my $mon = $self->{+MONITOR};
+
+    $mon->announce({
+        harness_run => {
+            run_uuid  => $run->run_uuid,
+            state     => 'queued',
+            job_uuids => $run->job_uuids,
+            job_count => scalar(@{$run->jobs}),
+            completed => 0,
+            passed    => 0,
+            failed    => 0,
+            stamp     => time,
+        },
+    });
+
+    for my $job (@{$run->jobs}) {
+        $mon->announce({
+            harness_job => {
+                job_uuid => $job->job_uuid,
+                run_uuid => $job->run_uuid,
+                spec     => $job->TO_JSON,
+                stamp    => time,
+            },
+        });
+    }
+
+    return;
+}
+
+sub _announce_run_progress ($self, $run_uuid) {
+    my $run = $self->_find_run($run_uuid) or return;
+    my ($job_count, $completed, $passed, $failed) = $self->_run_counts($run);
+
+    $self->{+MONITOR}->announce({
+        harness_run => {
+            run_uuid  => $run_uuid,
+            completed => $completed,
+            passed    => $passed,
+            failed    => $failed,
+            stamp     => time,
+        },
+    });
+
+    return;
+}
+
+sub _announce_run_complete ($self, $run_uuid) {
+    my $run = $self->_find_run($run_uuid) or return;
+    my ($job_count, $completed, $passed, $failed) = $self->_run_counts($run);
+
+    $self->{+MONITOR}->announce({
+        harness_run => {
+            run_uuid  => $run_uuid,
+            state     => 'complete',
+            job_count => $job_count,
+            completed => $completed,
+            passed    => $passed,
+            failed    => $failed,
+            pass      => ($failed == 0 ? 1 : 0),
+            stamp     => time,
+        },
+    });
+
+    return;
+}
+
+sub _run_counts ($self, $run) {
+    my $mon  = $self->{+MONITOR};
+    my @jobs = @{$run->jobs};
+
+    my ($completed, $passed) = (0, 0);
+    for my $job (@jobs) {
+        next unless $job->state eq 'done';
+        $completed++;
+        my $fs = $mon->final_state($job->job_uuid);
+        $passed++ if $fs && $fs->{pass};
+    }
+
+    return (scalar(@jobs), $completed, $passed, $completed - $passed);
+}
+
+sub _find_run ($self, $run_uuid) {
+    for my $run (@{$self->{+SCHEDULER}->runs}) {
+        return $run if $run->run_uuid eq $run_uuid;
+    }
+    return undef;
 }
 
 1;

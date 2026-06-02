@@ -413,6 +413,7 @@ sub init ($self) {
             name => $self->{+NAME},
             ($self->{+IS_TEST}          ? (try      => 1)                  : ()),    # retry is not implemented yet
             (defined $self->{+RUN_UUID} ? (run_uuid => $self->{+RUN_UUID}) : ()),
+            config => $self->_collector_config,
         );
     }
 
@@ -478,6 +479,11 @@ sub run_collector ($self) {
 
     $self->_set_procname;
 
+    # Test collectors get their 'starting' transition from the auditor; other
+    # collectors have no such source, so announce the start (with config) here.
+    $self->{+RECORDER}->announce_start
+        if !$self->{+IS_TEST} && $self->{+RECORDER} && $self->{+RECORDER}->can('announce_start');
+
     my $ok  = eval { $self->_run_parent; 1 };
     my $err = $@;
 
@@ -525,9 +531,25 @@ Turn a blessed object (returned as-is), a class name (constructed with no
 arguments), or a C<[class =E<gt> @args]> arrayref (constructed with those
 arguments) into an instance. Croaks for anything else, naming C<$label>.
 
+=item $hashref = $self->_collector_config
+
+The serializable spawn configuration handed to the recorder for the start
+message: C<is_test>, the C<exec> command, the child C<env>, and the C<processor>
+spec. The C<run> coderef (service collectors) is intentionally omitted -- it
+cannot be serialized.
+
 =back
 
 =cut
+
+sub _collector_config ($self) {
+    return {
+        is_test => $self->{+IS_TEST} ? 1 : 0,
+        (defined $self->{+EXEC_COMMAND} ? (exec      => $self->{+EXEC_COMMAND}) : ()),
+        (defined $self->{+CHILD_ENV}    ? (env       => $self->{+CHILD_ENV})    : ()),
+        (defined $self->{+PROCESSOR}    ? (processor => $self->{+PROCESSOR})    : ()),
+    };
+}
 
 sub _coerce_parser ($self, $thing) {
     return $self->_coerce_class_arg($thing, 'parser') if defined $thing;

@@ -17,9 +17,11 @@ use Object::HashBase qw{
     <collector_name
     <collector_try
     <collector_run_uuid
+    <collector_config
     <events_writer
     <sockets
     <finalized
+    <start_announced
 };
 
 use Role::Tiny::With;
@@ -127,6 +129,16 @@ Append one L<Test2::Harness2::Event> to the events file. When the event still
 carries its on-wire C<compressed_form> frame, that frame is written verbatim;
 otherwise the event is JSON-encoded and compressed into a fresh frame.
 
+=item announce_start
+
+=item $rec->announce_start
+
+Send a single C<starting> transition message (with the collector's start info,
+including the spawn C<config>) to every notification pipe. Idempotent. The base
+recorder does not announce on its own; the collector calls this for collectors
+that have no other source of a start signal (e.g. service collectors, which lack
+the auditor that drives a test's C<starting> transition).
+
 =item finalize
 
 =item $rec->finalize
@@ -134,12 +146,13 @@ otherwise the event is JSON-encoded and compressed into a fresh frame.
 Close the events file and send a finalization message to every notification
 pipe. Safe to call more than once -- subsequent calls are no-ops.
 
-=item $rec->set_collector_info(uuid => $uuid, name => $name, try => $try, run_uuid => $run)
+=item $rec->set_collector_info(uuid => $uuid, name => $name, try => $try, run_uuid => $run, config => $hashref)
 
 Record the owning collector's identity. The collector calls this so the
 recorder can stamp the collector C<uuid> on every notification message and
-include the C<name>, events file, C<run_uuid> (when set), and (for test
-collectors) the C<try> number in the start message.
+include the C<name>, events file, C<run_uuid> (when set), (for test
+collectors) the C<try> number, and the serializable spawn C<config> in the
+start message.
 
 =back
 
@@ -150,6 +163,19 @@ sub set_collector_info ($self, %info) {
     $self->{+COLLECTOR_NAME}     = $info{name}     if exists $info{name};
     $self->{+COLLECTOR_TRY}      = $info{try}      if exists $info{try};
     $self->{+COLLECTOR_RUN_UUID} = $info{run_uuid} if exists $info{run_uuid};
+    $self->{+COLLECTOR_CONFIG}   = $info{config}   if exists $info{config};
+    return;
+}
+
+sub announce_start ($self) {
+    return if $self->{+START_ANNOUNCED};
+    $self->{+START_ANNOUNCED} = 1;
+
+    $self->_notify_sockets(
+        {harness_state_transition => {state => 'starting', stamp => time}},
+        $self->_start_extra,
+    );
+
     return;
 }
 
@@ -229,8 +255,9 @@ state across messages.
 =item %extra = $self->_start_extra
 
 L</_collector_extra> plus the C<events_file> path and, when set, the
-C<run_uuid>; the start message adds the events-file location and run
-association on top of the identity fields.
+C<run_uuid> and the spawn C<config>; the start message adds the events-file
+location, run association, and launch configuration on top of the identity
+fields.
 
 =back
 
@@ -284,6 +311,7 @@ sub _start_extra ($self) {
         $self->_collector_extra,
         events_file => $self->{+EVENTS_FILE},
         (defined $self->{+COLLECTOR_RUN_UUID} ? (run_uuid => $self->{+COLLECTOR_RUN_UUID}) : ()),
+        (defined $self->{+COLLECTOR_CONFIG}   ? (config   => $self->{+COLLECTOR_CONFIG})   : ()),
     );
 }
 

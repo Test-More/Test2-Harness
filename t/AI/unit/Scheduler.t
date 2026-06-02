@@ -116,4 +116,33 @@ subtest preassigned_uuids => sub {
     is($run->jobs->[0]->job_uuid, 'JOB-A', "honors a passed job_uuid");
 };
 
+subtest new_started_runs => sub {
+    my $s = Test2::Harness2::Scheduler->new;
+    is([$s->new_started_runs], [], "nothing started before any run is queued");
+
+    my $run = $s->queue_run(files => ['a.t', 'b.t']);
+    is([$s->new_started_runs], [$run->run_uuid], "the queued run is considered/started");
+    is([$s->new_started_runs], [], "started is drain-once");
+
+    # Drain it fully; the next run becomes the considered one.
+    my $j1 = $s->next_job; $s->mark_running($j1); $s->mark_done($j1);
+    my $j2 = $s->next_job; $s->mark_running($j2); $s->mark_done($j2);
+
+    my $run2 = $s->queue_run(files => ['c.t']);
+    is([$s->new_started_runs], [$run2->run_uuid], "second run started once first is done");
+};
+
+subtest new_completed_runs => sub {
+    my $s   = Test2::Harness2::Scheduler->new;
+    my $run = $s->queue_run(files => ['a.t', 'b.t']);
+    is([$s->new_completed_runs], [], "run not complete while jobs pending");
+
+    my $j1 = $s->next_job; $s->mark_running($j1); $s->mark_done($j1);
+    is([$s->new_completed_runs], [], "run not complete with one job left");
+
+    my $j2 = $s->next_job; $s->mark_running($j2); $s->mark_done($j2);
+    is([$s->new_completed_runs], [$run->run_uuid], "run complete when all jobs done");
+    is([$s->new_completed_runs], [], "completed is drain-once");
+};
+
 done_testing;

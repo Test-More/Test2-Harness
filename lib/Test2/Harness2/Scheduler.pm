@@ -13,6 +13,10 @@ use Object::HashBase qw{
     <run_ord_counter
     <max_concurrent
     <no_more
+    +started
+    +pending_started
+    +completed_runs
+    +pending_completed_runs
 };
 
 =pod
@@ -58,6 +62,12 @@ sub init ($self) {
     $self->{+RUN_ORD_COUNTER} //= 1;
     $self->{+MAX_CONCURRENT}  //= 1;
     $self->{+NO_MORE}         //= 0;
+
+    $self->{+STARTED}                //= {};
+    $self->{+PENDING_STARTED}        //= [];
+    $self->{+COMPLETED_RUNS}         //= {};
+    $self->{+PENDING_COMPLETED_RUNS} //= [];
+
     return;
 }
 
@@ -96,6 +106,18 @@ Move a job between C<pending> / C<running> / C<done>.
 
 Declare that no further runs will be queued.
 
+=item @run_uuids = $self->new_started_runs
+
+Drain-on-call list of runs that became "started" since the previous call. A run
+starts the first time the scheduler considers its jobs -- when it reaches the
+head of the queue with pending work -- independent of whether a concurrency slot
+is free, so a run is reported started before its first job launches.
+
+=item @run_uuids = $self->new_completed_runs
+
+Drain-on-call list of runs whose every job reached the C<done> state since the
+previous call. Each run is reported at most once.
+
 =item all_done
 
 =item $bool = $self->all_done
@@ -126,6 +148,39 @@ sub queue_run ($self, %args) {
 sub no_more_runs ($self) {
     $self->{+NO_MORE} = 1;
     return;
+}
+
+sub new_started_runs ($self) {
+    # The run currently being considered is the first one not yet fully done.
+    # Mark it started (once) even before a concurrency slot frees up. Only the
+    # head run is considered under the single-run model.
+    for my $run (@{$self->{+RUNS}}) {
+        next if $self->_run_all_done($run);
+        my $id = $run->run_uuid;
+        unless ($self->{+STARTED}{$id}) {
+            $self->{+STARTED}{$id} = 1;
+            push @{$self->{+PENDING_STARTED}} => $id;
+        }
+        last;
+    }
+
+    my $list = $self->{+PENDING_STARTED};
+    $self->{+PENDING_STARTED} = [];
+    return @$list;
+}
+
+sub new_completed_runs ($self) {
+    for my $run (@{$self->{+RUNS}}) {
+        my $id = $run->run_uuid;
+        next if $self->{+COMPLETED_RUNS}{$id};
+        next unless @{$run->jobs} && $self->_run_all_done($run);
+        $self->{+COMPLETED_RUNS}{$id} = 1;
+        push @{$self->{+PENDING_COMPLETED_RUNS}} => $id;
+    }
+
+    my $list = $self->{+PENDING_COMPLETED_RUNS};
+    $self->{+PENDING_COMPLETED_RUNS} = [];
+    return @$list;
 }
 
 sub next_job ($self) {
@@ -169,6 +224,10 @@ How many jobs are currently in the C<running> state.
 =item $self->_set_state($job, $state)
 
 Set a job's C<state>.
+
+=item $bool = $self->_run_all_done($run)
+
+True when every job in C<$run> is in the C<done> state.
 
 =item $self->_add_file_jobs($run, \@files, \@job_uuids)
 
@@ -227,6 +286,13 @@ sub _running_count ($self) {
         $n++ for grep { $_->state eq 'running' } @{$run->jobs};
     }
     return $n;
+}
+
+sub _run_all_done ($self, $run) {
+    for my $job (@{$run->jobs}) {
+        return 0 unless $job->state eq 'done';
+    }
+    return 1;
 }
 
 1;

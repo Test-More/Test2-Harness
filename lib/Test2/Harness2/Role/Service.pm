@@ -4,11 +4,11 @@ use v5.38;
 our $VERSION = '2.000000';
 
 use Carp qw/croak/;
-use POSIX        qw/WNOHANG/;
-use IO::Select   ();
-use Time::HiRes  qw/sleep/;
-use File::Spec   ();
-use File::Path   qw/make_path/;
+use POSIX qw/WNOHANG/;
+use IO::Select ();
+use Time::HiRes qw/sleep/;
+use File::Spec ();
+use File::Path qw/make_path/;
 
 use Test2::Harness2::Util::Socket qw/open_unix_listen write_frame/;
 use Test2::Harness2::Util::Zstd qw/compress_blob/;
@@ -42,13 +42,16 @@ L<Test2::Harness2::Util::Zstd::FrameBuffer> splits them on the read side.
 
 A request is C<< {request =E<gt> $type, ...} >>; it dispatches to
 C<request_handler_$type($payload, $conn)>, whose return value (a hashref) is sent
-back as the response. The built-in C<request_handler_stop> ends the loop.
+back as the response. A handler may return C<undef> to send B<no> response, for
+one-way requests (e.g. streamed reports) whose sender does not read replies. The
+built-in C<request_handler_stop> ends the loop.
 
 =head2 Required / optional consumer methods
 
 C<workdir> and C<name> are required. Optional: C<run_ord> (a per-run numeric
 subdir), C<service_on_start> (called once after the socket binds),
-C<service_tick> (called each loop iteration), and
+C<service_tick> (called each loop iteration), C<service_on_stop> (called once
+after the loop exits, before the socket is closed), and
 C<service_on_reap($pid, $status)>.
 
 =head1 PUBLIC METHODS
@@ -97,9 +100,9 @@ sub start_service ($self) {
     my $listen = open_unix_listen($path);
     $listen->blocking(0);
 
-    $self->{service_listen} = $listen;
-    $self->{service_select} = IO::Select->new($listen);
-    $self->{service_conns}  = {};
+    $self->{service_listen}  = $listen;
+    $self->{service_select}  = IO::Select->new($listen);
+    $self->{service_conns}   = {};
     $self->{service_stopped} = 0;
 
     return;
@@ -116,6 +119,7 @@ sub run ($self) {
         sleep 0.01;
     }
 
+    $self->service_on_stop if $self->can('service_on_stop');
     $self->_close_service;
     return;
 }
@@ -227,8 +231,15 @@ sub _service_io ($self) {
         for my $rec ($fb->drain) {
             my $payload;
             my $ok = eval { $payload = decode_json($rec->{payload}); 1 };
-            my $resp = $ok ? $self->handle_request($payload, $fh)
-                           : {ok => 0, error => "undecodable request"};
+            my $resp =
+                  $ok
+                ? $self->handle_request($payload, $fh)
+                : {ok => 0, error => "undecodable request"};
+
+            # A handler may return undef to send no response (one-way requests,
+            # e.g. streamed system_load reports), so the sender's socket does
+            # not accumulate unread replies.
+            next unless defined $resp;
 
             eval { write_frame($fh, compress_blob(encode_json($resp))); 1 }
                 or warn "service: failed to write response: $@\n";

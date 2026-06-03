@@ -36,7 +36,19 @@ DragonFly.
   `Role::Service`; `service_on_start` opens one outbound connection to the
   harness socket; `service_tick` samples at most once per `interval` (drift-free
   `next_at += interval`, resync if it falls behind) and writes a one-way
-  `system_load` request. Stops itself if that write fails (harness gone).
+  `system_load` request. Stops itself if that write fails or the harness closes
+  the connection (a non-blocking EOF check covers steady periods with no writes).
+
+  **Reporting policy (change-gated; added 2026-06-03).** It samples every tick
+  but does not report every sample. CPU and memory usage are each rounded **up**
+  to the nearest 5% and tracked independently with the same policy: an
+  **increase** is reported immediately; a **decrease** only once the lower value
+  has held for `decrease_delay` seconds (default 1.0s ≈ five ticks); an unchanged
+  value reports nothing. A message is sent when **either** metric triggers and
+  carries the current rounded value of both. Rounding/throttling is a reporting
+  concern in the sampler; `SystemLoad` still measures raw values. The per-metric
+  state machine is `_metric_triggers` (decides, tracks the decrease window) +
+  `_commit_metric` (records last-sent on send); `_round_up_5` does the ceiling.
 
 - **`Role::Service`** — two small additions: a `service_on_stop` hook (called
   after the loop exits, before the socket closes) and support for a

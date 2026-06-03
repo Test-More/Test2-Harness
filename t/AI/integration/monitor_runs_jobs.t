@@ -40,6 +40,12 @@ subtest passing_run => sub {
     like($job->{spec}{relative}, qr/collector_pass\.pl/, "job carries the scanned spec");
     is($job->{config}{is_test}, 1, "job carries spawn config (is_test)");
     like($job->{config}{exec}[-1], qr/collector_pass\.pl/, "spawn config exec names the test file");
+
+    my $sys = $snap->{system};
+    ok($sys, "downstream received a system load snapshot from the sampler") or return;
+    ok(defined $sys->{ncpu}, "snapshot has a cpu count");
+    ok(exists $sys->{cpu_pct}, "snapshot has a cpu_pct field");
+    ok(defined $sys->{stamp}, "snapshot is stamped");
 };
 
 subtest failing_run => sub {

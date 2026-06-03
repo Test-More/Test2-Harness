@@ -8,10 +8,14 @@ use File::Spec ();
 use File::Path qw/make_path/;
 use Time::HiRes qw/time/;
 
+use Test2::Util::UUID qw/gen_uuid/;
+
 use Test2::Harness2::Collector qw/spawn_collector/;
+use Test2::Harness2::Collector::Recorder;
 use Test2::Harness2::Collector::Recorder::Test;
 use Test2::Harness2::Collector::Monitor;
 use Test2::Harness2::Scheduler;
+use Test2::Harness2::Service::Sampler;
 
 use Object::HashBase qw{
     <workdir
@@ -21,6 +25,9 @@ use Object::HashBase qw{
     <running
     <run_stray
     <client_seq
+    <sampler_interval
+    <sampler_pid
+    <system_load
 };
 
 use Role::Tiny::With;
@@ -65,17 +72,23 @@ Declare no further runs; the service stops once everything finishes.
 Register the requesting connection to receive collector transition frames
 (forwarded by the monitor). Returns C<< {ok, monitor => $path} >>.
 
+=item system_load => { load => \%snapshot }
+
+A one-way report from the sampler process: store the latest system load snapshot
+and announce it to the monitor. No response.
+
 =back
 
 =cut
 
 sub init ($self) {
-    $self->{+NAME}       //= 'harness';
-    $self->{+SCHEDULER}  //= Test2::Harness2::Scheduler->new;
-    $self->{+MONITOR}    //= Test2::Harness2::Collector::Monitor->new(listen => 1);
-    $self->{+RUNNING}    //= {};
-    $self->{+RUN_STRAY}  //= {};
-    $self->{+CLIENT_SEQ} //= 0;
+    $self->{+NAME}             //= 'harness';
+    $self->{+SCHEDULER}        //= Test2::Harness2::Scheduler->new;
+    $self->{+MONITOR}          //= Test2::Harness2::Collector::Monitor->new(listen => 1);
+    $self->{+RUNNING}          //= {};
+    $self->{+RUN_STRAY}        //= {};
+    $self->{+CLIENT_SEQ}       //= 0;
+    $self->{+SAMPLER_INTERVAL} //= 0.2;
 
     die "'workdir' is required\n" unless defined $self->{+WORKDIR} && length $self->{+WORKDIR};
     make_path($self->{+WORKDIR})  unless -d $self->{+WORKDIR};
@@ -91,8 +104,17 @@ sub init ($self) {
 
 =item $self->service_tick
 
-Called each loop iteration: poll the monitor, mark finished jobs done, launch
-pending jobs, and stop the service once the scheduler reports everything done.
+Called each loop iteration: poll the monitor, announce run lifecycle, mark
+finished jobs done, launch pending jobs, sweep the monitor, and stop the service
+once the scheduler reports everything done.
+
+=item $self->service_on_start
+
+Announce startup and spawn the load sampler (when C<sampler_interval> is set).
+
+=item $self->service_on_stop
+
+Stop the sampler process when the service loop exits.
 
 =back
 
@@ -101,6 +123,18 @@ pending jobs, and stop the service once the scheduler reports everything done.
 sub service_on_start ($self) {
     # Captured by the service's collector into the service events file.
     say "harness service '" . $self->{+NAME} . "' started (pid $$)";
+    $self->_start_sampler if $self->{+SAMPLER_INTERVAL};
+    return;
+}
+
+sub service_on_stop ($self) {
+    # Reap the sampler before this process exits. Its collector inherited our
+    # stdout/stderr write ends, so until it is gone our own collector never sees
+    # EOF on those pipes (and would stall on its orphan timeout).
+    if (my $pid = delete $self->{+SAMPLER_PID}) {
+        kill 'TERM', $pid;
+        waitpid($pid, 0);
+    }
     return;
 }
 
@@ -148,6 +182,8 @@ sub service_tick ($self) {
 
 =item $resp = $self->request_handler_subscribe($payload, $conn)
 
+=item $resp = $self->request_handler_system_load($payload)
+
 Request handlers; see L</REQUESTS>.
 
 =back
@@ -188,6 +224,13 @@ sub request_handler_no_more_runs ($self, $payload = undef, $conn = undef) {
     return {ok => 1};
 }
 
+sub request_handler_system_load ($self, $payload, $conn = undef) {
+    my $load = $payload->{load} or return undef;
+    $self->{+SYSTEM_LOAD} = $load;
+    $self->{+MONITOR}->announce({harness_system => $load});
+    return undef;    # one-way report; no response
+}
+
 sub request_handler_subscribe ($self, $payload, $conn) {
     my $name = 'client-' . $self->{+CLIENT_SEQ}++;
     $self->{+MONITOR}->add_proxy($name, $conn);
@@ -209,6 +252,12 @@ events file and reporting transitions to the monitor. Marks the job running.
 
 The job's events file: C<< $workdir/$run_ord/$job_ord/$try.jsonl.zst >> (dirs
 created).
+
+=item $self->_start_sampler
+
+Fork the L<Test2::Harness2::Service::Sampler> under a collector (recording to
+C<< $workdir/sampler.jsonl.zst >> and reporting transitions to the monitor),
+pointed at this service's socket. Records its pid for shutdown.
 
 =item $self->_announce_run_queued($run)
 
@@ -268,6 +317,32 @@ sub _job_events_file ($self, $job) {
     my $dir = File::Spec->catdir($self->{+WORKDIR}, $job->run_ord, $job->job_ord);
     make_path($dir) unless -d $dir;
     return File::Spec->catfile($dir, $job->try . ".jsonl.zst");
+}
+
+sub _start_sampler ($self) {
+    my $wd     = $self->{+WORKDIR};
+    my $events = File::Spec->catfile($wd, 'sampler.jsonl.zst');
+
+    my $pid = spawn_collector(
+        is_test => 0,
+        name    => 'sampler',
+        uuid    => gen_uuid(),
+        run     => sub {
+            Test2::Harness2::Service::Sampler->new(
+                workdir        => $wd,
+                name           => 'sampler',
+                interval       => $self->{+SAMPLER_INTERVAL},
+                harness_socket => $self->service_socket_path,
+            )->run;
+        },
+        recorder => Test2::Harness2::Collector::Recorder->new(
+            events_file        => $events,
+            transition_sockets => [$self->{+MONITOR}->socket_path],
+        ),
+    );
+
+    $self->{+SAMPLER_PID} = $pid;
+    return;
 }
 
 sub _announce_run_queued ($self, $run) {

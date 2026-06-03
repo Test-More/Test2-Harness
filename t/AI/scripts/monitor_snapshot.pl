@@ -34,20 +34,24 @@ my $specs = [map { $_->TO_JSON } @{$run->jobs}];
 
 my $resp = $h->queue_run(run_uuid => $ruuid, jobs => $specs);
 die "queue failed: $resp->{error}\n" unless $resp->{ok};
-$h->no_more_runs;
 
+# Do NOT declare no_more_runs yet: keep the service alive until both the run has
+# completed AND at least one system-load sample has propagated (the sampler is a
+# freshly-forked process and a fast run can finish before its first report).
 my $deadline = time + 60;
 while (time < $deadline) {
     $h->poll_state;
     my $r = $mon->run($ruuid);
-    last if $r && ($r->{state} // '') eq 'complete';
+    last if $r && ($r->{state} // '') eq 'complete' && $mon->system_load;
     sleep 0.02;
 }
 
+$h->no_more_runs;
 $h->shutdown;
 $h->poll_state;    # flush any trailing frames buffered before the socket closed
 
 print encode_json({
-    run => $mon->run($ruuid),
-    job => $mon->job($juuid),
+    run    => $mon->run($ruuid),
+    job    => $mon->job($juuid),
+    system => $mon->system_load,
 });

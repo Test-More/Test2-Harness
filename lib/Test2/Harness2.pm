@@ -279,13 +279,16 @@ sub _read_one_frame ($self, $sock, $fb) {
     while (time < $deadline) {
         my $buf = '';
         my $n   = sysread($sock, $buf, 65536);
-        if ($n) {
-            $fb->push_bytes($buf);
-            for my $rec ($fb->drain) {
-                return decode_json($rec->{payload});
-            }
+
+        # 0 (EOF) or undef (error) on this blocking socket means the service
+        # closed the connection without a (complete) response -- e.g. it shut
+        # down while we were asking. Do not busy-wait to the deadline.
+        croak "harness service closed the connection without responding" unless $n;
+
+        $fb->push_bytes($buf);
+        for my $rec ($fb->drain) {
+            return decode_json($rec->{payload});
         }
-        sleep 0.01;
     }
     croak "no response from harness service within timeout";
 }

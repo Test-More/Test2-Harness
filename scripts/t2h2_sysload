@@ -1,0 +1,88 @@
+#!/usr/bin/env perl
+use v5.38;
+
+use File::Basename qw/basename/;
+use File::Temp     qw/tempdir/;
+use Time::HiRes    qw/sleep/;
+use Cwd            ();
+
+use Test2::Harness2;
+
+# t2h2_sysload - run a harness service and print system load as it is reported.
+#
+# Usage: t2h2_sysload [TEST_FILE...]
+#
+# Starts a harness service (which spawns the dedicated load sampler) and prints
+# the cpu / memory snapshot every time the sampler reports one. The sampler only
+# reports on change (cpu or memory crossing a 5% bucket, with decreases held for
+# a second), so quiet periods print nothing.
+#
+# With no arguments it runs until interrupted (Ctrl-C). With test files it queues
+# them as one run, prints load throughout, and exits when the run finishes.
+
+my @files = @ARGV;
+
+my $project = eval { require Cwd; basename(Cwd::getcwd()) } || 'sysload';
+my $h = Test2::Harness2->new(project => $project, workdir => tempdir(CLEANUP => 1));
+$h->start;
+
+my $mon = $h->subscribe;
+
+my $stopping = 0;
+$SIG{INT} = $SIG{TERM} = sub { $stopping = 1 };
+
+my %want;
+if (@files) {
+    my $resp = $h->queue_run(files => \@files);
+    die "failed to queue run: $resp->{error}\n" unless $resp->{ok};
+    $h->no_more_runs;
+    %want = map { $_ => 1 } @{$resp->{job_uuids}};
+}
+
+printf "%-14s %5s  %-22s  %s\n", 'time', 'cpu', 'memory', 'load(1m/5m/15m)';
+
+my $last_stamp;
+until ($stopping) {
+    $h->poll_state;
+
+    my $sl = $mon->system_load;
+    if ($sl && (!defined($last_stamp) || ($sl->{stamp} // 0) != $last_stamp)) {
+        $last_stamp = $sl->{stamp} // 0;
+        print_load($sl);
+    }
+
+    # When running specific files, stop once they have all finished.
+    if (%want) {
+        delete $want{$_} for $mon->new_finalized;
+        last unless keys %want;
+    }
+
+    sleep 0.05;
+}
+
+$h->shutdown;
+exit 0;
+
+# Format and print one system-load snapshot.
+sub print_load ($sl) {
+    my $cpu = defined $sl->{cpu_pct} ? sprintf('%3d%%', $sl->{cpu_pct}) : '  -- ';
+
+    my $mem = '   --';
+    if (defined $sl->{mem_pct}) {
+        $mem = sprintf('%3d%% (%s / %s)', $sl->{mem_pct}, human($sl->{mem_used}), human($sl->{mem_total}));
+    }
+
+    my $load = @{$sl->{load_avg} // []} ? join(' ', map { sprintf('%.2f', $_) } @{$sl->{load_avg}}) : '-';
+
+    printf "%-14.3f %5s  %-22s  %s\n", ($sl->{stamp} // 0), $cpu, $mem, $load;
+    return;
+}
+
+# Human-readable byte size.
+sub human ($bytes) {
+    return '?' unless defined $bytes;
+    my @unit = qw/B K M G T/;
+    my $i    = 0;
+    while ($bytes >= 1024 && $i < $#unit) { $bytes /= 1024; $i++ }
+    return $i ? sprintf('%.1f%s', $bytes, $unit[$i]) : "${bytes}B";
+}

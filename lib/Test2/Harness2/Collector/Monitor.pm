@@ -23,6 +23,8 @@ use Object::HashBase qw{
     <select
     <conns
     <completed_ttl
+    +system
+    +system_frame
     +runs
     +jobs
     +collectors
@@ -267,6 +269,13 @@ services/global in the collectors table), or just the tests / just the services.
 
 The uuids of all tracked runs / jobs.
 
+=item $snapshot = $mon->system_load
+
+The latest system load snapshot (a hashref: C<cpu_pct>, C<ncpu>, C<load_avg>,
+C<mem_total>, C<mem_available>, C<mem_used>, C<mem_pct>, C<stamp>), or C<undef>
+if none has arrived. Published by the harness from a C<harness_system> message;
+broadcast to every subscriber unfiltered and kept as a single latest value.
+
 =item collector
 
 =item $state = $mon->collector($uuid)
@@ -383,6 +392,8 @@ sub services ($self) {
 
 sub runs ($self) { return keys %{$self->{+RUNS}} }
 sub jobs ($self) { return keys %{$self->{+JOBS}} }
+
+sub system_load ($self) { return $self->{+SYSTEM} }
 
 sub run ($self, $uuid) { return $self->{+RUNS}{$uuid} }
 sub job ($self, $uuid) { return $self->{+JOBS}{$uuid} }
@@ -505,6 +516,9 @@ sub add_proxy ($self, $name, $target, %opts) {
         $self->_write_proxy($sock, $_) for @{$buf->{frames}};
     }
 
+    # The latest system-load snapshot goes to every proxy, unfiltered.
+    $self->_write_proxy($sock, $self->{+SYSTEM_FRAME}) if defined $self->{+SYSTEM_FRAME};
+
     return;
 }
 
@@ -610,6 +624,15 @@ sub _handle_frame ($self, $rec) {
     my $payload = $envelope->{payload};
     $self->_process($payload);
 
+    # System load is a global singleton, not a lifecycle entity: broadcast it to
+    # every proxy regardless of filter, and keep only the latest frame for
+    # replay so a new subscriber immediately gets current load.
+    if ($payload->{facet_data}{harness_system}) {
+        $self->{+SYSTEM_FRAME} = $rec->{frame};
+        $self->_write_proxy($_->{sock}, $rec->{frame}) for values %{$self->{+PROXIES}};
+        return $payload;
+    }
+
     my ($id, $run_uuid, $terminal) = $self->_route_info($payload->{facet_data});
     if (defined $id) {
         $self->_forward($run_uuid, $rec->{frame});
@@ -699,6 +722,8 @@ sub _drain ($self, $slot) {
 
 sub _process ($self, $payload) {
     my $fd = $payload->{facet_data} or return;
+
+    if (my $sys = $fd->{harness_system}) { $self->{+SYSTEM} = $sys; return; }
 
     return $self->_process_run($fd->{harness_run}) if $fd->{harness_run};
     return $self->_process_job($fd->{harness_job}) if $fd->{harness_job};

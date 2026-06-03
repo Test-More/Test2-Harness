@@ -454,6 +454,66 @@ subtest sweep_removes_completed_after_ttl => sub {
     ok($mon->run('R2'),  "in-flight run never reaped");
 };
 
+subtest system_load_stored => sub {
+    my $mon = unmanaged_monitor();
+    is($mon->system_load, undef, "no system load yet");
+
+    $mon->feed({facet_data => {harness_system => {cpu_pct => 12.5, ncpu => 4, mem_pct => 30}}});
+    is($mon->system_load->{cpu_pct}, 12.5, "system load stored");
+    is($mon->system_load->{ncpu}, 4, "ncpu stored");
+
+    # Replaced, not accumulated.
+    $mon->feed({facet_data => {harness_system => {cpu_pct => 90, ncpu => 4}}});
+    is($mon->system_load->{cpu_pct}, 90, "latest snapshot replaces the prior one");
+};
+
+subtest system_load_forwarded_live => sub {
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/down.sock";
+    my $dlisten = open_unix_listen($dpath);
+
+    my $mon = unmanaged_monitor();
+    $mon->add_proxy(down => $dpath);
+    my $dconn = $dlisten->accept;
+
+    $mon->announce({harness_system => {cpu_pct => 33, ncpu => 8}});
+
+    my $down = downstream_from_conn($dconn);
+    is($down->system_load->{cpu_pct}, 33, "system load forwarded to a live proxy");
+};
+
+subtest system_load_replayed_to_late_proxy => sub {
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/down.sock";
+    my $dlisten = open_unix_listen($dpath);
+
+    my $mon = unmanaged_monitor();
+    $mon->announce({harness_system => {cpu_pct => 7, ncpu => 1}});
+    $mon->announce({harness_system => {cpu_pct => 8, ncpu => 1}});
+
+    # Proxy joins late: it should get the latest snapshot only.
+    $mon->add_proxy(down => $dpath);
+    my $dconn = $dlisten->accept;
+
+    my $down = downstream_from_conn($dconn);
+    is($down->system_load->{cpu_pct}, 8, "latest system snapshot replayed to a late proxy");
+};
+
+subtest system_load_ignores_run_filter => sub {
+    my $dir     = File::Temp::tempdir(CLEANUP => 1);
+    my $dpath   = "$dir/down.sock";
+    my $dlisten = open_unix_listen($dpath);
+
+    my $mon = unmanaged_monitor();
+    $mon->add_proxy(down => $dpath, run_uuid => 'RUN-1');    # run-scoped filter
+    my $dconn = $dlisten->accept;
+
+    $mon->announce({harness_system => {cpu_pct => 5, ncpu => 2}});
+
+    my $down = downstream_from_conn($dconn);
+    is($down->system_load->{cpu_pct}, 5, "system load reaches even a run-filtered proxy");
+};
+
 subtest sweep_disabled_when_ttl_zero => sub {
     my $mon = Test2::Harness2::Collector::Monitor->new(completed_ttl => 0);
     feed_run($mon, run_uuid => 'R1', state => 'complete');

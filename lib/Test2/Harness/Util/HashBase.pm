@@ -449,7 +449,7 @@ F<http://github.com/Test-More/HashBase/>.
 
 =over 4
 
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+=item Chad Granum E<lt>exodist7@gmail.comE<gt>
 
 =back
 
@@ -457,13 +457,13 @@ F<http://github.com/Test-More/HashBase/>.
 
 =over 4
 
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+=item Chad Granum E<lt>exodist7@gmail.comE<gt>
 
 =back
 
 =head1 COPYRIGHT
 
-Copyright 2017 Chad Granum E<lt>exodist@cpan.orgE<gt>.
+Copyright 2017 Chad Granum E<lt>exodist7@gmail.comE<gt>.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

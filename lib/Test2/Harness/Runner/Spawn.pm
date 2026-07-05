@@ -65,7 +65,7 @@ F<http://github.com/Test-More/Test2-Harness/>.
 
 =over 4
 
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+=item Chad Granum E<lt>exodist7@gmail.comE<gt>
 
 =back
 
@@ -73,7 +73,7 @@ F<http://github.com/Test-More/Test2-Harness/>.
 
 =over 4
 
-=item Chad Granum E<lt>exodist@cpan.orgE<gt>
+=item Chad Granum E<lt>exodist7@gmail.comE<gt>
 
 =back
 

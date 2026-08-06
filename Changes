@@ -2,6 +2,10 @@
 
     - Add [PruneCruft] to dist.ini so build artifacts (blib/,
       pm_to_blib, MYMETA.*) no longer leak into release tarballs.
+    - Fix collector busy-loop: sleep with exponential backoff (1ms..100ms)
+      when no events were processed, instead of never sleeping while any
+      job is active. Collector CPU usage drops from 100% of a core to ~0
+      during normal runs.
 
 1.000172  2026-04-28 21:15:51-07:00 America/Los_Angeles
 

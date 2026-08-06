@@ -10,7 +10,7 @@ use Test2::Harness::Collector::JobDir;
 
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::Queue;
-use Time::HiRes qw/sleep time/;
+use Time::HiRes qw/sleep time usleep/;
 use File::Spec;
 
 use File::Path qw/remove_tree/;
@@ -57,10 +57,14 @@ sub process {
     my %warning_seen;
     my $settings = $self->settings;
 
+    my $idle_wait = 1_000;    # µs
+
     while (1) {
         my $count = 0;
-        $count += $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
-        $count += $self->process_tasks();
+        my $work  = 0;
+        $work += $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
+        $work += $self->process_tasks();
+        $count += $work;
 
         my $jobs = $self->jobs;
 
@@ -84,6 +88,7 @@ sub process {
             }
 
             $count += $e_count;
+            $work  += $e_count;
             next if $e_count;
             my $done = $jdir->done;
             unless ($done) {
@@ -119,7 +124,14 @@ sub process {
         }
 
         last if !$count && $self->runner_exited;
-        sleep $self->{+WAIT_TIME} unless $count;
+
+        if ($work) {
+            $idle_wait = 1_000;
+        }
+        else {
+            usleep($idle_wait);
+            $idle_wait = $idle_wait * 2 > 100_000 ? 100_000 : $idle_wait * 2;
+        }
     }
 
     # One last slurp

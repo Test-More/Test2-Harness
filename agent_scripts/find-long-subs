@@ -1,0 +1,127 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+# Walk lib/**.pm and report any sub whose body exceeds the line threshold
+# (see PERL_STYLE_GUIDE.md "Subroutine size"). POD blocks, __END__ trailers,
+# blank lines, and comment-only lines are excluded; the limit applies to
+# executable Perl only.
+#
+# Usage:
+#   perl agent_scripts/find-long-subs                   # threshold = 75, walks lib
+#   perl agent_scripts/find-long-subs --threshold 100   # custom threshold
+#   perl agent_scripts/find-long-subs lib/Foo.pm lib    # files and/or directories
+#
+# Exits 0 when no subs exceed the threshold, 1 otherwise. Suitable for CI as
+# a tripwire on regressions.
+
+use File::Find ();
+use Getopt::Long qw/GetOptions/;
+
+my $threshold = 75;
+GetOptions('threshold=i' => \$threshold) or die "bad arguments\n";
+
+# A directory argument is walked for .pm files; anything that is neither a
+# readable file nor a directory is an error instead of a silent empty scan.
+sub collect_files {
+    my @out;
+    for my $arg (@_) {
+        if (-d $arg) {
+            File::Find::find(
+                {
+                    no_chdir => 1,
+                    wanted   => sub { push @out => $_ if /\.pm\z/ && -f $_ },
+                },
+                $arg,
+            );
+            next;
+        }
+        die "'$arg' is not a file or directory\n" unless -f $arg;
+        push @out => $arg;
+    }
+    return @out;
+}
+
+my @files = collect_files(@ARGV ? @ARGV : 'lib');
+
+my $found = 0;
+for my $file (sort @files) {
+    open my $fh, '<', $file or do { warn "open $file: $!"; next };
+    my @lines = <$fh>;
+    close $fh;
+
+    # Strip POD blocks (=foo ... =cut).
+    my $in_pod = 0;
+    for my $i (0 .. $#lines) {
+        if ($lines[$i]             =~ /^=cut\b/)       { $in_pod = 0; $lines[$i] = ""; next }
+        if (!$in_pod && $lines[$i] =~ /^=[A-Za-z]\w*/) { $in_pod = 1 }
+        $lines[$i] = "" if $in_pod;
+    }
+    # Strip __END__ / __DATA__ trailers.
+    my $eof = 0;
+    for my $i (0 .. $#lines) {
+        $eof       = 1  if $lines[$i] =~ /^__(?:END|DATA)__\s*$/;
+        $lines[$i] = "" if $eof;
+    }
+
+    my $i = 0;
+    while ($i < @lines) {
+        if ($lines[$i] =~ /^\s*sub\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(.*?\))?\s*\{/) {
+            my $name   = $1;
+            my $start  = $i;
+            my $depth  = 0;
+            my $j      = $i;
+            my $opened = 0;
+            my $len    = 0;
+            my $heredoc;
+            while ($j < @lines) {
+                my $stripped = $lines[$j];
+                if (defined $heredoc) {
+                    $heredoc  = undef if $stripped =~ /^\Q$heredoc\E\s*$/;
+                    $stripped = '';
+                }
+                else {
+                    $heredoc  = $2 if $stripped =~ /<<[-~]?\s*(['"]?)([A-Za-z_]\w*)\1/;
+                    $stripped = strip_quote_like($stripped);
+                }
+                $stripped           =~ s/'(?:\\.|[^'\\])*'//g;
+                $stripped           =~ s/"(?:\\.|[^"\\])*"//g;
+                $stripped           =~ s/#.*//;
+                $len++ if $stripped =~ /\S/;
+                my $o = () = $stripped =~ /\{/g;
+                my $c = () = $stripped =~ /\}/g;
+                $depth += $o - $c;
+                $opened ||= $o > 0;
+
+                if ($opened && $depth <= 0) {
+                    if ($len > $threshold) {
+                        printf("%s:%d  %s  (%d lines)\n", $file, $start + 1, $name, $len);
+                        $found++;
+                    }
+                    $i = $j;
+                    last;
+                }
+                $j++;
+            }
+            $i++ if $j >= @lines;
+        }
+        $i++;
+    }
+}
+
+if ($found) {
+    print STDERR "\n$found sub(s) exceed the shared $threshold-line threshold.\n";
+    exit 1;
+}
+exit 0;
+
+sub strip_quote_like {
+    my ($line) = @_;
+
+    $line =~ s{\b(?:q[qwxr]?|m)\s*\{(?:\\.|[^{}])*\}[a-z]*}{}g;
+    $line =~ s{\b(?:q[qwxr]?|m)\s*\((?:\\.|[^()])*\)[a-z]*}{}g;
+    $line =~ s{\b(?:q[qwxr]?|m)\s*\[(?:\\.|[^\[\]])*\][a-z]*}{}g;
+    $line =~ s{\b(?:q[qwxr]?|m)\s*/(?:\\.|[^/])*/[a-z]*}{}g;
+    $line =~ s{\b(?:s|tr|y)\s*\{(?:\\.|[^{}])*\}\s*\{(?:\\.|[^{}])*\}[a-z]*}{}g;
+    return $line;
+}

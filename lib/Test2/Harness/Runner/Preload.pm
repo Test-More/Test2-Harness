@@ -490,7 +490,7 @@ This B<MUST> be called inside a C<stage()> builder coderef.
 This B<MUST> be called only once across C<ALL> stages in a given library.
 
 If multiple preload libraries are loaded then the I<first> default set (based
-on load order) will be the default, others will notbe honored.
+on load order) will be the default, others will not be honored.
 
 =item $stage_name = file_stage($test_file)
 

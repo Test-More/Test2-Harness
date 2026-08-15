@@ -35,3 +35,7 @@ lastlog.*
 docs
 worktrees
 AI_DOCS/
+.immiscible-test.lock
+nytprof.out
+scratch
+/xxx/

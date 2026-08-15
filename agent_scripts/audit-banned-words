@@ -1,0 +1,130 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+# Flags forbidden terminology (see PERL_STYLE_GUIDE.md "Terminology").
+#
+#   backstop     -> fallback (fires when the primary path fails)
+#                   or safeguard (a protective limit)
+#   iff          -> "if and only if", or reword to "only when" / "only if"
+#   kwarg(s)     -> "named argument(s)" / "key/value argument"
+#   load-bearing -> name the actual constraint
+#
+# Defaults to maintained code plus user-facing documents with conventional
+# names. Internal Markdown is not scanned merely because it is at the
+# repository root. Pass explicit paths to add project-specific user docs.
+#
+# Usage:
+#   perl agent_scripts/audit-banned-words
+#   perl agent_scripts/audit-banned-words lib
+#   perl agent_scripts/audit-banned-words --list       # show the word list
+#
+# Exits 1 on any hit, 0 on clean.
+
+use File::Find ();
+use Getopt::Long qw/GetOptions/;
+
+my %BANNED = (
+    backstop       => 'use "fallback" (fires when the primary path fails) or "safeguard" (a protective limit)',
+    iff            => 'write "if and only if", or reword to "only when" / "only if"',
+    kwarg          => 'write "named argument" or "key/value argument"',
+    kwargs         => 'write "named arguments" or "key/value arguments"',
+    'load-bearing' => 'name the actual constraint (e.g. "the runner relies on this")',
+);
+
+my @DEFAULT_PATHS = qw{
+    lib t scripts share agent_scripts bin install
+    README.md AI_AND_LLM_POLICY.txt templates/TEMPLATE.pod
+};
+
+my $list = 0;
+GetOptions('list' => \$list) or die "bad arguments\n";
+
+if ($list) {
+    printf("%-14s %s\n", $_, $BANNED{$_}) for sort keys %BANNED;
+    exit 0;
+}
+
+my @targets = @ARGV ? @ARGV : default_targets();
+
+my @hits;
+for my $target (@targets) {
+    if (-d $target) {
+        File::Find::find(
+            {
+                no_chdir => 1,
+                wanted   => sub { scan_file($_) if -f $_ && wanted_file($_) },
+            },
+            $target,
+        );
+        next;
+    }
+    scan_file($target) if -f $target;
+}
+
+if (@hits) {
+    print "Forbidden terminology from the shared style policy:\n";
+    print "  $_\n" for @hits;
+    print "\nReplacements:\n";
+    printf("  %-14s %s\n", $_, $BANNED{$_}) for sort keys %BANNED;
+    exit 1;
+}
+
+print "OK: no forbidden terminology.\n";
+exit 0;
+
+sub default_targets {
+    return grep { -e $_ } @DEFAULT_PATHS;
+}
+
+sub wanted_file {
+    my ($path) = @_;
+    return 0 if is_skipped_path($path);
+    return 0 if is_exempt_file($path);
+    return 1 if $path =~ /\.(?:pm|pl|t|pod|md|sql|txt)\z/;
+    return 1 if $path =~ m{(?:^|/)(?:agent_scripts|bin)/[^/]+\z};
+    return 0;
+}
+
+sub is_skipped_path {
+    my ($path) = @_;
+    return 1 if $path =~ m{(?:^|/)(?:\.git|blib|cover_db|node_modules|_build)(?:/|$)};
+    return 1 if $path =~ m{(?:^|/)(?:reference|old[^/]*|worktrees)(?:/|$)};
+    return 0;
+}
+
+# The documents that define the rule necessarily contain the words, as does
+# this script. Exempting them by name beats teaching every reader to litter
+# escape markers through the guide.
+sub is_exempt_file {
+    my ($path) = @_;
+    my ($base) = $path =~ m{([^/]+)\z};
+    return 0 unless defined $base;
+    return 1 if $base eq 'PERL_STYLE_GUIDE.md';
+    return 1 if $base eq 'STYLE_GUIDE.md';
+    return 1 if $base eq 'STYLE_GUIDE_AGENT_CHECKLIST.md';
+    return 1 if $base eq 'audit-banned-words';
+    return 0;
+}
+
+sub scan_file {
+    my ($path) = @_;
+
+    return if is_skipped_path($path);
+    return if is_exempt_file($path);
+
+    open(my $fh, '<', $path) or return;
+    my $line_no = 0;
+    while (my $line = <$fh>) {
+        $line_no++;
+        chomp $line;
+        next if $line =~ /banned-words-ok/;
+        for my $word (sort keys %BANNED) {
+            next unless $line =~ /(?<![\w-])\Q$word\E(?![\w-])/i;
+            (my $trimmed = $line) =~ s/^\s+|\s+$//g;
+            push @hits => sprintf('%s:%d: %s  [%s]', $path, $line_no, $trimmed, $word);
+            last;
+        }
+    }
+    return;
+}

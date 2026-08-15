@@ -125,7 +125,7 @@ C<$input> is an arrayref of files and/or directories provided at the command
 line.
 
 C<$default_search> is an arrayref with the default files/directories pulled in
-when nothing is specified at the command ine.
+when nothing is specified at the command line.
 
 C<$settings> is an instance of L<Test2::Harness::Settings>
 
@@ -200,7 +200,7 @@ post-processing on what it provides.
 
 This is a callback that lets your plugin add meta-data or custom fields to the
 run event. The meta-data and fields are available in the event log, and are
-particularily useful to L<App::Yath::UI>.
+particularly useful to L<App::Yath::UI>.
 
     sub inject_run_data {
         my $class  = shift;
@@ -250,7 +250,7 @@ Diffs must be in the same format as this git command:
 
     git diff -U1000000 -W --minimal BASE_BRANCH_OR_COMMIT
 
-Some other diff formats may work by chance, but they are not dirfectly
+Some other diff formats may work by chance, but they are not directly
 supported. In the future other diff formats may be directly supported, but not
 yet.
 
@@ -268,7 +268,7 @@ In memory diff as a single string
 
 =item lines => \@lines
 
-Diff where each line is a seperate string in an arrayref.
+Diff where each line is a separate string in an arrayref.
 
 =item line_sub => sub { ... }
 
@@ -290,7 +290,7 @@ from the command will be seen as events and will be part of the yath log. If no
 workspace is available this will not redirect IO and it will be identical to
 calling C<system()>.
 
-This is particularily useful in C<setup()> and C<teardown()> when running
+This is particularly useful in C<setup()> and C<teardown()> when running
 external commands, specially any that daemonize and continue to produce output
 after the setup/teardown method has completed.
 

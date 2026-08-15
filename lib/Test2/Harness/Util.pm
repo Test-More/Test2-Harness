@@ -383,7 +383,7 @@ __END__
 
 =head1 NAME
 
-Test2::Harness::Util - General utiliy functions.
+Test2::Harness::Util - General utility functions.
 
 =head1 DESCRIPTION
 

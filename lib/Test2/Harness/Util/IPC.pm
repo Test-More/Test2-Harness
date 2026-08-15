@@ -250,12 +250,12 @@ post-chroot
 
 =item run_in_parent => [sub { ... }, sub { ... }]
 
-An arrayref of callbacks to be run in the parent process immedietly after the
+An arrayref of callbacks to be run in the parent process immediately after the
 child process is started.
 
 =item run_in_child => [sub { ... }, sub { ... }]
 
-An arrayref of callbacks to be run in the child process immedietly after fork.
+An arrayref of callbacks to be run in the child process immediately after fork.
 This parameter is silently ignored on systems without fork/exec.
 
 =item env => { ENVVAR => $VAL, ... }
@@ -266,7 +266,7 @@ local prior to the spawn.
 
 =item no_set_pgrp => $bool,
 
-Normall C<setpgrp(0,0)> is called on systems where it is supported. You can use
+Normally C<setpgrp(0,0)> is called on systems where it is supported. You can use
 this parameter to override the normal behavior. setpgrp() is not called in the
 spawn model, so this parameter is silently ignored there.
 
@@ -285,7 +285,7 @@ after the spawn.
 
 =item stdin  => $handle
 
-Thise can be used to provide custom STDERR, STDOUT, and STDIN. In the fork/exec
+These can be used to provide custom STDERR, STDOUT, and STDIN. In the fork/exec
 model these are swapped into place post-fork in the child. In the spawn model
 the swap occurs pre-spawn, then the old handles are swapped back post-spawn.
 

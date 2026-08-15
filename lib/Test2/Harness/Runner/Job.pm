@@ -621,7 +621,7 @@ Note, this object subclasses L<Test2::Harness::IPC::Process>.
 
 =item $arrayref = $job->args
 
-Get the arguments for the test either formt he queue item, or from the run.
+Get the arguments for the test either from the queue item, or from the run.
 
 =item $path = $job->bail_file
 
@@ -633,7 +633,7 @@ True if the test job bailed out.
 
 =item $cat $job->category
 
-Process category, always 'job' unless overriden in a subclass.
+Process category, always 'job' unless overridden in a subclass.
 
 =item $path = $job->ch_dir
 

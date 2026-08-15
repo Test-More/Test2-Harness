@@ -110,7 +110,7 @@ This module represents a queue, stored as a jsonl file.
 
     $queue->end();
 
-Then in another processs:
+Then in another process:
 
     use Test2::Harness::Util::Queue;
 

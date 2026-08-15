@@ -113,7 +113,7 @@ Fields in the summary hash:
 
 =item fail => $BOOL
 
-These are negatives of eachother. These represent the pass/fail state after
+These are negatives of each other. These represent the pass/fail state after
 processing the events. When one is true the other should be false. These are
 normalized to C<1> and C<0>.
 

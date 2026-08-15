@@ -630,7 +630,7 @@ cases the runner module is exposed via a callback or a plugin affordance.
 
 =head2 FROM SETTINGS
 
-These are attributesd with values set from the L<Test2::Harness::Settings>
+These are attributes with values set from the L<Test2::Harness::Settings>
 instance created from command line arguments.
 
 See L<App::Yath::Options::Runner> for the most up to date documentation on

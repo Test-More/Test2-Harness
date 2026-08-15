@@ -313,7 +313,7 @@ split and text-wrapping may occur if used for terminal display.
 =item $stdout = isolate_stdout()
 
 This will close STDOUT and reopen it to point at STDERR. The result of this is
-that any print statement that does not specify a fielhandle will print to
+that any print statement that does not specify a filehandle will print to
 STDERR instead of STDOUT, in addition any print directly to STDOUT will instead
 go to STDERR. A filehandle to the real STDOUT is returned for you to use when
 you actually want to write to STDOUT.
@@ -331,7 +331,7 @@ will throw an exception if the script cannot be found.
 
 Note: The result is cached so that subsequent calls will return the same path
 even if something installs a new yath script in another location that would
-otherwise be found first. This guarentees that a single process will not switch
+otherwise be found first. This guarantees that a single process will not switch
 scripts.
 
 =back

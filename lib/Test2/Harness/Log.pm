@@ -28,7 +28,7 @@ compressed in bzip2.
 
 =head1 FORMAT
 
-The log file is in jsonl format. Each line of the log can be indepentantly
+The log file is in jsonl format. Each line of the log can be independently
 parsed as json. Each line represents a single event Test2::Harness processed
 during a run. These events will be in the original order Test2::Harness
 processed them in (may not be chronological to when they were generated as
@@ -81,7 +81,7 @@ unique string if UUID generation is disabled or not available.
 =item job_try : INTEGER_OR_NULL
 
 For C<< job_id => 0 >> this will be C<NULL> for any other job this will be an
-intgeger of 0 or greater. This is 0 for the first time a test job is run, if a
+integer of 0 or greater. This is 0 for the first time a test job is run, if a
 job is re-run due to failure (or any other reason) this will be incremented to
 tell you what run it is. When a job is re-run it keeps the same job ID, you can
 use this to distinguish events from each run of the job.

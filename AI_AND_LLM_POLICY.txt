@@ -9,19 +9,41 @@ TL;DR:
     in small chunks that are easy for a human to digest.
 
     No 'vibe' coded contributions where no human understands what was produced
-    or how it works will be accepted.
+    or how it works will be accepted. Such things are fine for rapid
+    experimentation, just not final product.
 
-Can developers use AI/LLM tools to contribute to Test2-Harness?
+    These rules exist to serve one goal: the humans who maintain this code
+    later must be able to understand it. Proven contributors have some leeway
+    where that goal is still met.
 
-    Developers who contribute to Test2-Harness are allowed to use whatever
-    tools they decide are necessary for their work. The project will not
-    micromanage a contributor's workflow. This includes AI/LLM tools.
+Who these rules are for, and how strict they are
+
+    The bar every contribution must clear is that the humans maintaining the
+    code going forward can understand it. The rest of this policy is a guide
+    for getting new contributors and new contributions over that bar. It is
+    not an unbreakable law.
+
+    Active project members with a track record of quality work have more
+    freedom. They may deviate from the specifics below — how work is chunked,
+    whether corrections land as their own commit, how AI use is noted — as
+    long as what they contribute stays high quality and understandable to the
+    people who will maintain it.
+
+    How much flexibility applies depends on the contribution itself and on
+    proven contributors being willing to do the review. A larger or looser
+    contribution is acceptable when someone trusted has actually read it and
+    stands behind it. When that is not the case, follow the rules as written.
+
+Can developers use AI/LLM tools to contribute?
+
+    Developers who contribute are allowed to use whatever tools they decide are
+    necessary for their work. The project will not micromanage a contributor's
+    workflow. This includes AI/LLM tools.
 
 AI/LLM code MUST be human vetted
 
-    Any code that goes into Test2::Harness should be vetted by a human.
-    Maintainers who merge pull requests MUST verify the accuracy and utility of
-    any PR.
+    Any code that goes in should be vetted by a human. Maintainers who merge
+    pull requests MUST verify the accuracy and utility of any PR.
 
     If the AI/LLM generated code needs additional edits or corrections
     before/during merge, those MUST be a separate commit indicating what human
@@ -41,6 +63,13 @@ No 'vibe' coding
     A human must understand what is being done from start to finish. AI may
     assist, and be used as a tool. But it cannot do all the work, and it cannot
     replace your own understanding of the code you are contributing.
+
+Documentation follows the project's documentation policy
+
+    Documentation may be AI written, and may even be identifiably so, but it
+    must meet the same readability and content standards as human-written
+    documentation. It must be concise, natural to read, useful to its audience,
+    and free of needless repetition.
 
 Significant AI/LLM code MUST be noted as such.
 
@@ -66,10 +95,10 @@ Significant AI/LLM code MUST be noted as such.
 
     The reason for noting it is so that we know if there is a human who
     understands it that can be asked questions about the code later. Such a
-    human does exist when AI is an assistant, it does not exit when AI is the
+    human does exist when AI is an assistant, it does not exist when AI is the
     primary author.
 
-    This is entirly due to maintaner preference, it is not intended for an
+    This is entirely due to maintainer preference, it is not intended for an
     exhaustive audit or to single-out contributors who use or reject AI
     assistance. Using this rule as an excuse to troll or attack a contributor
     will not be tolerated. If you think someone missed the mark on noting AI

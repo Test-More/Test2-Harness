@@ -36,6 +36,7 @@ Schwern
 Skoll
 Slaymaker
 ZeeGee
+Exodist
 
 ## proper names
 Fennec
@@ -128,6 +129,45 @@ preloading
 shm
 qvf
 mem
+addons
+argv
+arrayref
+backcompat
+cli
+cmd
+daemonize
+dep
+dev
+dirs
+entrypoint
+libs
+params
+Params
+parsable
+pfile
+sha
+shbang
+subref
+uncompress
+yaml
+durations
+affordance
+
+
+## module and class names
+DepTracer
+SharedJobSlots
+TimeTracker
+timetracker
+YathUI
+
+
+## acronyms and platform names
+CI
+UI
+ENVVAR
+bsd
+macos
 
 
 ## other jargon, slang

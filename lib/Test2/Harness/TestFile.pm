@@ -601,7 +601,7 @@ override with C<set_stage()>.
 
 This checks for the C<# HARNESS-NO-NAME> or C<# HARNESS-USE-NAME> or
 C<# HARNESS-YES-NAME> directives. C<NO> will result in a false boolean. C<YES>
-and C<USE> will result in a ture boolean. If no directive is found then
+and C<USE> will result in a true boolean. If no directive is found then
 C<undef> will be returned.
 
 =item $arrayref = $tf->conflicts_list()

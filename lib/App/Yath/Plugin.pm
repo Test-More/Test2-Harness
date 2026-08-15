@@ -106,7 +106,7 @@ This method is normally left undefined, but will be called if you define it.
 
 =item $plugin->finish(%args)
 
-This is what arguments are recieved:
+This is what arguments are received:
 
     (
         settings     => $settings,                      # The settings

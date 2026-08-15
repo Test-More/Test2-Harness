@@ -254,7 +254,7 @@ This module takes a stream of events and produces aggregated coverage data.
 
 =head1 METHODS
 
-=head2 IMPLEMENTABLE IN SUBLCASSES
+=head2 IMPLEMENTABLE IN SUBCLASSES
 
 If you implement these in a subclass they will be called for you at the proper
 times, making subclassing much easier. In most cases you can avoid overriding

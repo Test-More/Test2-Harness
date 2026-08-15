@@ -21,7 +21,7 @@ App::Yath::Converting - Things you may need to change in your tests before you c
 By default yath tells any L<Test2> or L<Test::Builder> tests to use
 L<Test2::Formatter::Stream> instead of L<Test2::Formatter::TAP>. This is done
 in order to make sure as much data as possible makes it to yath, TAP is a lossy
-formater by comparison.
+formatter by comparison.
 
 This is not normally a problem, but tests that do strange things with
 STDERR/STDOUT, or try to intercept output from the regular TAP formatter can

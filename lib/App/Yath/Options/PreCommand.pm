@@ -140,7 +140,7 @@ App::Yath::Options::PreCommand - Options for yath before command is specified.
 
 =head1 DESCRIPTION
 
-This is qhere many pe-commnd options are defined.
+This is where many pre-command options are defined.
 
 =head1 PROVIDED OPTIONS POD IS AUTO-GENERATED
 

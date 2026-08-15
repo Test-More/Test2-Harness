@@ -1,0 +1,209 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+# Scan for PERL_STYLE_GUIDE.md "Naming and structure" violations: a sub
+# defined in an object module must be CALLED through an invocant
+# ($self->helper(...)), not as a bare function (helper(...)).
+#
+# The rule is about the call site. A sub defined in a class is part of that
+# class's interface -- calling it as a plain function bypasses method
+# dispatch, so a subclass or a consuming role cannot override it, and the
+# call is invisible to anyone grepping for the class's callers.
+#
+# This scanner therefore reports CALLS, never declarations. It will never ask
+# an empty method (sub cache { }) to grow an unused `my $self = shift;` --
+# an earlier declaration-shaped version of this check did exactly that, which
+# is noise, not style.
+#
+# Not flagged:
+#   - imported functions (they are not defined in this file)
+#   - `use constant` and Object::HashBase attribute constants (not `sub`)
+#   - \&name (taking a reference) and `goto &name` (re-dispatch with @_)
+#   - anonymous subs, non-object modules, Perl specials
+#
+# Usage:
+#   perl agent_scripts/audit-methods-not-functions            # walks lib
+#   perl agent_scripts/audit-methods-not-functions lib t/lib  # dirs and/or files
+#
+# Exits 1 on any violation, 0 on clean.
+
+use File::Find ();
+
+my @ROOTS = @ARGV ? @ARGV : ('lib');
+
+my %SPECIAL = map { $_ => 1 } qw(
+    BEGIN END INIT CHECK UNITCHECK DESTROY AUTOLOAD CLONE CLONE_SKIP
+    import unimport
+);
+
+# A bare call to one of these runs the Perl builtin, not the module's sub of
+# the same name -- `delete($params{x})` inside a class that also defines
+# `sub delete` is the builtin every time. Only the explicit `&name(...)` form
+# reaches the sub, so that is the only shape worth flagging for these.
+my %BUILTIN = map { $_ => 1 } qw(
+    bind chomp chop close connect delete dump exec exists fork format
+    index join keys last length link listen log map next open pop print
+    printf push read recv redo ref reset reverse seek select send shift
+    sleep sort splice split sprintf sqrt stat sub tell tie truncate
+    unlink unpack untie values wait warn write
+);
+
+my @hits;
+
+for my $file (collect_files(@ROOTS)) {
+    audit_file($file);
+}
+
+if (@hits) {
+    print "Subs defined in an object module but called as plain functions:\n";
+    print "  $_\n" for @hits;
+    print "\nCall them through the invocant instead: \$self->name(...) / \$class->name(...).\n";
+    print "Do NOT 'fix' these by adding an unused invocant to the declaration.\n";
+    exit 1;
+}
+
+print "OK: no function-style calls to object-module subs.\n";
+exit 0;
+
+# {{{ File collection
+
+sub collect_files {
+    my @out;
+    for my $arg (@_) {
+        if (-d $arg) {
+            File::Find::find(
+                {
+                    no_chdir => 1,
+                    wanted   => sub { push @out => $_ if /\.pm\z/ && -f $_ },
+                },
+                $arg,
+            );
+            next;
+        }
+        die "'$arg' is not a file or directory\n" unless -f $arg;
+        push @out => $arg;
+    }
+    return sort @out;
+}
+
+# }}} File collection
+
+# {{{ Auditing
+
+sub audit_file {
+    my ($path) = @_;
+
+    open(my $fh, '<', $path) or die "open '$path': $!";
+    my @lines = <$fh>;
+    chomp @lines;
+
+    return unless is_object_module(join("\n", @lines));
+
+    my @code = strip_noncode(@lines);
+
+    my %declared;
+    for my $i (0 .. $#code) {
+        next unless $code[$i] =~ /^\s*sub\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
+        next if $SPECIAL{$1};
+        $declared{$1} = $i + 1;
+    }
+
+    return unless keys %declared;
+
+    for my $i (0 .. $#code) {
+        my $line = $code[$i];
+        next unless length $line;
+
+        for my $name (sort keys %declared) {
+            next unless bare_call($line, $name);
+            push @hits => sprintf('%s:%d: %s(...) -- declared at line %d', $path, $i + 1, $name, $declared{$name});
+        }
+    }
+
+    return;
+}
+
+# A module defines an object class if it uses Object::HashBase, consumes a
+# role, or IS a role. `use Role::Tiny ();` and `use Role::Tiny::With;` do
+# neither -- the first just loads the module, the second only imports `with`
+# -- so a plain function library that does either stays exempt.
+sub is_object_module {
+    my ($src) = @_;
+    return 1 if $src =~ /^use\s+(?:[A-Za-z_][A-Za-z0-9_]*::)*HashBase\b/m;
+    return 1 if $src =~ /^use\s+Role::Tiny\s*;/m;
+    return 1 if $src =~ /^with\s+['"q]/m;
+    return 0;
+}
+
+# Matches `name(` as a function call. Rejects method calls ($x->name(),
+# Pkg::name()), sigil-prefixed names, references (\&name), re-dispatch
+# (goto &name), fat-comma keys, and the declaration itself.
+sub bare_call {
+    my ($line, $name) = @_;
+
+    while ($line =~ /(?<![-\w:>\$\@\%])(&?)\Q$name\E\s*\(/g) {
+        my $amp    = $1;
+        my $start  = $-[0];
+        my $before = substr($line, 0, $start);
+
+        next if $before =~ /\\\s*$/;         # \&name
+        next if $before =~ /\bgoto\s+$/;     # goto &name
+        next if $before =~ /\bsub\s+$/;      # declaration
+        next if $before =~ /->\s*$/;         # $obj->name(
+        next if $before =~ /::\s*$/;         # Pkg::name(
+        next if !$amp && $before =~ /[\$\@\%\&]\s*$/;
+        next if !$amp && $BUILTIN{$name};    # the builtin wins, not the sub
+
+        return 1;
+    }
+
+    return 0;
+}
+
+# Blanks out POD, __END__/__DATA__ trailers, comments, and quoted strings so
+# a name appearing in prose or a message cannot look like a call.
+sub strip_noncode {
+    my @lines = @_;
+
+    my $in_pod = 0;
+    my $eof    = 0;
+    my $heredoc;
+
+    for my $line (@lines) {
+        if ($eof) { $line = ''; next }
+
+        if (defined $heredoc) {
+            $heredoc = undef if $line =~ /^\Q$heredoc\E\s*$/;
+            $line    = '';
+            next;
+        }
+
+        if ($line =~ /^__(?:END|DATA)__\s*$/) { $eof = 1; $line = ''; next }
+
+        if ($line =~ /^=cut\b/)                { $in_pod = 0; $line = ''; next }
+        if (!$in_pod && $line =~ /^=[A-Za-z]/) { $in_pod = 1 }
+        if ($in_pod)                           { $line   = ''; next }
+
+        $heredoc = $2 if $line =~ /<<[-~]?\s*(['"]?)([A-Za-z_]\w*)\1/;
+        $line    = strip_quote_like($line);
+        $line =~ s/'(?:\\.|[^'\\])*'//g;
+        $line =~ s/"(?:\\.|[^"\\])*"//g;
+        $line =~ s/(?<![\$\\])#.*$//;
+    }
+
+    return @lines;
+}
+
+sub strip_quote_like {
+    my ($line) = @_;
+
+    $line =~ s{\b(?:q[qwxr]?|m)\s*\{(?:\\.|[^{}])*\}[a-z]*}{}g;
+    $line =~ s{\b(?:q[qwxr]?|m)\s*\((?:\\.|[^()])*\)[a-z]*}{}g;
+    $line =~ s{\b(?:q[qwxr]?|m)\s*\[(?:\\.|[^\[\]])*\][a-z]*}{}g;
+    $line =~ s{\b(?:q[qwxr]?|m)\s*/(?:\\.|[^/])*/[a-z]*}{}g;
+    $line =~ s{\b(?:s|tr|y)\s*\{(?:\\.|[^{}])*\}\s*\{(?:\\.|[^{}])*\}[a-z]*}{}g;
+    return $line;
+}
+
+# }}} Auditing

@@ -348,7 +348,7 @@ properly.
 =item subtest => sub { ... }
 
 These 3 arguments are all aliases for the same thing, only one should be used.
-The codeblock will be called with C<$result> as the onyl argument. The
+The codeblock will be called with C<$result> as the only argument. The
 codeblock will be run as a subtest. If you specify the C<'exit'> argument that
 check will also happen in the same subtest.
 
@@ -412,7 +412,7 @@ When this argument is set to true the path is not added.
 
 =item lib => [...]
 
-This poorly named argument allows you to inject command line argumentes between
+This poorly named argument allows you to inject command line arguments between
 C<perl> and C<yath> in the command.
 
     perl [LIB] path/to/yath [PRE-COMMAND] [COMMAND] [ARGS]
@@ -421,7 +421,7 @@ C<perl> and C<yath> in the command.
 
 =head3 RESULT
 
-The result hashref may containt he following fields depending on the arguments
+The result hashref may contain the following fields depending on the arguments
 passed into C<yath()>.
 
 =over 4

@@ -179,8 +179,8 @@ they are loaded.
 
 =head1 DESCRIPTION
 
-This tool is used by Test2::Harness to build a graph of dependancies which can
-then be used to blacklist modified modules (and anything thatuses them) when
+This tool is used by Test2::Harness to build a graph of dependencies which can
+then be used to blacklist modified modules (and anything that uses them) when
 they change under a preloaded runner.
 
 =head1 SYNOPSIS
@@ -236,7 +236,7 @@ Start tracking modules which are loaded.
 
 =item $dt->stop
 
-Stop tracking moduels that are loaded.
+Stop tracking modules that are loaded.
 
 =back
 

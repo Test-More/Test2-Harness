@@ -120,7 +120,7 @@ accessed via AUTOLOAD generating the methods as needed.
 
 =item $scalar_ref = $prefix->vivify_field($field_name)
 
-This will force a field into existance. It returns a scalar reference to the
+This will force a field into existence. It returns a scalar reference to the
 field which can be used to set the value:
 
     my $vref = $display->vivify_field('verbose');    # Create or find field

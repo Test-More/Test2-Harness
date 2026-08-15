@@ -105,7 +105,7 @@ events.
 
 =head1 SYNOPSIS
 
-In normal usage ou will never need to create one fo these events yourself. This
+In normal usage you will never need to create one of these events yourself. This
 documentation assumes you are operating on an existing event C<$event> that the
 harness exposed to you via a plugin or similar.
 
@@ -159,7 +159,7 @@ says which attempt the event is for. The counter starts at 0.
 =item $bool = $event->processed
 
 This will be true if the event has been process by the harness. Note that this
-attibute is not serialized by C<TO_JSON> or C<as_json>.
+attribute is not serialized by C<TO_JSON> or C<as_json>.
 
 =item $string = $event->run_id
 
@@ -178,7 +178,7 @@ formatter itself.
 
 =item $trace = $event->trace
 
-This si a shortcut for C<< $event->facet_data->{trace} >>. The trace data is
+This is a shortcut for C<< $event->facet_data->{trace} >>. The trace data is
 essential and used everywhere.
 
 =back

@@ -824,7 +824,7 @@ B<Note:> The result is cached, see L<pull_durations()> to refresh the data.
 =item @reasons = $finder->exclude_file($test)
 
 The input argument should be an L<Test2::Harness::Test> instance. This will
-return a list of human readible reasons a test file should be excluded. If the
+return a list of human readable reasons a test file should be excluded. If the
 file should not be excluded the list will be empty.
 
 This is a utility method that verifies the file is not in an exclude
@@ -855,7 +855,7 @@ The default C<find_files()> implementation is this:
 
 Each one returns an arrayref of L<Test2::Harness::TestFile> instances.
 
-Note that C<find_multi_project_files()> uses C<find_project_files()> internall,
+Note that C<find_multi_project_files()> uses C<find_project_files()> internally,
 once per project directory.
 
 $plugins is a list of plugins, some may be class names, others may be

@@ -338,10 +338,10 @@ C<assign()> method above.
 =head2 QUEUE MANAGEMENT IS UNLOCKED
 
 Once the above has been done, queue management will be unlocked. You can be
-guarenteed that only one process will be run the C<available()>, and
+guaranteed that only one process will be run the C<available()>, and
 C<assign()> sequence at a time, and that they will be called in order, though
 C<assign()> may not be called if another resource was not available. If
-C<assign()> is called, you can be guarenteed that all processes, including the
+C<assign()> is called, you can be guaranteed that all processes, including the
 one that called C<assign()> will have their C<record()> called with the proper
 argument B<BEFORE> they try to manage the queue (which is the only place
 resources are checked or assigned).
@@ -354,14 +354,14 @@ has completed. Every time a job_id completes the C<release($job_id)> method
 will be called on your resource class in all runner processes. This allows the
 state to be updated to reflect the freed resource.
 
-You can be guarenteed that any process that locks the queue to run a new
+You can be guaranteed that any process that locks the queue to run a new
 test will eventually see the message. The message may come in during a loop
 that is checking for resources, in which case the state will not reflect the
 resource being available, however in such cases the loop will end and be
-called again later with the message having been receieved. There will be no
+called again later with the message having been received. There will be no
 deadlock due to a queue manager waiting for the message.
 
-There are no guarentees about what order resources will be released in.
+There are no guarantees about what order resources will be released in.
 
 =head1 METHODS
 
@@ -373,7 +373,7 @@ This will be called once before the runner forks or initialized per-process
 instances. If you have any "setup once" tasks to initialize resources before
 tests run this is a good place to do it.
 
-This runs immedietly after plugin setup() methods are called.
+This runs immediately after plugin setup() methods are called.
 
 B<NOTE:> Do not rely on recording any global state here, the runner and
 per-process instances may not be forked from the process that calls setup().
@@ -434,7 +434,7 @@ you in this method.
 
 =item $inst->record($job_id, $record_arg_from_assign)
 
-B<NOTE: THIS MAY BE CALLED IN MUTLIPLE PROCESSES CONCURRENTLY>.
+B<NOTE: THIS MAY BE CALLED IN MULTIPLE PROCESSES CONCURRENTLY>.
 
 This will be called in all processes so that your instance can update any
 internal state.
@@ -452,7 +452,7 @@ process.
 
 =item $inst->release($job_id)
 
-B<NOTE: THIS MAY BE CALLED IN MUTLIPLE PROCESSES CONCURRENTLY>.
+B<NOTE: THIS MAY BE CALLED IN MULTIPLE PROCESSES CONCURRENTLY>.
 
 This will be called for every test job that completes, even if it did not use
 this resource. If the job_id did not use the resource you may simply return,
@@ -493,7 +493,7 @@ between each set of requests for resources.
 =item $bool = $inst->job_limiter()
 
 True if your resource is intended as a job limiter (IE alternative to
-specifying -jN at the command line).
+specifying C<-jN> at the command line).
 
 =item $int = $inst->job_limiter_max()
 
@@ -509,7 +509,7 @@ used to avoid a resource-allocation loop as an optimization.
 
 Used to sort resources if you want them to be checked in a specific order. For
 most resources this defaults to 50. For job_limiter resources this defaults to
-100. Lower numbers are sorted to the front of the list, IE they are aquired
+100. Lower numbers are sorted to the front of the list, IE they are acquired
 first, before other resources.
 
 Job slots are sorted later (100) so that we do not try to grab a job slot if

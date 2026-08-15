@@ -843,7 +843,7 @@ Get the L<Test2::Harness::Settings> instance.
 =item $arrayref = $options->args
 
 Get the reference to the list of command line arguments. This list is modified
-as arguments are processed, there are no guarentees about what is in here at
+as arguments are processed, there are no guarantees about what is in here at
 any given stage of argument processing.
 
 =item $class_name = $options->command_class

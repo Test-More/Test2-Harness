@@ -583,11 +583,11 @@ used multiple times. A value is required.
 =item H hash-list
 
 Similar to the 'h' type except the key/value pair expects a comma separated
-list for the value, and it will be placed under the key as an arrayef.
+list for the value, and it will be placed under the key as an arrayref.
 
     yath --opt foo=a,b,c --opt bar=1,2,3
 
-The yath command obove would produce this structure:
+The yath command above would produce this structure:
 
     {
         foo => ['a', 'b', 'c'],
@@ -606,7 +606,7 @@ specify a title it will be used to generate the name and field.
 If your title is C<'foo-bar_baz'> then your field will be C<'foo_bar_baz'> and
 your name will be C<'$PREFIX-foo-bar-baz'>.
 
-Basically title is used to generate a sane field and/or name if niether are
+Basically title is used to generate a sane field and/or name if neither are
 specified. For field all dashes are changed to underscores. The field is used
 as a key in the settings: C<< $settings->prefix->field >>. For the name all
 underscores are changed to dashes, if the option is provided by a plugin then
@@ -666,14 +666,14 @@ The prefix for the option, specified when the option was defined.
 
 =item $field_name
 
-The field for the option, specified whent the option was defined.
+The field for the option, specified when the option was defined.
 
 =item $raw_value
 
 The value/argument provided at the command line C<--foo bar> would give us
 C<"bar">. This is BEFORE any processing/normalizing is done.
 
-For options that do not take arguments, or where argumentes are optional and none are provided, this
+For options that do not take arguments, or where arguments are optional and none are provided, this
 will be '1'.
 
 =item $normalized_value
@@ -789,7 +789,7 @@ Note, for any non-scalar type you want to use a subref to define the value:
         default => sub { [qw/a b c/] },
     );
 
-=item $class->new(description => "Fe Fi Fo Fum")
+=item $class->new(description => "Fee Fie Foe Fum")
 
 =item $multiline_string = $opt->description()
 
@@ -802,7 +802,7 @@ provide a value the default is C<'NO DESCRIPTION - FIX ME'>.
 
 If set, this should be an arrayref of environment variable names. If any of the
 environment variables are defined then the settings will be updated as though
-the option was provided onthe command line with that value.
+the option was provided on the command line with that value.
 
 Example:
 
@@ -830,7 +830,7 @@ You can also ask to have the environment variables cleared after they are checke
         are used.
     );
 
-If you would like the option set to the opposite of the envarinment variable
+If you would like the option set to the opposite of the environment variable
 you can prefix it with a C<'!'> character:
 
     option foo =>(
@@ -838,7 +838,7 @@ you can prefix it with a C<'!'> character:
         env_vars => ['!FOO'],
     );
 
-In this case these are equivelent:
+In this case these are equivalent:
 
     FOO=0 yath test
     yath test --foo=1
@@ -910,7 +910,7 @@ and returns the normalized form.
 =item $bool = $opt->pre_command()
 
 Options are either command-specific, or pre-command. Pre-command options are
-ones yath processes even if it has not determined what comamnd is being used.
+ones yath processes even if it has not determined what command is being used.
 Good examples are C<--dev-lib> and C<--plugin>.
 
     yath --pre-command-opt COMMAND --command-opt
@@ -943,7 +943,7 @@ L<App::Yath::Options> instance.
         },
     );
 
-Explanation of paremeters:
+Explanation of parameters:
 
 =over 4
 
@@ -978,7 +978,7 @@ case of negation this key may not exist.
 If you want your option to be usable as a short option (single character,
 single dash C<-X>) then you can provide the character to use here. If the
 option does not require an argument then it can be used along with other
-no-argument short options: C<-xyz> would be equivilent to C<-x -y -z>.
+no-argument short options: C<-xyz> would be equivalent to C<-x -y -z>.
 
 There are only so many single-characters available, so options are restricted
 to picking only 1.

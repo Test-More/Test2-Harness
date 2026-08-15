@@ -403,7 +403,7 @@ if the file is not yet known.
 
 =item $string = $watcher->halt
 
-If the test was halted (bail-out) this will contain the human readible reason.
+If the test was halted (bail-out) this will contain the human readable reason.
 
 =item $bool = $watcher->has_exit
 
@@ -446,7 +446,7 @@ harness_job_exit event.
 
 =item $times = $watcher->times()
 
-Retuns the L<Test2::Harness::Auditor::TimeTracker> instance.
+Returns the L<Test2::Harness::Auditor::TimeTracker> instance.
 
 =item $int = $watcher->try()
 

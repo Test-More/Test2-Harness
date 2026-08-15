@@ -393,7 +393,7 @@ Set a custom signal handler. This is a safer version of
 C<< local %SIG{$sig} >> for use with IPC.
 
 The callback will get exactly one argument, the name of the signal that was
-recieved.
+received.
 
 =item $ipc->handle_sig($sig)
 
@@ -440,7 +440,7 @@ Options:
 
 =item timeout => $float
 
-If a blocking paremeter is provided this can be used to break the wait after a
+If a blocking parameter is provided this can be used to break the wait after a
 timeout. L<Time::HiRes> is used, so timeout is in seconds with decimals.
 
 =item all => $bool

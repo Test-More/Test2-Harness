@@ -779,7 +779,7 @@ This section documents the L<App::Yath> module itself.
 =head2 SYNOPSIS
 
 In practice you should never need to write your own yath script, or construct
-an L<App::Yath> instance, or even access themain instance when yath is running.
+an L<App::Yath> instance, or even access the main instance when yath is running.
 However some aspects of doing so are documented here for completeness.
 
 A minimum yath script looks like this:

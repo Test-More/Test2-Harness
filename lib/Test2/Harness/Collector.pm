@@ -413,7 +413,7 @@ to any plugins or callbacks.
 If you need a collector for a third-party command you should look at
 L<App::Yath::Command::collector>. When a command needs a collector (such as
 L<App::Yath::Command::test> does) it normally spawns a collector process by
-execuing C<yath collector>. The C<start_collector()> subroutine in
+executing C<yath collector>. The C<start_collector()> subroutine in
 L<App::Yath::Command::test> is a good place to look for more details.
 
 =head1 SOURCE

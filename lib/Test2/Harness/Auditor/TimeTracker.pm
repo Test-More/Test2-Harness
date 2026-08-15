@@ -315,7 +315,7 @@ This produces a summary string of the totals data:
 
     Startup: 0.00708s | Events: 0.00000s | Cleanup: 0.10390s | Total: 0.11098s
 
-Fields that have no data will be ommited from the string.
+Fields that have no data will be omitted from the string.
 
 =item $table = $tracker->table
 

@@ -394,7 +394,7 @@ be 1, 0, or -1. $a and $b are the 2 items being compared. $state_object is an
 instance of C<Test2::Harness::Runner::Resource::SharedJobSlots::State>.
 $state_data is a hashref like you get from C<< $state_object->state() >> which
 is useful if you want to know how many slots each runner is using for a 'fair'
-style algorth.
+style algorithm.
 
 Take a look at the C<request_sort_XXX> methods on
 C<Test2::Harness::Runner::Resource::SharedJobSlots::State> which implement the

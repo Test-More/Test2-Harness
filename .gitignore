@@ -33,3 +33,5 @@ lastlog.*
 *.test_info.*.json
 .testsharedjobslots.yml
 docs
+worktrees
+AI_DOCS/

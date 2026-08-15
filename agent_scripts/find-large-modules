@@ -1,0 +1,82 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+# Walk lib/**.pm and report any file whose code (excluding POD) exceeds the
+# 10,000-line threshold (see PERL_STYLE_GUIDE.md "Module size").
+#
+# A project may declare a lower threshold; pass it with --threshold in that
+# case.
+#
+# Usage:
+#   perl agent_scripts/find-large-modules                    # threshold = 10000, walks lib
+#   perl agent_scripts/find-large-modules --threshold 1000   # custom threshold
+#   perl agent_scripts/find-large-modules lib/Foo.pm lib     # files and/or directories
+#
+# Exits 0 when no files exceed the threshold, 1 otherwise.
+
+use File::Find ();
+use Getopt::Long qw/GetOptions/;
+
+my $threshold = 10_000;
+GetOptions('threshold=i' => \$threshold) or die "bad arguments\n";
+
+# A directory argument is walked for .pm files; anything that is neither a
+# readable file nor a directory is an error instead of a silent empty scan.
+sub collect_files {
+    my @out;
+    for my $arg (@_) {
+        if (-d $arg) {
+            File::Find::find(
+                {
+                    no_chdir => 1,
+                    wanted   => sub { push @out => $_ if /\.pm\z/ && -f $_ },
+                },
+                $arg,
+            );
+            next;
+        }
+        die "'$arg' is not a file or directory\n" unless -f $arg;
+        push @out => $arg;
+    }
+    return @out;
+}
+
+my @files = collect_files(@ARGV ? @ARGV : 'lib');
+
+my $found = 0;
+for my $file (sort @files) {
+    open my $fh, '<', $file or do { warn "open $file: $!"; next };
+    my @lines = <$fh>;
+    close $fh;
+
+    my $code_count = 0;
+    my $in_pod     = 0;
+
+    for my $line (@lines) {
+        last if $line =~ /^__END__\s*$/ || $line =~ /^__DATA__\s*$/;
+
+        if ($line =~ /^=cut\b/) {
+            $in_pod = 0;
+            next;
+        }
+        if (!$in_pod && $line =~ /^=[A-Za-z]\w*/) {
+            $in_pod = 1;
+        }
+
+        next if $in_pod;
+        $code_count++;
+    }
+
+    if ($code_count > $threshold) {
+        printf("%s: %d lines of code (threshold %d)\n", $file, $code_count, $threshold);
+        $found++;
+    }
+}
+
+if ($found) {
+    print STDERR "\n$found module(s) exceed the shared $threshold-line threshold.\n";
+    print STDERR "Flag these for human review -- do not split them silently.\n";
+    exit 1;
+}
+exit 0;

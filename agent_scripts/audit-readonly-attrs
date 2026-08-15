@@ -1,0 +1,94 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+# Flags Object::HashBase read-only attributes declared with the `-` prefix
+# (reader + a setter that exists only to throw "read-only") instead of `<`
+# (reader, no setter at all). `<` is the house style for read-only slots; `-`
+# leaves a dead throwing setter behind for no benefit. See
+# PERL_STYLE_GUIDE.md "Object orientation".
+#
+# `-attr` is allowed only in the rare case where the throwing setter is
+# genuinely wanted (e.g. a clearer error than "method not found" at a call
+# site that cannot be removed). Mark such a line with the exact token
+# `-attr-ok` in a comment to silence this check; a bare comment does NOT
+# exempt it, so the marker is deliberate and greppable.
+#
+# Scans the WHOLE tree (default lib/), not a touched-file subset, so an
+# incomplete edit set cannot let a `-attr` slip through.
+#
+# Usage:
+#   perl agent_scripts/audit-readonly-attrs           # walks lib
+#   perl agent_scripts/audit-readonly-attrs lib t/lib
+
+use File::Find ();
+
+my @roots = @ARGV ? @ARGV : ('lib');
+
+my @hits;
+audit_file($_) for collect_files(@roots);
+
+if (@hits) {
+    print "Read-only HashBase attributes using '-' (use '<' instead; if the throwing setter is intentional, add a '-attr-ok' comment):\n";
+    print "  $_\n" for @hits;
+    exit 1;
+}
+
+print "OK: no unjustified '-' read-only HashBase attributes.\n";
+exit 0;
+
+sub collect_files {
+    my @out;
+    for my $root (@_) {
+        if (-d $root) {
+            File::Find::find(
+                {
+                    no_chdir => 1,
+                    wanted   => sub { push @out => $_ if /\.pm\z/ && -f $_ },
+                },
+                $root,
+            );
+            next;
+        }
+        die "'$root' is not a file or directory\n" unless -f $root;
+        push @out => $root;
+    }
+    return sort @out;
+}
+
+sub audit_file {
+    my ($file) = @_;
+
+    open(my $fh, '<', $file) or die "Could not open $file: $!";
+    my @lines = <$fh>;
+
+    my $in_hashbase = 0;
+    my $in_pod      = 0;
+    for my $i (0 .. $#lines) {
+        my $line = $lines[$i];
+
+        last if $line =~ /^__(?:END|DATA)__\s*$/;
+        if ($line =~ /^=cut\b/) {
+            $in_pod = 0;
+            next;
+        }
+        $in_pod = 1 if !$in_pod && $line =~ /^=[A-Za-z]/;
+        next        if $in_pod;
+
+        unless ($in_hashbase) {
+            next unless $line =~ /^\s*use\s+(?:[A-Za-z_][A-Za-z0-9_]*::)*HashBase\b\s+qw\b/;
+            $in_hashbase = 1;
+        }
+
+        my $code = $line;
+        $code =~ s/#.*$//;
+        if ($code =~ /(?:^|[\s\{\(\[\/])-[A-Za-z_][A-Za-z0-9_]*/ && $line !~ /-attr-ok/) {
+            (my $trimmed = $line) =~ s/^\s+|\s+$//g;
+            push @hits => sprintf('%s:%d: %s', $file, $i + 1, $trimmed);
+        }
+
+        $in_hashbase = 0 if $code =~ /;/;
+    }
+
+    return;
+}

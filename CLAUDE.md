@@ -1,7 +1,10 @@
-# Test2-Harness (Legacy)
+# MANDATORY
 
-Project directory is named `-Legacy` because the harness is being rewritten elsewhere. The CPAN distribution name is still `Test2-Harness`.
+You MUST read `AGENTS.md` at the root of this repository before doing ANY
+work in this project. This is not optional. No exceptions.
 
-## CPAN Testers
-Dist name on https://mcp.cpantesters.org/ (MCP server with CPAN Testers data): `Test2-Harness`
-See ~/CLAUDE.md for MCP query protocol.
+`AGENTS.md` contains the authoritative project instructions, conventions,
+and constraints. CLAUDE.md exists solely to point you there.
+
+Do not answer questions, make edits, run commands, or plan work until you
+have read `AGENTS.md` in the current session.

@@ -310,7 +310,8 @@ sub find_libraries {
     my ($search, @paths) = @_;
     my @parts = grep $_, split /::(\*)?/, $search;
 
-    @paths = @INC unless @paths;
+    # Skip @INC hook refs; canonpath would stringify them to bogus paths.
+    @paths = grep { !ref($_) } @INC unless @paths;
 
     @paths = map { File::Spec->canonpath($_) } @paths;
 
@@ -387,6 +388,10 @@ __END__
 Test2::Harness::Util - General utility functions.
 
 =head1 DESCRIPTION
+
+Utility functions used throughout the harness. Nothing here is specific to any
+one part of it; the sections below group the functions by the kind of work
+they do.
 
 =head1 METHODS
 
@@ -483,8 +488,7 @@ initial list.
 
 This will add all paths from C<@INC> to the output, after the initial list.
 Hook entries in C<@INC> - coderefs, arrayrefs, and blessed objects - are not
-paths and are skipped. Note that '.', if in C<@INC> will be moved to the end of
-the final output.
+paths and are skipped. C<'.'> is skipped as well; use C<include_dot> to add it.
 
 =item clean => $bool
 
@@ -494,9 +498,8 @@ If included all paths except C<'.'> will be cleaned using C<clean_path()>.
 
 If true C<'.'> will be appended to the end of the output.
 
-B<Note> even if this is set to false C<'.'> may still be included if it was in
-the initial list, or if it was in C<@INC> and C<@INC> was included using the
-C<include_current> parameter.
+B<Note> this is the only way to get C<'.'> into the output. It is dropped from
+the initial list and from C<@INC> alike.
 
 =back
 

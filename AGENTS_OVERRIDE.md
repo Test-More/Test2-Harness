@@ -91,5 +91,4 @@ reference their own paths.
 ## Prior rulings
 
 Recorded in `RULINGS.md`, not here. This file holds declarations and
-shared-rule overrides; a ruling is neither. This project has no `RULINGS.md`
-— nothing has been ruled on that could be raised again.
+shared-rule overrides; a ruling is neither.

@@ -10,6 +10,7 @@ imported_ok qw{
     maybe_open_file
     maybe_read_file
     open_file
+    process_includes
     read_file
     write_file
     write_file_atomic
@@ -87,5 +88,20 @@ ok(is_same_file("$tmp/foo", "$tmp/foo"), "Matching filenames");
 ok(is_same_file("$tmp/foo", "$tmp/foo2"), "hard link");
 ok(is_same_file("$tmp/foo", "$tmp/foo3"), "soft link");
 ok(!is_same_file("$tmp/foo", "$tmp/bar"), "Different files");
+
+# @INC may hold hooks (coderef, arrayref, blessed object) as documented in
+# perlvar "@INC". They are not paths, and clean_path() would turn them into
+# nonexistent 'CODE(0x...)' paths that then reach child processes as -I args.
+my ($plain, $cleaned);
+{
+    my $hook = sub { return };
+    local @INC = ('/some/lib', $hook, [$hook], bless({}, 'Some::INC::Hook'), '/other/lib');
+
+    $plain   = [process_includes(include_current => 1)];
+    $cleaned = [process_includes(include_current => 1, clean => 1)];
+}
+
+is($plain, ['/some/lib', '/other/lib'], "process_includes drops \@INC hooks and keeps paths in order");
+ok(!(grep { m{(?:CODE|ARRAY|HASH)\(0x} } @$cleaned), "No stringified hook reached the cleaned list");
 
 done_testing;

@@ -1,5 +1,9 @@
 use Test2::V0;
 
-ok(1, 'basic test runs under @INC hook');
+# Reported so the parent can see whether a stringified hook reached this
+# process as an -I path.
+note("INC: $_") for @INC;
+
+ok(1, 'basic test runs under an @INC hook');
 
 done_testing;

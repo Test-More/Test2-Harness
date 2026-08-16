@@ -22,7 +22,7 @@ sub do_begin {
     my %ORIG_SIG = map { defined($SIG{$_}) ? ($_ => "$SIG{$_}") : () } keys %SIG;
     my @ORIG_ARGV = @$argv;
     # Skip @INC hook refs (coderef / arrayref / blessed); they can't cross exec via -I nor round-trip JSON.
-    my @ORIG_INC = grep { ref $_ eq '' } @INC;
+    my @ORIG_INC = grep { !ref($_) } @INC;
     my %CONFIG;
 
     @ARGV = @$argv;

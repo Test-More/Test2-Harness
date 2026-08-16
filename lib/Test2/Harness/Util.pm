@@ -105,7 +105,7 @@ sub process_includes {
     }
 
     # Skip @INC hook refs; clean_path would stringify them to bogus paths.
-    push @list => grep { ref $_ eq '' } @INC if delete $params{include_current};
+    push @list => grep { !ref($_) } @INC if delete $params{include_current};
 
     @list = map { $_ eq '.' ? $_ : clean_path($_) || $_ } @list if delete $params{clean};
 
@@ -482,7 +482,9 @@ initial list.
 =item include_current => $bool
 
 This will add all paths from C<@INC> to the output, after the initial list.
-Note that '.', if in C<@INC> will be moved to the end of the final output.
+Hook entries in C<@INC> - coderefs, arrayrefs, and blessed objects - are not
+paths and are skipped. Note that '.', if in C<@INC> will be moved to the end of
+the final output.
 
 =item clean => $bool
 

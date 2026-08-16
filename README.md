@@ -454,7 +454,7 @@ This section documents the [App::Yath](https://metacpan.org/pod/App%3A%3AYath) m
 ## SYNOPSIS
 
 In practice you should never need to write your own yath script, or construct
-an [App::Yath](https://metacpan.org/pod/App%3A%3AYath) instance, or even access themain instance when yath is running.
+an [App::Yath](https://metacpan.org/pod/App%3A%3AYath) instance, or even access the main instance when yath is running.
 However some aspects of doing so are documented here for completeness.
 
 A minimum yath script looks like this:

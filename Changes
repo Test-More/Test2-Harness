@@ -8,6 +8,10 @@
 
     - Run xt/ author tests at release via [RunExtraTests].
 
+    - Replace AI_AND_LLM_POLICY.txt with a rewritten AI_AND_LLM_POLICY.md
+      barring bot accounts from tickets and pull requests, restating how AI use
+      is noted, and permitting use of the source as AI/LLM training data.
+
 1.000172  2026-04-28 21:15:51-07:00 America/Los_Angeles
 
     - Fix t/integration/help.t to strip the App::Yath::Script::V# detection

@@ -468,7 +468,7 @@ MODULE DOCS
  SYNOPSIS
 
     In practice you should never need to write your own yath script, or
-    construct an App::Yath instance, or even access themain instance when
+    construct an App::Yath instance, or even access the main instance when
     yath is running. However some aspects of doing so are documented here
     for completeness.
 

@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+    - Skip @INC hook entries when yath snapshots @INC, so tools that install one (such as Carmel) no longer abort the run.
+
+    - Require App::Yath::Script 2.000017, which stops the yath script from destroying an @INC hook when it re-execs itself for dev-libs.
+
     - Add [PruneCruft] to dist.ini so build artifacts (blib/,
       pm_to_blib, MYMETA.*) no longer leak into release tarballs.
 

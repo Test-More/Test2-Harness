@@ -90,14 +90,15 @@ shared concurrency lock for anything above `-j4`:
 
 ## Related repositories
 
-- **`Test-Simple`** (`~/projects/Test-More/test-more`) — this distribution
-  pins `Test2`, `Test::Builder`, and `Test::More` at `1.302170`. A change
-  that depends on newer Test2 behavior needs that floor raised here.
+- **`Test-Simple`** (`~/projects/Test-More/test-more`) — supplies `Test2`,
+  `Test::Builder`, and `Test::More`, which this distribution pins to a floor
+  declared in `dist.ini`. A change that depends on newer Test2 behavior needs
+  that floor raised here.
 - **`App-Yath-Script`** (`~/projects/Test-More/App-Yath-Script`) — supplies
-  the shared `yath` executable; required at `App::Yath::Script` 2.000011 so
-  both harness generations can dispatch through one script. Anything touching
-  script detection, the `yath` entry point, or the `App::Yath::Script::V#`
-  handshake must be checked against it.
+  the shared `yath` executable so both harness generations can dispatch
+  through one script; `dist.ini` declares the required `App::Yath::Script`
+  floor. Anything touching script detection, the `yath` entry point, or the
+  `App::Yath::Script::V#` handshake must be checked against it.
 - **`Test2-Harness2`** (`~/projects/Test-More/Test2-Harness2`) — the version 2
   rewrite. It is a separate distribution; changes do not propagate either way,
   but a behavior decision made there is the one to match when both must agree.

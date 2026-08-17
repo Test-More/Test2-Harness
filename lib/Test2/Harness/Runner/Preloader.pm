@@ -2,7 +2,7 @@ package Test2::Harness::Runner::Preloader;
 use strict;
 use warnings;
 
-our $VERSION = '1.000174';
+our $VERSION = '1.000175';
 
 use B();
 use Carp qw/confess croak/;

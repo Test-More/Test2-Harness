@@ -2,7 +2,7 @@ package App::Yath::Command::ps;
 use strict;
 use warnings;
 
-our $VERSION = '1.000174';
+our $VERSION = '1.000175';
 
 use Term::Table();
 use File::Spec();

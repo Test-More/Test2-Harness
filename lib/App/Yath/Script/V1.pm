@@ -2,7 +2,7 @@ package App::Yath::Script::V1;
 use strict;
 use warnings;
 
-our $VERSION = '1.000174';
+our $VERSION = '1.000175';
 
 my ($RUN_SUB, @DEVLIBS, $NO_PLUGINS);
 

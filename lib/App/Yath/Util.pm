@@ -24,34 +24,113 @@ our @EXPORT_OK = qw{
     find_yath
 };
 
+my @CONFIG_SCRIPT_KEYS = qw{
+    bin binexp initialinstalllocation installbin installscript
+    installsitebin installsitescript installusrbinperl installvendorbin
+    scriptdir scriptdirexp sitebin sitebinexp sitescript sitescriptexp
+    vendorbin vendorbinexp
+};
+
 sub find_yath {
     return $App::Yath::Script::SCRIPT if defined $App::Yath::Script::SCRIPT;
 
-    if (-d 'scripts') {
-        my $script = File::Spec->catfile('scripts', 'yath');
-        return $App::Yath::Script::SCRIPT = clean_path($script) if -e $script && -x $script;
-    }
+    my @searched;
 
-    my @keys = qw{
-        bin binexp initialinstalllocation installbin installscript
-        installsitebin installsitescript installusrbinperl installvendorbin
-        scriptdir scriptdirexp sitebin sitebinexp sitescript sitescriptexp
-        vendorbin vendorbinexp
-    };
+    my $script = _find_yath(\@searched);
+    return $App::Yath::Script::SCRIPT = $script if $script;
 
-    my %seen;
-    for my $path (@Config{@keys}) {
-        next unless $path;
-        next if $seen{$path}++;
+    die _find_yath_error(\@searched);
+}
 
-        my $script = File::Spec->catfile($path, 'yath');
+sub _find_yath {
+    my ($searched) = @_;
+
+    for my $script (_yath_scripts()) {
+        push @$searched => $script;
         next unless -f $script && -x $script;
 
-        $App::Yath::Script::SCRIPT = $script = clean_path($script);
-        return $script;
+        return clean_path($script);
     }
 
-    die "Could not find yath in Config paths";
+    return undef;
+}
+
+sub _yath_scripts {
+    my @scripts;
+
+    # A checkout's own script wins: it is the one being developed against.
+    push @scripts => File::Spec->catfile('scripts', 'yath') if -d 'scripts';
+
+    # Set by the yath script itself, so it is the script running this process.
+    push @scripts => $ENV{YATH_SCRIPT} if $ENV{YATH_SCRIPT};
+
+    push @scripts => map { File::Spec->catfile($_, 'yath') } _yath_script_dirs();
+
+    my %seen;
+    return grep { !$seen{$_}++ } @scripts;
+}
+
+sub _yath_script_dirs {
+    my @dirs;
+
+    # An uninstalled dist is never in a Config path, so it comes first.
+    push @dirs => _yath_dirs_from_inc(qr{^(.*)[/\\]blib[/\\](?:lib|arch)$}, 'blib', 'script');
+
+    push @dirs => grep { $_ } @Config{@CONFIG_SCRIPT_KEYS};
+
+    # A guess at the layout, so it comes after anything authoritative.
+    push @dirs => _yath_dirs_from_inc(qr{^(.*)[/\\]lib[/\\]perl5(?:[/\\][^/\\]+)*$}, 'bin');
+
+    push @dirs => File::Spec->path();
+
+    my %seen;
+    return grep { $_ && !$seen{$_}++ } @dirs;
+}
+
+# The script may live next to the libs it belongs to without ever being
+# installed. CPAN smokers do this: they add each prerequisite's uninstalled
+# '<build>/blib/lib' to PERL5LIB, leaving the script in '<build>/blib/script'.
+# local::lib and 'cpanm -l' trees pair '<base>/lib/perl5' with '<base>/bin'.
+sub _yath_dirs_from_inc {
+    my ($pattern, @subdirs) = @_;
+
+    my @dirs;
+    for my $inc (@INC) {
+        next if ref $inc;
+        next unless $inc =~ $pattern;
+
+        push @dirs => File::Spec->catdir($1, @subdirs);
+    }
+
+    return @dirs;
+}
+
+# Failing to find the script is nearly always an environment we have not
+# taught find_yath about yet. Dump everything needed to teach it.
+sub _find_yath_error {
+    my ($searched) = @_;
+
+    my $msg = "Could not find the yath script.\n";
+
+    $msg .= "Searched:\n";
+    $msg .= "  $_\n" for @$searched;
+
+    my @mods = grep { -f File::Spec->catfile($_, 'App', 'Yath', 'Script.pm') } grep { !ref $_ } @INC;
+    $msg .= "App::Yath::Script loaded from: " . ($INC{'App/Yath/Script.pm'} // '(not loaded)') . "\n";
+    $msg .= "App::Yath::Script found in: " .    (@mods ? join(', ' => @mods) : '(nowhere in @INC)') . "\n";
+
+    # Some candidates are relative to the current directory, so it is needed to
+    # make sense of them.
+    $msg .= "Cwd: " . clean_path('.') . "\n";
+    $msg .= "PATH: " .     ($ENV{PATH}     // '(not set)') . "\n";
+    $msg .= "PERL5LIB: " . ($ENV{PERL5LIB} // '(not set)') . "\n";
+
+    $msg .= "\@INC:\n";
+    $msg .= "  $_\n" for grep { !ref $_ } @INC;
+
+    $msg .= "Please report this at http://github.com/Test-More/Test2-Harness/ along with the output above.\n";
+
+    return $msg;
 }
 
 sub isolate_stdout {
@@ -325,9 +404,38 @@ STDOUT.
 =item $path_to_script = find_yath()
 
 This will attempt to find the C<yath> command line script. When possible this
-will return the path that was used to launch yath. If yath was not run to start
-the process it will search the paths specified in the L<Config> module. This
-will throw an exception if the script cannot be found.
+will return the path that was used to launch yath. If
+C<$App::Yath::Script::SCRIPT> is not set the following are searched, in order:
+
+=over 8
+
+=item A C<scripts/> directory in the current directory
+
+=item The C<YATH_SCRIPT> environment variable
+
+The yath script sets this, so it identifies the script that launched the
+current process tree.
+
+=item C<< <base>/blib/script >> for any C<< <base>/blib/lib >> or C<< <base>/blib/arch >> in C<@INC>
+
+This finds the script when the L<App::Yath::Script> distribution is being used
+uninstalled from its build directory, as CPAN smokers do.
+
+=item The paths specified in the L<Config> module
+
+=item C<< <base>/bin >> for any C<< <base>/lib/perl5 >> in C<@INC>
+
+Any version and architecture directories under C<lib/perl5> are ignored, so
+C<< <base>/lib/perl5/5.36.0/x86_64-linux >> also gives C<< <base>/bin >>. This
+finds the script in a L<local::lib> or C<cpanm -l> tree.
+
+=item The C<PATH> environment variable
+
+=back
+
+This will throw an exception if the script cannot be found. The exception lists
+every path that was checked, along with the current directory, C<@INC>, C<PATH>,
+and C<PERL5LIB>, so the missing case can be reported.
 
 Note: The result is cached so that subsequent calls will return the same path
 even if something installs a new yath script in another location that would

@@ -8,6 +8,8 @@
 
     - Add [PruneCruft] to dist.ini so build artifacts (blib/,
       pm_to_blib, MYMETA.*) no longer leak into release tarballs.
+    - Fix the collector pinning a CPU core: it now sleeps between polls
+      instead of busy-looping whenever a job is active.
 
     - Keep .yath.rc in the release tarball; [PruneCruft] drops every root
       dotfile and was undoing the [GatherFile] that ships it.

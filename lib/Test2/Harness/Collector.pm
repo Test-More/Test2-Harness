@@ -32,9 +32,12 @@ use Test2::Harness::Util::HashBase qw{
     +jobs_file +jobs_queue +jobs_done  +jobs
     +pending
 
-    <wait_time
+    <wait_time <idle_wait
     <action
 };
+
+# Floor of the idle backoff. The ceiling is 'wait_time'.
+sub MIN_WAIT() { 0.001 }
 
 sub init {
     my $self = shift;
@@ -47,8 +50,29 @@ sub init {
     $self->{+RUN_DIR} = $run_dir;
 
     $self->{+WAIT_TIME} //= 0.02;
+    $self->{+IDLE_WAIT} = MIN_WAIT;
 
     $self->{+ACTION}->($self->_harness_event(0, undef, time, harness_run => $self->{+RUN}, harness_settings => $self->settings, about => {no_display => 1}));
+}
+
+sub reset_idle_wait {
+    my $self = shift;
+    $self->{+IDLE_WAIT} = MIN_WAIT;
+    return;
+}
+
+# Sleep for the current backoff, then double it up to the 'wait_time' ceiling.
+sub idle_sleep {
+    my $self = shift;
+
+    my $wait = $self->{+IDLE_WAIT};
+    sleep($wait);
+
+    $wait *= 2;
+    my $max = $self->{+WAIT_TIME};
+    $self->{+IDLE_WAIT} = $wait > $max ? $max : $wait;
+
+    return;
 }
 
 sub process {
@@ -58,14 +82,29 @@ sub process {
     my $settings = $self->settings;
 
     while (1) {
+        # $count is the liveness counter that guards loop exit: it also counts
+        # jobs that exist but have produced nothing yet. $work counts events
+        # actually processed, and is the only thing the sleep decision uses.
         my $count = 0;
-        $count += $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
-        $count += $self->process_tasks();
+        my $work  = 0;
+        $work  += $self->process_runner_output if $self->{+SHOW_RUNNER_OUTPUT};
+        $work  += $self->process_tasks();
+        $count += $work;
 
-        my $jobs = $self->jobs;
+        # jobs() emits harness_job_start events for any newly discovered jobs;
+        # that counts as work. It cannot change $count: a new job means %$jobs
+        # is not empty, so the loop below counts it.
+        my $known = keys %{$self->{+JOBS} // {}};
+        my $jobs  = $self->jobs;
+        $work += (keys %$jobs) - $known;
 
         unless (keys %$jobs) {
-            next if $count;
+            if ($count) {
+                # Work was done, so do not sleep, but keep the backoff at its
+                # floor for the next idle iteration.
+                $self->reset_idle_wait;
+                next;
+            }
 
             if ($self->persistent_runner) {
                 last if $self->{+JOBS_DONE};
@@ -84,6 +123,7 @@ sub process {
             }
 
             $count += $e_count;
+            $work  += $e_count;
             next if $e_count;
             my $done = $jdir->done;
             unless ($done) {
@@ -119,7 +159,8 @@ sub process {
         }
 
         last if !$count && $self->runner_exited;
-        sleep $self->{+WAIT_TIME} unless $count;
+
+        $work ? $self->reset_idle_wait : $self->idle_sleep;
     }
 
     # One last slurp

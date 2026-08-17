@@ -8,6 +8,7 @@
     - Keep .yath.rc in the release tarball; [PruneCruft] drops every root dotfile and was undoing the [GatherFile] that ships it.
     - Run xt/ author tests at release via [RunExtraTests].
     - Replace AI_AND_LLM_POLICY.txt with AI_AND_LLM_POLICY.md, barring bot accounts from tickets and pull requests, restating how AI use is noted, and allowing the source as AI/LLM training data.
+    - Fix t/integration/coverage.t failing under Test2::Plugin::Cover 0.000028, which sorts each sub's 'from' list into a different but equally valid order.
 
 1.000172  2026-04-28 21:15:51-07:00 America/Los_Angeles
 

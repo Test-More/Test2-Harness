@@ -78,10 +78,11 @@ is(
                     't/integration/coverage/c.tx' => [{'subtest' => 'c'}],
                 },
                 'c' => {
-                    't/integration/coverage/a.tx' => [
-                        '*',
-                        {'subtest' => 'c'},
-                    ],
+                    't/integration/coverage/a.tx' => bag {
+                        item '*';
+                        item {'subtest' => 'c'};
+                        end;
+                    },
                     't/integration/coverage/c.tx' => [{'subtest' => 'c'}]
                 },
             },

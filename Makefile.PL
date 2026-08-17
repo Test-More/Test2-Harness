@@ -33,7 +33,7 @@ my %WriteMakefileArgs = (
   "MIN_PERL_VERSION" => "5.010000",
   "NAME" => "Test2::Harness",
   "PREREQ_PM" => {
-    "App::Yath::Script" => "2.000011",
+    "App::Yath::Script" => "2.000017",
     "Carp" => 0,
     "Config" => 0,
     "Cwd" => 0,
@@ -96,7 +96,7 @@ my %WriteMakefileArgs = (
 );
 
 my %FallbackPrereqs = (
-  "App::Yath::Script" => "2.000011",
+  "App::Yath::Script" => "2.000017",
   "Carp" => 0,
   "Config" => 0,
   "Cwd" => 0,

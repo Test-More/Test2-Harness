@@ -469,7 +469,7 @@ A minimum yath script looks like this:
         my $settings = Test2::Harness::Settings->new(
             harness => {
                 orig_argv       => [@ARGV],
-                orig_inc        => [@INC],
+                orig_inc        => [grep { !ref($_) } @INC],
                 script          => __FILE__,
                 start           => Time::HiRes::time(),
                 version         => $App::Yath::VERSION,

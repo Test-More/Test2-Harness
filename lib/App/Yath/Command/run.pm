@@ -49,7 +49,7 @@ sub cli_args { '[--] [test files/dirs] [::] [arguments to test scripts] [test_fi
 sub description {
     return <<"    EOT";
 This command will run tests through an already started persistent instance. See
-the start command for details on how to launch a persistant instance.
+the start command for details on how to launch a persistent instance.
     EOT
 }
 

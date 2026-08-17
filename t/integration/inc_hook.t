@@ -22,7 +22,7 @@ chdir(tempdir(CLEANUP => 1, TMPDIR => 1)) or die "Could not chdir to a temp dir:
 # blessed hook aborts the run when the settings are JSON encoded, and all three
 # reach child -I flags as nonexistent 'CODE(0x...)' style paths.
 my @cases = (
-    {name => 'blessed object hook', module => 'FakeHook',     ref_re => qr/FakeHook=HASH\(/},
+    {name => 'blessed object hook', module => 'FakeHook',     ref_re => qr{/FakeHook=HASH\(}},
     {name => 'coderef hook',        module => 'CoderefHook',  ref_re => qr{/CODE\(0x}},
     {name => 'arrayref hook',       module => 'ArrayrefHook', ref_re => qr{/ARRAY\(0x}},
 );

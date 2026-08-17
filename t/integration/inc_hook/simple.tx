@@ -1,8 +1,10 @@
 use Test2::V0;
 
 # Reported so the parent can see whether a stringified hook reached this
-# process as an -I path.
-note("INC: $_") for @INC;
+# process as an -I path. Live hooks are skipped: this process keeps its own
+# when it is exec'd rather than forked, and printing one would look exactly
+# like the leak being watched for.
+note("INC: $_") for grep { !ref($_) } @INC;
 
 ok(1, 'basic test runs under an @INC hook');
 

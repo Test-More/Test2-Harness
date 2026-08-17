@@ -195,6 +195,40 @@ ESYNC
 muxed
 
 
+## option names, flags, and values, from the auto-generated command POD.
+## These only appear in a built distribution, not in the source tree.
+agg
+api
+ByRun
+ByTest
+dbi
+depmap
+Dfoo
+Dlib
+Dt
+io
+iso
+msg
+MyFinder
+nonsub
+nytprof
+pPLUGIN
+proc
+procname
+ps
+qvfd
+sharedjobslots
+speedtag
+tmp
+ui
+yathui
+YathUIDB
+
+## halves of the example git sha in --git-change-base
+abe
+df
+
+
 ## Spelled correctly according to google:
 recognise
 recognises

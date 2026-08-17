@@ -91,7 +91,7 @@ sub cli_args { "" }
 
 sub description {
     return <<"    EOT";
-This command is used to start a persistant instance of yath. A persistant
+This command is used to start a persistent instance of yath. A persistent
 instance is useful because it allows you to preload modules in advance,
 reducing start time for any tests you decide to run as you work.
 

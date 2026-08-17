@@ -4,6 +4,8 @@
 
     - Require App::Yath::Script 2.000017, which stops the yath script from destroying an @INC hook when it re-execs itself for dev-libs.
 
+    - Fix spelling in the help text for -j, --rerun-plugin, --cover-maybe-from, and the persistent runner commands.
+
     - Add [PruneCruft] to dist.ini so build artifacts (blib/,
       pm_to_blib, MYMETA.*) no longer leak into release tarballs.
 

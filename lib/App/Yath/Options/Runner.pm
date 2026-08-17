@@ -50,7 +50,7 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         type           => 's',
         short          => 'j',
         alt            => ['jobs'],
-        description    => 'Set the number of concurrent jobs to run. Add a :# if you also wish to designate multiple slots per test. 8:2 means 8 slots, but each test gets 2 slots, so 4 tests run concurrently. Tests can find their concurrency assignemnt in the "T2_HARNESS_MY_JOB_CONCURRENCY" environment variable.',
+        description    => 'Set the number of concurrent jobs to run. Add a :# if you also wish to designate multiple slots per test. 8:2 means 8 slots, but each test gets 2 slots, so 4 tests run concurrently. Tests can find their concurrency assignment in the "T2_HARNESS_MY_JOB_CONCURRENCY" environment variable.',
         env_vars       => [qw/YATH_JOB_COUNT T2_HARNESS_JOB_COUNT HARNESS_JOB_COUNT/],
         clear_env_vars => 1,
         long_examples  => [' 4', ' 8:2'],

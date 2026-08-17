@@ -69,7 +69,7 @@ option_group {prefix => 'finder', category => "Finder Options", builds => 'Test2
 
     option rerun_plugin => (
         type => 'm',
-        description => "What plugin(s) should be used for rerun (will fallback to other plugins if the listed ones decline the value, this is just used ot set an order of priority)",
+        description => "What plugin(s) should be used for rerun (will fallback to other plugins if the listed ones decline the value, this is just used to set an order of priority)",
         long_examples => [' Foo', ' +App::Yath::Plugin::Foo'],
     );
 

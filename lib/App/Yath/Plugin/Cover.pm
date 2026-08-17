@@ -107,7 +107,7 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
 
     option maybe_from => (
         type => 's',
-        description => "This can be a test log, a coverage dump (old style json or new jsonl format), or a url to any of the previous. Tests will coninue if even if the coverage file/url is invalid.",
+        description => "This can be a test log, a coverage dump (old style json or new jsonl format), or a url to any of the previous. Tests will continue even if the coverage file/url is invalid.",
         long_examples => [' path/to/log.jsonl', ' http://example.com/coverage', ' path/to/coverage.jsonl']
     );
 };

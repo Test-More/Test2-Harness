@@ -18,6 +18,44 @@ see `~/projects/Agents/AGENTS.md` under "What earns a place in `RULINGS.md`".
 
 ---
 
+## 2026-08-17 — `find_yath()` does not look for `./scripts/yath`
+
+**Ruling: `find_yath()` returns `$App::Yath::Script::SCRIPT` when it is set,
+then searches `YATH_SCRIPT`, a `blib/script` beside any `blib/lib` or
+`blib/arch` in `@INC`, the `Config` paths, a `bin` beside any `lib/perl5` in
+`@INC`, and `PATH`. It does not check a `scripts/` directory in the current
+directory.**
+
+The check was there because this distribution once shipped the script as
+`scripts/yath`. It stopped shipping it in 1.000171, when `b5134b33c` moved the
+script logic into `App::Yath::Script::V1` and the script itself into the
+App-Yath-Script distribution; no top-level `scripts/` directory has existed
+here since. The one tracked path that still ends in `scripts/yath` is the
+`t/yath_script/nested` fixture, which `t/yath_script.t` chdirs into: it is an
+empty, non-executable file, so neither the removed check nor `find_alt_script`
+ever matched it.
+
+The behavior it provided did not go away, it moved up a layer.
+`App::Yath::Script::do_begin` calls `find_alt_script()`, which swaps to an
+executable `./scripts/yath` when the current directory has one and re-execs it.
+That script sets `$ENV{YATH_SCRIPT}` to itself, and `find_yath()` checks
+`YATH_SCRIPT` first, so a checkout's own script still wins — through the layer
+that owns the behavior.
+
+Keeping the check meant a second, cwd-relative source that outranked the
+authoritative one and whose answer changed under a `chdir`. Five integration
+tests (`t/integration/includes.t`, `init.t`, `inc_hook.t`, `projects.t`,
+`speedtag.t`) call `find_yath()` early with `# cache result before we chdir`.
+Those calls still matter: a relative `@INC` entry or `PATH` element keeps the
+remaining search cwd-dependent.
+
+Revisit if: something needs `find_yath()` to prefer a checkout's script in a
+process that yath did not start — plain `prove` or `perl` in a tree that has
+`scripts/yath`. No such caller is known; App-Yath-Script's own suite does not
+use `find_yath()`.
+
+---
+
 ## 2026-08-15 — `@INC` hooks are not propagated to test jobs
 
 **Ruling: yath filters `@INC` hook refs out of every snapshot it takes and does

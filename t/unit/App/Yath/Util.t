@@ -38,12 +38,15 @@ tests find_yath => sub {
 
     $App::Yath::Script::SCRIPT = undef;
 
-    my $tmp = gen_temp('scripts' => {'yath' => 'xxx'});
-    my $yath = clean_path(File::Spec->catfile($tmp, 'scripts', 'yath'));
-    chdir($tmp);
-    eval { chmod(0755, File::Spec->catfile($tmp, 'scripts', 'yath')); 1 } or warn $@;
-    is(find_yath, $yath, "found yath script in scripts/ dir");
-    is($App::Yath::Script::SCRIPT, $yath, "cached result");
+    my $tmp = gen_temp('bin' => {'yath' => 'xxx'});
+    my $yath = clean_path(File::Spec->catfile($tmp, 'bin', 'yath'));
+    eval { chmod(0755, File::Spec->catfile($tmp, 'bin', 'yath')); 1 } or warn $@;
+
+    {
+        local $ENV{YATH_SCRIPT} = $yath;
+        is(find_yath, $yath, "found the yath script named by \$ENV{YATH_SCRIPT}");
+        is($App::Yath::Script::SCRIPT, $yath, "cached result");
+    }
 
     # An uninstalled dist: the script lives in blib/script, next to the libs
     # in blib/lib. A local::lib style tree pairs lib/perl5 with bin.
@@ -55,10 +58,6 @@ tests find_yath => sub {
     my $blib_yath = clean_path(File::Spec->catfile($tmp2, 'blib', 'script', 'yath'));
     my $bin_yath  = clean_path(File::Spec->catfile($tmp2, 'bin',  'yath'));
     eval { chmod(0755, $blib_yath, $bin_yath); 1 } or warn $@;
-
-    # Nothing here should have a scripts/ dir of its own.
-    my $empty = gen_temp();
-    chdir($empty);
 
     # Each search source is checked in isolation: only what the params provide
     # is visible to find_yath.
@@ -89,11 +88,11 @@ tests find_yath => sub {
 
     is($find->(env_script => $yath), $yath, "Found it via \$ENV{YATH_SCRIPT}");
 
-    # Running the suite under yath sets YATH_SCRIPT, which must not displace a
-    # checkout's own script.
-    chdir($tmp);
-    is($find->(env_script => $bin_yath), $yath, "A scripts/ dir outranks \$ENV{YATH_SCRIPT}");
-    chdir($empty);
+    is(
+        $find->(env_script => $yath, inc => [File::Spec->catdir($tmp2, 'blib', 'lib')]),
+        $yath,
+        "\$ENV{YATH_SCRIPT} outranks the search paths",
+    );
 
     is(
         $find->(inc => [File::Spec->catdir($tmp2, 'blib', 'lib')]),
@@ -108,19 +107,32 @@ tests find_yath => sub {
     );
 
     is(
-        $find->(config => {scriptdir => File::Spec->catdir($tmp, 'scripts')}),
+        $find->(config => {scriptdir => File::Spec->catdir($tmp, 'bin')}),
         $yath,
         "Found it in a config path",
     );
 
-    is($find->(path => File::Spec->catdir($tmp, 'scripts')), $yath, "Found it in PATH");
+    is($find->(path => File::Spec->catdir($tmp, 'bin')), $yath, "Found it in PATH");
+
+    # App::Yath::Script re-execs into a checkout's own script and names it in
+    # YATH_SCRIPT, so find_yath does not look for one itself.
+    my $checkout = gen_temp('scripts' => {'yath' => 'xxx'});
+    eval { chmod(0755, File::Spec->catfile($checkout, 'scripts', 'yath')); 1 } or warn $@;
+
+    chdir($checkout) or die "$!";
+    like(
+        $find->(dies => 1),
+        qr/Could not find the yath script/,
+        "A scripts/ dir in the current directory is not searched",
+    );
+    chdir($initial_dir) or die "$!";
 
     # An uninstalled script is never in a config path, a lib/perl5 pairing is a
     # guess, so they sit on either side of the config paths.
     is(
         $find->(
             inc    => [File::Spec->catdir($tmp2, 'blib', 'lib')],
-            config => {scriptdir => File::Spec->catdir($tmp, 'scripts')},
+            config => {scriptdir => File::Spec->catdir($tmp, 'bin')},
         ),
         $blib_yath,
         "A blib/script dir outranks a config path",
@@ -129,7 +141,7 @@ tests find_yath => sub {
     is(
         $find->(
             inc    => [File::Spec->catdir($tmp2, 'lib', 'perl5')],
-            config => {scriptdir => File::Spec->catdir($tmp, 'scripts')},
+            config => {scriptdir => File::Spec->catdir($tmp, 'bin')},
         ),
         $yath,
         "A config path outranks a lib/perl5 pairing",

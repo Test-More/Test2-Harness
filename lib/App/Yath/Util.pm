@@ -58,10 +58,10 @@ sub _find_yath {
 sub _yath_scripts {
     my @scripts;
 
-    # A checkout's own script wins: it is the one being developed against.
-    push @scripts => File::Spec->catfile('scripts', 'yath') if -d 'scripts';
-
-    # Set by the yath script itself, so it is the script running this process.
+    # Set by the yath script itself, so it names the script running this
+    # process tree. Under a yath run this is also how a checkout's own script
+    # gets here: App::Yath::Script re-execs into an executable './scripts/yath'
+    # when the current directory has one, and that script sets this to itself.
     push @scripts => $ENV{YATH_SCRIPT} if $ENV{YATH_SCRIPT};
 
     push @scripts => map { File::Spec->catfile($_, 'yath') } _yath_script_dirs();
@@ -409,12 +409,13 @@ C<$App::Yath::Script::SCRIPT> is not set the following are searched, in order:
 
 =over 8
 
-=item A C<scripts/> directory in the current directory
-
 =item The C<YATH_SCRIPT> environment variable
 
 The yath script sets this, so it identifies the script that launched the
-current process tree.
+current process tree. Under a yath run this also covers a checkout's own
+script: L<App::Yath::Script> re-execs into an executable C<./scripts/yath> of
+its own accord when the current directory has one, and the script it re-execs
+into sets this variable to itself.
 
 =item C<< <base>/blib/script >> for any C<< <base>/blib/lib >> or C<< <base>/blib/arch >> in C<@INC>
 

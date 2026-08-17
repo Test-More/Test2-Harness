@@ -2,6 +2,7 @@
 
     - Teach find_yath() to check $ENV{YATH_SCRIPT}, the directories paired with @INC entries, and PATH, so an uninstalled yath script (as CPAN smokers use) is found instead of aborting the test run.
     - Make the find_yath() failure report every path it checked, plus the current directory, @INC, PATH, and PERL5LIB, so a report from an unhandled environment can be acted on.
+    - Stop find_yath() from looking for ./scripts/yath, which this dist no longer ships; the yath script re-execs into a local one itself and then names it in YATH_SCRIPT.
 
 1.000173  2026-08-16 22:09:40-07:00 America/Los_Angeles
 

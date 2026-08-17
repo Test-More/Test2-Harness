@@ -46,8 +46,8 @@ Keeping the check meant a second, cwd-relative source that outranked the
 authoritative one and whose answer changed under a `chdir`. Five integration
 tests (`t/integration/includes.t`, `init.t`, `inc_hook.t`, `projects.t`,
 `speedtag.t`) call `find_yath()` early with `# cache result before we chdir`.
-Those calls stay load-bearing: a relative `@INC` entry or `PATH` element still
-makes the remaining search cwd-dependent.
+Those calls still matter: a relative `@INC` entry or `PATH` element keeps the
+remaining search cwd-dependent.
 
 Revisit if: something needs `find_yath()` to prefer a checkout's script in a
 process that yath did not start — plain `prove` or `perl` in a tree that has

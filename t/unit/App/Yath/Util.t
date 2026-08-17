@@ -78,9 +78,13 @@ tests find_yath => sub {
         return find_yath;
     };
 
-    my $err = $find->(dies => 1);
+    # An empty dir as a config path, so the error has a candidate to list.
+    my $empty     = gen_temp();
+    my $not_found = File::Spec->catfile($empty, 'yath');
+
+    my $err = $find->(dies => 1, config => {scriptdir => $empty});
     like($err, qr/Could not find the yath script/, "No yath found");
-    like($err, qr/^Searched:/m,                    "Error reports what it searched");
+    like($err, qr/^\s+\Q$not_found\E$/m,           "Error reports each path it checked");
     like($err, qr/^Cwd:/m,                         "Error reports the current directory");
     like($err, qr/^PATH:/m,                        "Error reports PATH");
     like($err, qr/^PERL5LIB:/m,                    "Error reports PERL5LIB");
@@ -126,6 +130,24 @@ tests find_yath => sub {
         "A scripts/ dir in the current directory is not searched",
     );
     chdir($initial_dir) or die "$!";
+
+    # The script is run as an argument to perl, so it need not be executable,
+    # except when PATH is what named it.
+    my $tmp3         = gen_temp(bin => {yath => 'xxx'});
+    my $unexecutable = clean_path(File::Spec->catfile($tmp3, 'bin', 'yath'));
+    eval { chmod(0644, $unexecutable); 1 } or warn $@;
+
+    is(
+        $find->(config => {scriptdir => File::Spec->catdir($tmp3, 'bin')}),
+        $unexecutable,
+        "A config path yath does not need the exec bit",
+    );
+
+    like(
+        $find->(dies => 1, path => File::Spec->catdir($tmp3, 'bin')),
+        qr/Could not find the yath script/,
+        "A PATH yath without the exec bit is not used",
+    );
 
     # An uninstalled script is never in a config path, a lib/perl5 pairing is a
     # guess, so they sit on either side of the config paths.

@@ -45,9 +45,12 @@ sub find_yath {
 sub _find_yath {
     my ($searched) = @_;
 
-    for my $script (_yath_scripts()) {
+    for my $candidate (_yath_scripts()) {
+        my ($script, $need_exec) = @$candidate;
+
         push @$searched => $script;
-        next unless -f $script && -x $script;
+        next unless -f $script && -r _;
+        next if $need_exec && !-x _;
 
         return clean_path($script);
     }
@@ -55,6 +58,9 @@ sub _find_yath {
     return undef;
 }
 
+# Callers run the script as an argument to perl, so it only needs to be
+# readable. PATH is the exception: a yath without the exec bit is not the
+# command someone typing 'yath' would get.
 sub _yath_scripts {
     my @scripts;
 
@@ -62,12 +68,13 @@ sub _yath_scripts {
     # process tree. Under a yath run this is also how a checkout's own script
     # gets here: App::Yath::Script re-execs into an executable './scripts/yath'
     # when the current directory has one, and that script sets this to itself.
-    push @scripts => $ENV{YATH_SCRIPT} if $ENV{YATH_SCRIPT};
+    push @scripts => [$ENV{YATH_SCRIPT}, 0] if $ENV{YATH_SCRIPT};
 
-    push @scripts => map { File::Spec->catfile($_, 'yath') } _yath_script_dirs();
+    push @scripts => map { [File::Spec->catfile($_, 'yath'), 0] } _yath_script_dirs();
+    push @scripts => map { [File::Spec->catfile($_, 'yath'), 1] } File::Spec->path();
 
     my %seen;
-    return grep { !$seen{$_}++ } @scripts;
+    return grep { !$seen{$_->[0]}++ } @scripts;
 }
 
 sub _yath_script_dirs {
@@ -80,8 +87,6 @@ sub _yath_script_dirs {
 
     # A guess at the layout, so it comes after anything authoritative.
     push @dirs => _yath_dirs_from_inc(qr{^(.*)[/\\]lib[/\\]perl5(?:[/\\][^/\\]+)*$}, 'bin');
-
-    push @dirs => File::Spec->path();
 
     my %seen;
     return grep { $_ && !$seen{$_}++ } @dirs;
@@ -128,7 +133,7 @@ sub _find_yath_error {
     $msg .= "\@INC:\n";
     $msg .= "  $_\n" for grep { !ref $_ } @INC;
 
-    $msg .= "Please report this at http://github.com/Test-More/Test2-Harness/ along with the output above.\n";
+    $msg .= "Please report this at https://github.com/Test-More/Test2-Harness/issues along with the output above.\n";
 
     return $msg;
 }
@@ -426,13 +431,17 @@ uninstalled from its build directory, as CPAN smokers do.
 
 =item C<< <base>/bin >> for any C<< <base>/lib/perl5 >> in C<@INC>
 
-Any version and architecture directories under C<lib/perl5> are ignored, so
+Anything after C<lib/perl5> is ignored, so
 C<< <base>/lib/perl5/5.36.0/x86_64-linux >> also gives C<< <base>/bin >>. This
 finds the script in a L<local::lib> or C<cpanm -l> tree.
 
 =item The C<PATH> environment variable
 
 =back
+
+Every candidate but the C<PATH> ones only needs to be readable, because the
+script is run as an argument to perl rather than executed. A candidate found
+via C<PATH> must also be executable.
 
 This will throw an exception if the script cannot be found. The exception lists
 every path that was checked, along with the current directory, C<@INC>, C<PATH>,

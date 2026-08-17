@@ -1,24 +1,13 @@
 {{$NEXT}}
 
     - Skip @INC hook entries when yath snapshots @INC, so tools that install one (such as Carmel) no longer abort the run.
-
     - Require App::Yath::Script 2.000017, which stops the yath script from destroying an @INC hook when it re-execs itself for dev-libs.
-
     - Fix spelling in the help text for -j, --rerun-plugin, --cover-maybe-from, and the persistent runner commands.
-
-    - Add [PruneCruft] to dist.ini so build artifacts (blib/,
-      pm_to_blib, MYMETA.*) no longer leak into release tarballs.
-    - Fix the collector pinning a CPU core: it now sleeps between polls
-      instead of busy-looping whenever a job is active.
-
-    - Keep .yath.rc in the release tarball; [PruneCruft] drops every root
-      dotfile and was undoing the [GatherFile] that ships it.
-
+    - Add [PruneCruft] to dist.ini so build artifacts (blib/, pm_to_blib, MYMETA.*) no longer leak into release tarballs.
+    - Fix the collector pinning a CPU core: it now sleeps between polls instead of busy-looping whenever a job is active.
+    - Keep .yath.rc in the release tarball; [PruneCruft] drops every root dotfile and was undoing the [GatherFile] that ships it.
     - Run xt/ author tests at release via [RunExtraTests].
-
-    - Replace AI_AND_LLM_POLICY.txt with a rewritten AI_AND_LLM_POLICY.md
-      barring bot accounts from tickets and pull requests, restating how AI use
-      is noted, and permitting use of the source as AI/LLM training data.
+    - Replace AI_AND_LLM_POLICY.txt with AI_AND_LLM_POLICY.md, barring bot accounts from tickets and pull requests, restating how AI use is noted, and allowing the source as AI/LLM training data.
 
 1.000172  2026-04-28 21:15:51-07:00 America/Los_Angeles
 

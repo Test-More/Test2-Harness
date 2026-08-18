@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Add the # HARNESS-SHARES-XXX directive, a shared claim on a name: any number of tests sharing XXX run at the same time, but none run alongside a # HARNESS-CONFLICTS-XXX test, which claims XXX exclusively.
+
 1.000174  2026-08-17 13:00:43-07:00 America/Los_Angeles
 
     - Teach find_yath() to check $ENV{YATH_SCRIPT}, the directories paired with @INC entries, and PATH, so an uninstalled yath script (as CPAN smokers use) is found instead of aborting the test run.

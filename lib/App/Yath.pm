@@ -733,6 +733,26 @@ XXX can be replaced with any type of your choosing.
 NOTE: This directive does not alter the category of your test. You are free
 to mark the test with LONG or MEDIUM in addition to this marker.
 
+=over 4
+
+=item Example with multiple lines.
+
+    #!/usr/bin/perl
+    # DASH and space are split the same way.
+    # HARNESS-CONFLICTS-DAEMON
+    # HARNESS-CONFLICTS  MYSQL
+
+    ...
+
+=item Or on a single line.
+
+    #!/usr/bin/perl
+    # HARNESS-CONFLICTS DAEMON MYSQL
+
+    ...
+
+=back
+
 =head3 HARNESS-SHARES-XXX
 
 This lets you tell C<yath> that this test uses XXX, but is happy to share it
@@ -768,26 +788,6 @@ Specify a range of job slots needed for the test to run. If set to a single
 value then the test will only run if it can have the specified number of slots.
 If given a range the test will require at least the lower number of slots, and
 use up to the maximum number of slots.
-
-=over 4
-
-=item Example with multiple lines.
-
-    #!/usr/bin/perl
-    # DASH and space are split the same way.
-    # HARNESS-CONFLICTS-DAEMON
-    # HARNESS-CONFLICTS  MYSQL
-
-    ...
-
-=item Or on a single line.
-
-    #!/usr/bin/perl
-    # HARNESS-CONFLICTS DAEMON MYSQL
-
-    ...
-
-=back
 
 =head3 HARNESS-RETRY-n
 

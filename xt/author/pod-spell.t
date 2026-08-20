@@ -233,3 +233,12 @@ df
 recognise
 recognises
 judgement
+
+## stall diagnostics
+Ctrl
+immiscible
+exec'd
+ptrace
+stateful
+unparseable
+Yama

@@ -12,6 +12,8 @@ use Test2::Harness::Util::JSON qw/decode_json/;
 use Test2::Harness::Util qw/mod2file/;
 
 use Test2::Harness::Run;
+use Test2::Harness::Stall::Detector();
+use Test2::Harness::Stall::Trace qw/install_trace_handler/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
@@ -31,6 +33,14 @@ sub run {
     my $fh = isolate_stdout();
 
     my $settings = Test2::Harness::Settings->new(File::Spec->catfile($dir, 'settings.json'));
+
+    # List context on purpose: parse_spec returns a list, so a boolean test
+    # would see only its last value and miss STRONG:0.
+    my %stall =
+        $settings->check_prefix('runner')
+        ? Test2::Harness::Stall::Detector->parse_spec($settings->runner->stall_report)
+        : ();
+    install_trace_handler(File::Spec->catdir($dir, 'stall')) if %stall;
 
     require(mod2file($collector_class));
 

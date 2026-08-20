@@ -13,6 +13,7 @@ use Test2::Harness::Util::JSON qw/decode_json encode_json/;
 use Test2::Harness::Util qw/mod2file/;
 
 use Test2::Harness::Run;
+use Test2::Harness::Stall::Trace qw/install_trace_handler/;
 
 use parent 'App::Yath::Command';
 use Test2::Harness::Util::HashBase;
@@ -30,6 +31,8 @@ sub run {
     $0 = $name;
 
     my $fh = isolate_stdout();
+
+    install_trace_handler($args{stall_dir}) if $args{stall_dir};
 
     require(mod2file($auditor_class));
 

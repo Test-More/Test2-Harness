@@ -2,7 +2,7 @@ package App::Yath::Options::Collector;
 use strict;
 use warnings;
 
-our $VERSION = '1.000175';
+our $VERSION = '1.000176';
 
 use App::Yath::Options;
 

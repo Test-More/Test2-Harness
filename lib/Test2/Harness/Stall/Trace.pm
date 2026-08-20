@@ -2,7 +2,7 @@ package Test2::Harness::Stall::Trace;
 use strict;
 use warnings;
 
-our $VERSION = '1.000175';
+our $VERSION = '1.000176';
 
 use File::Spec();
 

@@ -4,7 +4,7 @@ use warnings;
 
 use Carp qw/croak/;
 
-our $VERSION = '1.000175';
+our $VERSION = '1.000176';
 
 BEGIN {
     local $@ = undef;

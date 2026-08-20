@@ -23,6 +23,7 @@ use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
 use File::Spec;
 use Fcntl();
+use Errno();
 
 use Time::HiRes qw/sleep time/;
 use List::Util qw/sum max min/;
@@ -321,8 +322,17 @@ sub render {
         return if $self->{+SIGNAL};
         $_->step for @{$renderers};
 
+        # A non-blocking handle returns undef both when no data has arrived
+        # yet and when the writers are all gone; only errno tells them apart.
+        # Clear it first: a read answered from PerlIO's cached EOF flag issues
+        # no syscall and leaves whatever errno step() or wait() above set.
+        # Do not use eof(), it reports true for an empty pipe whose writer is
+        # still alive.
+        $! = 0;
         my $line = <$reader>;
         unless(defined $line) {
+            last unless $!{EAGAIN} || $!{EWOULDBLOCK} || $!{EINTR};
+
             $ipc->wait() if $ipc;
             sleep 0.02;
             next;
@@ -397,6 +407,18 @@ sub render {
 
         $ipc->wait() if $ipc;
     }
+
+    # Anything still buffered at EOF is a fragment of an event that was never
+    # completed, so it cannot be parsed. Report it, do not feed it to the JSON
+    # parser, which dies on invalid input.
+    if (defined($buffer) && length($buffer)) {
+        # An event can carry a whole test's output, so an incomplete one can
+        # be large. Show enough to identify it.
+        my $partial = length($buffer) > 200 ? substr($buffer, 0, 200) . "... (truncated)" : $buffer;
+        print STDERR "\nyath: Incomplete event discarded when the event stream ended: $partial\n";
+    }
+
+    return;
 }
 
 sub get_job_pid {

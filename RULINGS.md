@@ -18,6 +18,466 @@ see `~/projects/Agents/AGENTS.md` under "What earns a place in `RULINGS.md`".
 
 ---
 
+## 2026-08-20 — minor stall-diagnostics findings considered and accepted as-is
+
+**Ruling: the following were each raised by an independent reviewer, judged
+non-blocking, and deliberately left. They are recorded because a later review
+will re-derive them, not because they are open work.**
+
+- **The truncated event fragment is cut on a byte boundary**
+  (`App::Yath::Command::test`, the EOF fragment report), so it can split a
+  multi-byte UTF-8 sequence. The fragment is already a corrupt half-event and
+  everything on that pipe is bytes; there is nothing valid to preserve.
+- **`Stall::Capture::read_traces` unlinks a trace after reading it.** A handler
+  still mid-write keeps writing into the unlinked inode, so its tail can be
+  lost. The window is at least a second after the last signal. Closing it means
+  having the handler write a temporary file and rename it, which puts more work
+  in a signal handler inside a process already believed stuck — against the
+  capture ruling's deliberate minimalism there.
+- **A trace arriving after `read_traces` has read the directory** is attributed
+  to the next report. Delayed, not lost; the per-process round number in the
+  filename allows re-attribution.
+- **`Stall::Detector::replay` warns without a cap for a direct caller.**
+  `check()` gates at `>=` so it is unreachable from the only real caller.
+  Cosmetic asymmetry with `poll_stamps`, which kept its guard.
+- **`Stall::Capture::usr1_number` is unexercised.** Pinning the signal number
+  in the two mask subtests is required — without it the file fails on every
+  platform where `SIGUSR1` is not 10 — and that removed its only coverage. A
+  reversed name/number map would fall through to `// 10` and stay invisible on
+  x86. `%Config` is tied and read-only, so every available test either restates
+  the implementation or asserts a platform constant.
+- **The `STRONG:0` handler-install path has manual evidence only.** Reverting
+  the `runner.pm` fix still passes the whole suite. The seam only bites when
+  the last value is zero, which requires the strong tier and therefore nothing
+  running, and the integration fixture starts one test first so its tier is
+  `loose`. Covering it needs a second fixture.
+- **`render_under_alarm` in the renderer unit test has a race**: SIGALRM landing
+  between the eval returning and `alarm 0` lets the exception escape the
+  helper. It surfaces as a clear test failure rather than a hang, across a
+  handful of opcodes against a two or ten second alarm.
+
+Revisit if: any of them is observed rather than reasoned about, or a delivery
+path appears that makes the trace-file handling cheap to change.
+
+---
+
+## 2026-08-20 — where the stall bundle goes, and how it is named
+
+**Ruling: the JSON bundle is written to the directory yath was run from, named
+`yath-stall-report-<run_id>-<report>.json`, and a copy is also written into the
+aux log as one physical line.**
+
+Not the workdir, which is the obvious place and the wrong one. For a plain
+`yath test` it is
+`tempdir(CLEANUP => !($settings->debug->keep_dirs || $command->always_keep_dir))`
+and `App::Yath::Command::test` inherits `always_keep_dir { 0 }`, so a bundle
+written there is deleted moments later unless the site also passes
+`--keep-dirs` or an explicit `--workdir`.
+
+That matters because the text report is a reduced view. Each process's
+`cmdline`, its open file descriptors and what they point at, `sigblk`/`sigign`/
+`sigcgt`, `ppid`, thread count, kernel `stack`, `/proc/locks`, memory, load,
+the workdir filesystem, the full pending and running task detail with
+categories and conflicts, and exact timestamps exist **only** in the bundle.
+
+**Location.** The directory yath was run from — the project root in practice.
+`--stall-report-dir` overrides it, for a site whose working directory is not
+writable or that collects bundles somewhere durable. Any test that produces a
+bundle must pass that option, so running the suite never requires the
+distribution directory to be writable; at install time it may not be.
+
+**Name.** The run id keeps bundles from different runs apart, so many can sit
+in one directory; the trailing report number keeps a single run's reports (up
+to five) from overwriting each other. Both parts are required.
+
+**Also to the log.** A file on the machine that stalled only helps someone who
+can reach that machine, and these runs happen where nobody can. The bundle
+therefore also goes into `aux_logs/stall-STDERR.log`, which
+`Collector::process_runner_output` already forwards, so it reaches the yath UI
+with the rest of the run.
+
+**One physical line, and this is the part that is easy to break.** The
+collector makes one info facet per *line* of an aux log, so a pretty-printed
+bundle would scatter across hundreds of facets. `encode_json` escapes embedded
+newlines, which is what keeps a single line true however large the bundle gets
+— measured at 46,413 bytes for one report, parsing whole, with `meminfo`,
+`/proc/locks`, `strace` output and the stack traces all intact inside it. It
+survives rendering too, so it can be decoded straight out of a CI log.
+
+The readable report goes to STDERR and the aux log; the bundle goes to the aux
+log and the file, but **not** to STDERR, where it would drown the report it
+belongs to.
+
+**Deferred: attaching it as a binary instead.** `Test2::EventFacet::Binary`
+exists and carries base64 `data`, `filename`, `details` and `is_image`; the UI
+stores it (`Schema::Result::Binary`), serves it at `/binary/:binary_id`, and
+`RunProcessor::add_binary` decodes it on ingest. `MAX_ATTACH` is already
+defined at 1 MB in `test.pm` and `start.pm` — and consumed nowhere, in either
+repository. What is missing is delivery: aux logs carry text lines only, so
+nothing can currently move a facet from the runner side into the event stream.
+The single-line JSON is sufficient until that path exists; it can be pulled out
+of the info facet with one decode.
+
+Revisit if: a site needs the bundle somewhere the option cannot reach, the log
+copy proves too large in practice, or someone builds a way for the runner side
+to emit a facet rather than a line.
+
+---
+
+## 2026-08-19 — stall diagnostics go to real STDERR and to an aux log
+
+**Ruling: every stall diagnostic is printed to the main process's STDERR *and*
+appended to `$workdir/aux_logs/stall-STDERR.log`. Never append to
+`error.log`.**
+
+The two channels serve two readers. The main `yath test` process's STDERR is
+never redirected by yath — verified: `swap_io(\*STDERR, ...)` fires only when a
+`stderr` parameter is passed (`Util/IPC.pm:106`), and neither `start_collector`
+nor `start_auditor` passes one; `isolate_stdout` clones STDOUT and leaves
+STDERR alone; `Test2::Harness::Plugin::redirect_io` is opt-in. Only the runner
+and its descendants (`test.pm:955`) and test jobs (`runner.pm:453`) are
+redirected. So STDERR reaches the Jenkins log directly — but nothing forwards
+it, so it never reaches the yath UI database.
+
+`aux_logs` closes that gap using a shipped mechanism.
+`Collector::process_runner_output` re-`opendir`s `$workdir/aux_logs` on every
+poll, picks up files created mid-run, derives a tag from the basename and sets
+`debug => 1` for anything matching `*-STDERR.log` (`Collector.pm:228-243`). A
+file nobody else writes, opened `>>` by the main process alone, reaches the UI
+with no new forwarding code.
+
+**`error.log` is not an option.** It is the runner's redirected STDERR, opened
+by `swap_io` with mode `'>'`, not `'>>'` (`Util/IPC.pm:59`). The runner writes
+at its own fd offset, so a second process appending at EOF has its bytes
+overwritten by the runner's next write and corrupts the runner's output in
+turn. Processes that already own `error.log` — runner, scheduler, stages —
+writing their own `SIGUSR1` stack dumps to their own STDERR is fine and is not
+affected by this.
+
+The full JSON bundle is written separately; see the 2026-08-20 ruling on where
+it goes and how it is named.
+
+Limits accepted: `--hide-runner-output` disables the aux-log channel entirely,
+and `truncate_runner_output` swallows the first poll batch.
+
+---
+
+## 2026-08-19 — the stall detector reports, it does not kill
+
+**Ruling: detecting a stall produces diagnostics and nothing else. No signal to
+terminate, no escalation ladder, no forced exit. Killing is deferred, and the
+documentation says so rather than staying silent about it.**
+
+Diagnosis is the goal and termination is secondary: nobody has identified a
+root cause, manual means of killing these runs already exist, and Jenkins ends
+them on its own after 30 minutes of silence. Killing would change the outcome
+by minutes, not hours.
+
+Three reasons beyond that.
+
+**It works against the primary goal.** The reports are output, so each one
+resets Jenkins' silence timer and buys more sampling rounds against a live
+stalled process. With reproduction cycles measured in weeks, a stalled run left
+running is an asset, not a liability.
+
+**The tidy shutdown path is itself a wedge site.** Setting `SIGNAL` to unwind
+cleanly routes into `App::Yath::Command::test::stop()`, which does
+`delete $state->{no_poll}; $state->poll` (`test.pm:444-449`, not wrapped in
+`eval`). That `State` constructs the user's resource classes and its `poll`
+runs `release()` on them — the callback most likely to be wedged. Any kill
+design has to route around the harness's own cleanup. Not setting `SIGNAL` is
+what keeps the detector clear of this.
+
+**Its test is hard to write.** An integration test for a kill path cannot use
+an unbounded wedge: `App::Yath::Tester` sends TERM at 120s (`Tester.pm:126`),
+and that TERM lands in the same `stop()` → `poll` → `release()` trap, hanging
+the test process itself.
+
+Also unspecified and deliberately not solved: nothing currently makes an
+aborted run exit non-zero. `run()` returns `$pass ? 0 : 1` from `FINAL_DATA`
+(`test.pm:224-239`), which is absent on this path, so the run dies "Final data
+never received from auditor!".
+
+This supersedes `STALL_FIX_BRIEF.md`'s acceptance criterion that a stalled run
+must end itself non-zero, which was written before the owner set diagnosis
+above termination.
+
+Revisit if: a site needs the executor back sooner than Jenkins reclaims it, or
+a capture proves complete enough that keeping the specimen alive no longer has
+value. Adding a kill later is additive and leaves the diagnostic path
+unchanged; the starting points are the `stop()` trap and the exit-code path
+named above.
+
+---
+
+## 2026-08-19 — stall capture: external data in the sender, only the Perl stack in the signal handler
+
+**Ruling: the detector collects everything obtainable from outside the stalled
+process. The `SIGUSR1` handler produces only the Perl call stack, which cannot
+be obtained any other way. Capture broadly — verbosity is cheap, a missing
+field costs a reproduction cycle measured in weeks.**
+
+### Division of labour
+
+Collected by the **detector** (the main `yath test` process): per-process
+`/proc/*/{status,stat,wchan,syscall,stack,cmdline,fd,fdinfo}`; `strace -p`,
+short and bounded, best effort; `/proc/locks` (every flock holder on the box
+with pid and inode); `/proc/loadavg`; `/proc/meminfo`; the workdir's filesystem
+type and free space; the full process tree under the runner; the observer
+`State` dump; and a verbatim lock-free tail of `dispatch.jsonl` and the other
+workdir state files.
+
+Collected by the **handler** in each signalled process: `caller($i)` frames
+(package, file, line, sub name), `$0`, pid, ppid, `$!`, `$@`. Nothing else. No
+harness object traversal — a wedged process is the wrong place to walk state,
+and forking `strace` or opening files from a handler there is a bad bet.
+
+**This split is required, not stylistic. The handler may never run.** A
+process in an uninterruptible syscall, or one Perl auto-restarts, never reaches
+an opcode boundary, so `SIGUSR1` is never delivered — and that is exactly the
+case most in need of description. If `/proc` and `strace` lived in the handler
+we would get nothing precisely when we need everything.
+
+Consequently the detector **must not block waiting for a stack**. It records
+"no stack obtained" and treats the absence as evidence: no stack plus
+`State: D` in `/proc/*/status` is itself a diagnosis.
+
+### Where the handler is installed, and the safety rule
+
+Installed in **all harness processes**: runner, scheduler, stages, collector
+and auditor. The main process needs no signal; it dumps its own stack directly.
+
+**Not installed in test job processes, and they must never be signalled.** They
+shed the handler when `longjump` fires the `Scope::Guard` restoring
+`%orig_sig` (`runner.pm:130-142`), so `SIGUSR1` there takes its default action
+and **terminates the test**. Therefore:
+
+- Signal a positive whitelist of known pids only.
+- **Never signal a process group.** `IPC::killall` signals groups
+  (`IPC.pm:109-114`); the detector must not use it.
+
+Install the handler inside `generate_run_sub` after the `%orig_sig = %SIG`
+snapshot, so the scheduler and stage forks inherit it and job processes shed it
+with no per-job cleanup code.
+
+### Output shape
+
+The handler writes to its own STDERR (which for runner/scheduler/stages is
+`error.log`, already forwarded by the collector) **and** to
+`$workdir/stall/stack-<pid>-<round>.txt`. The detector reads those after a
+short timeout and folds them into one JSON bundle, so an analysis agent gets a
+single artifact rather than interleaved stderr; the stderr copy survives if the
+detector itself dies.
+
+The report is emitted as human-readable text plus a structured JSON payload
+between explicit begin/end markers, so it can be extracted from a Jenkins log
+by pattern rather than by parsing prose, and written to
+`$workdir/stall-report-N.json`.
+
+The whole per-process set is sampled **3 rounds a few seconds apart**. Frames
+and `syscall` moving between rounds is mechanism 2 (looping); identical is
+mechanism 1 (wedged). That distinction is the first question any analysis asks
+and is nearly free.
+
+### Related
+
+`strace` usually fails on default-hardened Linux and that is accepted rather
+than worked around. Yama gates the **tracer** on being an ancestor of the
+target; `strace` is a freshly exec'd process and is never an ancestor of the
+scheduler. Measured on Arch at `ptrace_scope=1`: an ancestor's read of a
+grandchild's `/proc/PID/syscall` succeeds, while `strace -p` against its own
+direct child returns `ptrace(PTRACE_SEIZE): Operation not permitted`. It is
+kept as best-effort because some CI containers run at `ptrace_scope=0` or with
+`CAP_SYS_PTRACE`, and `/proc/PID/syscall` plus `wchan`, sampled repeatedly,
+covers the same question when it is denied. `PR_SET_PTRACER` was considered to
+force it to work and rejected as arch-specific `syscall()` code in a
+perl-5.10-floor maintenance line.
+
+Installing a `USR1` handler makes a blocking `flock` return `EINTR`.
+`Runner.pm:322` is `flock($lock, LOCK_EX) or die ...`, unguarded, and that die
+counts toward the 5-error scheduler abort. An `EINTR` retry matching
+`Util::lock_file` ships with this.
+
+Revisit if: a capture arrives and an analysis agent still cannot identify a
+cause — the gap it names is the next thing to add.
+
+---
+
+## 2026-08-19 — stall reporting is opt-in, `yath test` only, thresholds 600:1200
+
+**Ruling: the stall detector is off by default and enabled per-site by
+`--stall-report=STRONG:LOOSE`, defaulting to `600:1200` seconds when switched
+on. It runs under `yath test` (and `projects`, which inherits it); `yath run`
+and `yath start` paths are unsupported for now.**
+
+Off by default because only a few sites hit this at all, and rarely; the owner
+wants it turned on where it matters rather than shipped into every run of a
+maintenance line.
+
+The thresholds come from the affected site's measured shape: most tests finish
+in under a minute; longer ones self-timeout at 15 minutes; about ten
+grandfathered tests run ~1 hour, the longest 1.5 hours; concurrency between
+`-j40:6` and `-j80:6`; runs last ~3 hours; the stall appears 1-2 hours in;
+Jenkins kills after 30 minutes of silence.
+
+- **Loose tier 1200s.** The binding legitimate case is all slots busy with
+  15-minute tests, so the floor is just above 15 minutes. The ten hour-long
+  tests cannot fill 40+ slots, so they do not raise it. Firing at stall+20min
+  beats the earliest possible Jenkins kill: the stall blocks new launches, not
+  running tests, so output continues until the last running test ends and the
+  kill lands no earlier than stall+30min.
+- **Strong tier 600s.** Above the site's ~5 minute application preload. The
+  currently-ready-stage gate (below) covers preload directly, but a site
+  preloading *several* stages can have a small stage ready while the big one is
+  still loading, and the detector cannot tell — see the stage-attribution limit
+  below. 600s is the safeguard. Detection at 10 minutes rather than 2 costs
+  nothing against the 30-minute Jenkins floor.
+
+**Two suppressions are part of this ruling.**
+
+1. **Gate on a stage being *currently* ready** — not on a `stage_ready` record
+   having ever appeared. The replay tracks `stage_readiness` (`stage_ready`
+   sets, `stage_down` clears), so this is exact. It suppresses the initial
+   preload window, during which the queue is already populated and nothing has
+   started.
+2. **Suppress when every pending task is `isolation` while something runs, or
+   the pending set is entirely conflict-blocked.** These are the scheduler
+   waiting correctly and can last as long as the longest running test — up to
+   1.5 hours at this site, which would otherwise force an unusably large loose
+   threshold. Category comes straight off the task (`State::task_fields:595-601`)
+   with no preloader involvement, so this is reliable. **This is not the
+   refuted `_next` blame seam**; it reads the pending set from a replay we
+   already perform, rather than instrumenting the dispatch decision.
+
+**Known limit, deliberately not fixed: per-stage suppression.**
+`State::task_stage` (`:565-576`) returns `$task->{stage} // 'DEFAULT'` when
+there is no preloader, and the observer `State` has none; the scheduler
+resolves the real stage via `preloader->task_stage($file, $wants)`. So the
+detector's per-task stage attribution can disagree with the scheduler's, and
+"all pending work belongs to a stage that is not ready" cannot be computed
+honestly. The strong-tier threshold is the safeguard instead.
+
+Reload and runner respawn were considered and set aside: the affected site uses
+no persistent runner and does not reload, so a mid-run restage is not a case
+this needs to handle.
+
+Implementation shape for the command scoping: one overridable predicate,
+default on, overridden off in `App::Yath::Command::run`. `projects.pm`
+subclasses `test` and owns its own runner, so it inherits a working detector;
+excluding it would cost more code than leaving it.
+
+Revisit if: a site enables this against a persistent runner, uses several
+preload stages and finds the strong tier noisy, or reports a stall the loose
+tier misses.
+
+---
+
+## 2026-08-19 — the stall detector replays `State`, with a resource list that cannot reach user code
+
+**Ruling: the stall detector builds its own observer
+`Test2::Harness::Runner::State` with an explicit in-tree `resources` list and
+calls `poll` on it, rather than hand-writing a reducer over
+`dispatch.jsonl`.**
+
+```perl
+Test2::Harness::Runner::State->new(
+    workdir   => $workdir,
+    job_count => $job_count,
+    resources => [Test2::Harness::Runner::Resource::JobCount->new(...)],
+)->poll;
+```
+
+The synthetic `resources` list is the point, and it is why this looks odd
+enough to be "cleaned up" by someone who does not know. `State::init`
+constructs the user's resource classes **only when `resources` is empty**
+(`State.pm:72-79`). A non-empty in-tree list means no user class is ever built,
+so `_stop_task`'s `$_->release($job_id)` (`State.pm:454`) reaches only
+`JobCount`. Passing `job_count` also avoids loading `settings.json`.
+
+Without that, `State::poll` in the main process runs the user's `release()` —
+the callback most likely to be wedged, and the reason
+`App::Yath::Command::test::stop()` can hang after a stall
+(`test.pm:444-449`). **Do not remove the `resources` argument.**
+
+Reading the file by hand was considered and rejected. Pending counts are not
+arithmetic over records: `_retry_task` calls `_stop_task` then `_queue_task`
+in-process without emitting a `queue_task` record (`State.pm:465-483`), both
+return early when the run is halted, and `_halt_run` prunes a run's whole
+pending subtree. A hand-written reducer duplicates five `State` handlers in a
+maintenance line and goes wrong the first time an action is added.
+
+`App::Yath::Command::status` (`status.pm:34-141`) already performs this replay
+and already renders the dump — pending per run, stage table with pids, running
+tests with job pids. Note it does *not* pass `resources`, so `yath status`
+itself does construct user resource classes; that is pre-existing and out of
+scope here.
+
+Costs accepted: `State`'s handlers `die` on inconsistency ("Run stack
+mismatch", "Could not find task to start") and were not written for read-only
+replay in a foreign process, so the replay is wrapped in `eval`. The detector
+must never be able to end a healthy run.
+
+Two related constraints, recorded here because they are easy to violate:
+
+- **Do not read through `$state->dispatch_file`.** `Queue`'s reader is
+  stateful, and the main process's `State` keeps its dispatch file untouched so
+  `stop()` can replay the whole file on Ctrl-C (`test.pm:444-449`, not wrapped
+  in `eval`). Sharing the reader starts that replay mid-file and dies.
+- **The trigger still needs a raw `Queue` read** for the last `start_task`
+  stamp. `State` exposes no stamps, and `LAST_JOB_ACTIVITY` updates on stop as
+  well as start (`State.pm:425`, `457`).
+
+Revisit if: `State` grows a documented read-only observer mode, or the replay's
+`die`-on-inconsistency behavior proves too noisy in practice.
+
+---
+
+## 2026-08-19 — the stall detector runs in the main process, not a watcher process
+
+**Ruling: the `yath test` main process polls the scheduler's heartbeat file
+from the render loop it already runs. No separate watcher process and no new
+internal command.**
+
+Bounding a wedged scheduler needs something outside that process to notice a
+heartbeat stop advancing and act on it. A dedicated `App::Yath::Command::watcher`
+was proposed and rejected; the detection logic, `/proc` collection, `SIGUSR1`
+stack dump, escalation ladder, option, and unit tests are identical either way,
+so only the polling site was ever at issue.
+
+Two of the three arguments for a separate process were measured false:
+
+- The scheduler's STDERR is `error.log`, but that is not a dead-end channel.
+  `Test2::Harness::Collector::process_runner_output` tails `output.log` and
+  `error.log` and forwards both through the event pipeline whenever
+  `show_runner_output` is on, which is the default. In the reported incident it
+  was silent because nothing wrote to it.
+- A watcher process would be the scheduler's *sibling*. Verified on Arch with
+  `kernel.yama.ptrace_scope=1`: a sibling reading `/proc/PID/syscall` gets
+  `EPERM`. The main process is the scheduler's ancestor and can read it.
+  (`/proc/PID/wchan` is `PTRACE_MODE_READ` and works either way.)
+
+The third — a watcher still reports when the main process itself wedges — is
+real but covers a failure nobody has reported. The one incident's main process
+hung only in `render()`, which the EOF fix addresses directly.
+
+Against that, a watcher costs a new long-lived process in every `yath test` run
+of a maintenance line, plus a lifecycle that has no natural end: `stop()` calls
+`$ipc->wait(all => 1)` and `killall` never fires on a clean run, so the
+watcher's own exit condition becomes the only thing ending a normal run, and
+its poll interval is added to every clean shutdown. It is also inherited by
+`App::Yath::Command::run` and `::projects` through `start()`, where it would
+watch a *shared persistent* scheduler.
+
+The render loop iterates every 0.02s for the life of the run and is made
+reliable by the EOF fix that ships alongside this.
+
+Revisit if: evidence shows the main process wedging for a reason the EOF fix
+does not cover, or `yath start` needs a watched scheduler. A separate watcher
+is the documented escalation; adding it later is additive, while removing a
+shipped internal command is not.
+
+---
+
 ## 2026-08-17 — `find_yath()` does not look for `./scripts/yath`
 
 **Ruling: `find_yath()` returns `$App::Yath::Script::SCRIPT` when it is set,

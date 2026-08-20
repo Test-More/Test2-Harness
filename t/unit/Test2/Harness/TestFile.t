@@ -27,6 +27,14 @@ my $tmp = gen_temp(
     conflicts3 => "# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS DAEMON   # Nothing to see here\n",
     conflicts4 => "# HARNESS-CONFLICTS PASSWD DAEMON\n# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS PASSWD\n# HARNESS-CONFLICTS PASSWD DAEMON\n",
 
+    shares1 => "# HARNESS-SHARES PASSWD\n",
+    shares2 => "# HARNESS-SHARES-PASSWD\n",
+    shares3 => "# HARNESS-SHARES PASSWD DAEMON\n",
+    shares4 => "# HARNESS-SHARES PASSWD\n# HARNESS-SHARES-DAEMON   # Nothing to see here\n",
+    shares5 => "# HARNESS-SHARES PASSWD DAEMON\n# HARNESS-SHARES PASSWD\n# HARNESS-SHARES-PASSWD\n",
+
+    both => "# HARNESS-CONFLICTS DAEMON\n# HARNESS-SHARES PASSWD DAEMON\n",
+
     extra_comments => "#!/usr/bin/perl\n\nuse strict;\n# comment here\n use warnings\n\n# copyright Dewey Cheatem and Howe\n# HARNESS-CAT-LONG\n# HARNESS-NO-TIMEOUT\n# HARNESS-USE-ISOLATION\n",
 
     smoke1     => "#HARNESS-SMOKE\n",
@@ -123,6 +131,7 @@ subtest taint => sub {
             non_perl    => 0,
             smoke       => 0,
             conflicts   => [],
+            shares      => [],
             via         => ['xxx'],
             rank        => T(),
             run_id      => FDNE(),
@@ -159,6 +168,7 @@ subtest warn => sub {
             non_perl    => 0,
             smoke       => 0,
             conflicts   => [],
+            shares      => [],
             run_id      => FDNE(),
         },
         "Got queue item data",
@@ -199,6 +209,7 @@ subtest notime => sub {
             non_perl    => 0,
             smoke       => 0,
             conflicts   => [],
+            shares      => [],
             run_id      => FDNE(),
         },
         "Got queue item data",
@@ -248,6 +259,7 @@ subtest all => sub {
             use_timeout => 0,
             smoke       => 0,
             conflicts   => [],
+            shares      => [],
             binary      => 0,
             non_perl    => 0,
             run_id      => FDNE(),
@@ -303,6 +315,7 @@ subtest med2 => sub {
             non_perl    => 0,
             smoke       => 0,
             conflicts   => [],
+            shares      => [],
         },
         "Got queue item data",
     );
@@ -355,6 +368,7 @@ subtest med1 => sub {
             non_perl    => 0,
             smoke       => 0,
             conflicts   => [],
+            shares      => [],
         },
         "Got queue item data",
     );
@@ -409,6 +423,7 @@ subtest long => sub {
             non_perl    => 0,
             smoke       => 0,
             conflicts   => [],
+            shares      => [],
         },
         "Got queue item data",
     );
@@ -461,6 +476,7 @@ subtest extra_comments => sub {
             non_perl    => 0,
             smoke       => 0,
             conflicts   => [],
+            shares      => [],
         },
         "Got queue item data",
     );
@@ -479,6 +495,33 @@ subtest conflicts => sub {
     $parsed_file = $CLASS->new(file => File::Spec->catfile($tmp, 'conflicts4'));
     is([sort @{$parsed_file->conflicts_list}], ['daemon', 'passwd'], "Duplicate conflict lines only lead to 2 conflict items.");
 
+};
+
+sub shares_in {
+    my ($name) = @_;
+    my $file = $CLASS->new(file => File::Spec->catfile($tmp, $name));
+    return [sort @{$file->shares_list}];
+}
+
+subtest shares => sub {
+    is(shares_in('shares1'), ['passwd'],           "1 share on 1 line is reflected as an array");
+    is(shares_in('shares2'), ['passwd'],           "dashes and spaces delimit the same way");
+    is(shares_in('shares3'), ['daemon', 'passwd'], "1 share line with 2 share categories");
+    is(shares_in('shares4'), ['daemon', 'passwd'], "2 share lines with a comment on one of them");
+    is(shares_in('shares5'), ['daemon', 'passwd'], "Duplicate share lines only lead to 2 share items");
+};
+
+subtest shares_and_conflicts => sub {
+    my $file = $CLASS->new(file => File::Spec->catfile($tmp, 'both'));
+
+    is(
+        warnings { $file->headers },
+        ["'daemon' is listed as both a conflict and a share in " . $file->file . ", treating it as a conflict.\n"],
+        "Warned about the name claimed both exclusively and shared",
+    );
+
+    is([sort @{$file->conflicts_list}], ['daemon'], "Exclusive claim was kept");
+    is([sort @{$file->shares_list}],    ['passwd'], "Shared claim on the same name was dropped");
 };
 
 subtest binary => sub {
@@ -521,6 +564,7 @@ subtest binary => sub {
             io_events   => 1,
             use_timeout => 1,
             conflicts   => [],
+            shares      => [],
             binary      => 1,
             non_perl    => 1,
             smoke       => 0,
@@ -557,6 +601,7 @@ subtest not_perl => sub {
             io_events   => 1,
             use_timeout => 1,
             conflicts   => [],
+            shares      => [],
             binary      => 0,
             non_perl    => 1,
             smoke       => 0,
@@ -594,6 +639,7 @@ subtest not_env_perl => sub {
             io_events   => 1,
             use_timeout => 1,
             conflicts   => [],
+            shares      => [],
             smoke       => 0,
             binary      => 0,
             non_perl    => 1,
@@ -629,6 +675,7 @@ subtest smoke => sub {
             non_perl    => 0,
             smoke       => 1,
             conflicts   => [],
+            shares      => [],
         },
         "Got queue item data",
     );

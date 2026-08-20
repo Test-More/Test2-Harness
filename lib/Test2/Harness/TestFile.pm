@@ -189,6 +189,10 @@ sub conflicts_list {
     return $_[0]->headers->{conflicts} || [];    # Assure conflicts is always an array ref.
 }
 
+sub shares_list {
+    return $_[0]->headers->{shares} || [];    # Assure shares is always an array ref.
+}
+
 sub headers {
     my $self = shift;
     $self->_scan unless $self->{+_SCANNED};
@@ -343,6 +347,14 @@ sub _scan {
             # Make sure no more than 1 conflict is ever present.
             @{$headers{conflicts}} = uniq @{$headers{conflicts}};
         }
+        elsif ($dir eq 'shares') {
+            # Allow multiple lines with # HARNESS-SHARES FOO
+            $headers{shares} ||= [];
+            push @{$headers{shares}}, map { lc($_) } @args;
+
+            # Make sure no more than 1 share of a name is ever present.
+            @{$headers{shares}} = uniq @{$headers{shares}};
+        }
         elsif ($dir eq 'timeout') {
             my ($type, $num, $extra) = @args;
             $type = lc($type);
@@ -362,6 +374,19 @@ sub _scan {
         else {
             warn "Unknown harness directive '$dir' at $self->{+FILE} line $ln.\n";
         }
+    }
+
+    # An exclusive lock on a name gazumps a shared one, so if a file asks for
+    # both we keep the exclusive and drop the shared. This is probably a
+    # mistake on the author's part, so warn.
+    if ($headers{conflicts} && $headers{shares}) {
+        my %exclusive = map { ($_ => 1) } @{$headers{conflicts}};
+
+        for my $both (grep { $exclusive{$_} } @{$headers{shares}}) {
+            warn "'$both' is listed as both a conflict and a share in $self->{+FILE}, treating it as a conflict.\n";
+        }
+
+        @{$headers{shares}} = grep { !$exclusive{$_} } @{$headers{shares}};
     }
 
     $self->{+_HEADERS} = \%headers;
@@ -442,6 +467,7 @@ sub queue_item {
         binary      => $binary,
         category    => $category,
         conflicts   => $self->conflicts_list,
+        shares      => $self->shares_list,
         duration    => $duration,
         file        => $self->file,
         rel_file    => $self->relative,
@@ -607,6 +633,10 @@ C<undef> will be returned.
 =item $arrayref = $tf->conflicts_list()
 
 Get a list of conflict markers.
+
+=item $arrayref = $tf->shares_list()
+
+Get a list of shared-use markers.
 
 =item $seconds = $tf->event_timeout()
 

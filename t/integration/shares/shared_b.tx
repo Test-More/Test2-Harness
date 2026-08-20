@@ -1,0 +1,8 @@
+use Test2::V0;
+# HARNESS-SHARES-DB
+
+sleep 1;
+ok(1, "pass");
+sleep 1;
+
+done_testing;

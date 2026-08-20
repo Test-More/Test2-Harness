@@ -73,10 +73,10 @@ sub run {
             next;
         }
 
-        my @rows = map {[$_->{job_id}, $_->{is_try} // $_->{job_try} // 0, $_->{rel_file}, join(', ' => @{$_->{conflicts} // []})]} @tasks;
+        my @rows = map {[$_->{job_id}, $_->{is_try} // $_->{job_try} // 0, $_->{rel_file}, join(', ' => @{$_->{conflicts} // []}), join(', ' => @{$_->{shares} // []})]} @tasks;
         my $run_table = Term::Table->new(
             collapse => 1,
-            header => [qw/uuid try test conflicts/],
+            header => [qw/uuid try test conflicts shares/],
             rows => [ sort { $a->[2] cmp $b->[2] } @rows ],
         );
 
@@ -128,11 +128,11 @@ sub run {
     print "\n**** Running tests: ****\n";
     my $running = $state->running_tasks;
     my $running_tasks = [values %$running];
-    my @rows = map {[$self->get_job_pid($_->{run_id}, $_->{job_id}) // 'N/A', $_->{job_id}, $_->{is_try} // $_->{job_try} // 0, $_->{rel_file}, join(', ' => @{$_->{conflicts} // []})]} @$running_tasks;
+    my @rows = map {[$self->get_job_pid($_->{run_id}, $_->{job_id}) // 'N/A', $_->{job_id}, $_->{is_try} // $_->{job_try} // 0, $_->{rel_file}, join(', ' => @{$_->{conflicts} // []}), join(', ' => @{$_->{shares} // []})]} @$running_tasks;
     if (@rows) {
         my $run_table = Term::Table->new(
             collapse => 1,
-            header => [qw/pid uuid try test conflicts/],
+            header => [qw/pid uuid try test conflicts shares/],
             rows => [ sort { $a->[0] <=> $b->[0] } @rows ],
         );
         print "$_\n" for $run_table->render;

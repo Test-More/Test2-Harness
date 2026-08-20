@@ -44,6 +44,7 @@ use Test2::Harness::Util::HashBase(
         <running_categories
         <running_durations
         <running_conflicts
+        <running_shares
         <running_tasks
 
         <stage_readiness
@@ -428,10 +429,21 @@ sub _start_task {
     $self->{+RUNNING_CATEGORIES}->{$cat}++;
     $self->{+RUNNING_DURATIONS}->{$dur}++;
 
-    my $cfls = $task->{conflicts} //= [];
+    my ($cfls, $shrs) = $self->task_locks($task);
+
     for my $cfl (@$cfls) {
+        die "Unexpected shared use of '$cfl' ($self->{+RUNNING_SHARES}->{$cfl}) running at this time!"
+            if $self->{+RUNNING_SHARES}->{$cfl};
+
         die "Unexpected parallel conflict '$cfl' ($self->{+RUNNING_CONFLICTS}->{$cfl}) running at this time!"
             if $self->{+RUNNING_CONFLICTS}->{$cfl}++;
+    }
+
+    for my $shr (@$shrs) {
+        die "Unexpected exclusive conflict '$shr' running at this time!"
+            if $self->{+RUNNING_CONFLICTS}->{$shr};
+
+        $self->{+RUNNING_SHARES}->{$shr}++;
     }
 
     return;
@@ -459,8 +471,9 @@ sub _stop_task {
     $self->{+RUNNING_CATEGORIES}->{$cat}--;
     $self->{+RUNNING_DURATIONS}->{$dur}--;
 
-    my $cfls = $task->{conflicts} //= [];
+    my ($cfls, $shrs) = $self->task_locks($task);
     $self->{+RUNNING_CONFLICTS}->{$_}-- for @$cfls;
+    $self->{+RUNNING_SHARES}->{$_}--    for @$shrs;
 
     return;
 }
@@ -575,6 +588,22 @@ sub task_stage {
     return $self->preloader->task_stage($task->{file}, $wants);
 }
 
+sub task_locks {
+    my $self = shift;
+    my ($task) = @_;
+
+    my $conflicts = $task->{conflicts} //= [];
+    my $shares    = $task->{shares}    //= [];
+
+    # An exclusive claim on a name gazumps a shared one, so a task holding both
+    # must not be counted as waiting on itself.  The scanner already drops
+    # these, but tasks can also be queued by hand, where the scanner will not
+    # have been able to fix it up.
+    my %exclusive = map { ($_ => 1) } @$conflicts;
+
+    return ($conflicts, [grep { !$exclusive{$_} } @$shares]);
+}
+
 sub task_pending_lookup {
     my $self = shift;
     my ($task) = @_;
@@ -599,6 +628,11 @@ sub task_fields {
     die "Invalid duration: $dur" unless DURATIONS->{$dur};
 
     $cat = 'conflicts' if $cat eq 'general' && $task->{conflicts} && @{$task->{conflicts}};
+
+    # Note that "shares" deliberately does NOT promote a task into the
+    # "conflicts" bucket. That bucket is searched ahead of "general", which is
+    # what lets an exclusive task claim a name before a shared one takes it,
+    # which would makes the exclusive task wait.
 
     return ($run_id, $smoke, $stage, $cat, $dur);
 }
@@ -761,6 +795,7 @@ sub _next {
     my $pending = $self->{+PENDING_TASKS}->{$run_id} or return;
 
     my $conflicts = $self->{+RUNNING_CONFLICTS};
+    my $shares    = $self->{+RUNNING_SHARES};
     my $cat_order = $self->_cat_order;
     my $dur_order = $self->_dur_order;
     my $stages    = $self->_stage_order();
@@ -782,14 +817,23 @@ sub _next {
                 for my $ldur (@$dur_order) {
                     my $search = $search->{$ldur} or next;
 
-                    # Make sure anything with conflicts runs early.
+                    # Make sure anything with conflicts runs early, then
+                    # anything with shares, which an exclusive task may be
+                    # waiting on.
                     unless ($SORTED{$search}++) {
-                        @$search = sort { scalar(@{$b->{conflicts}}) <=> scalar(@{$a->{conflicts}}) } @$search;
+                        @$search = sort {
+                            scalar(@{$b->{conflicts} // []}) <=> scalar(@{$a->{conflicts} // []})
+                                || scalar(@{$b->{shares} // []}) <=> scalar(@{$a->{shares} // []})
+                        } @$search;
                     }
 
                     for my $task (@$search) {
-                        # If the job has a listed conflict and an existing job is running with that conflict, then pick another job.
-                        next if first { $conflicts->{$_} } @{$task->{conflicts}};
+                        # An exclusive claim on a name cannot be made while any
+                        # other job holds that name, exclusively or shared.
+                        next if first { $conflicts->{$_} || $shares->{$_} } @{$task->{conflicts} // []};
+
+                        # A shared claim only has to wait out an exclusive holder.
+                        next if first { $conflicts->{$_} } @{$task->{shares} // []};
 
                         my $ok = 1;
                         my @resource_skip;

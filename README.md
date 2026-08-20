@@ -412,15 +412,6 @@ XXX can be replaced with any type of your choosing.
 NOTE: This directive does not alter the category of your test. You are free
 to mark the test with LONG or MEDIUM in addition to this marker.
 
-### HARNESS-JOB-SLOTS 2
-
-### HARNESS-JOB-SLOTS 1 10
-
-Specify a range of job slots needed for the test to run. If set to a single
-value then the test will only run if it can have the specified number of slots.
-If given a range the test will require at least the lower number of slots, and
-use up to the maximum number of slots.
-
 - Example with multiple lines.
 
         #!/usr/bin/perl
@@ -436,6 +427,42 @@ use up to the maximum number of slots.
         # HARNESS-CONFLICTS DAEMON MYSQL
 
         ...
+
+### HARNESS-SHARES-XXX
+
+This lets you tell `yath` that this test uses XXX, but is happy to share it
+with other tests that merely use it too. Any number of `HARNESS-SHARES-XXX`
+tests may run at the same time, but none of them will run at the same time
+as a `HARNESS-CONFLICTS-XXX` test. If you think of the two directives as a
+lock on the name XXX, `CONFLICTS` takes it exclusively and `SHARES` takes
+it shared.
+
+XXX can be replaced with any type of your choosing, and you may set several
+of them.
+
+The usual shape for this is one test that disturbs a resource and many that
+merely read it: mark the disruptive one `HARNESS-CONFLICTS-XXX` and the
+rest `HARNESS-SHARES-XXX`, and the readers keep their parallelism instead
+of being serialized alongside the writer.
+
+NOTE: An exclusive test has to wait for every shared test holding the name
+to finish, and `yath` will not hold job slots empty to make room for it. If
+shared tests keep becoming available the exclusive one may run quite late in
+the run, possibly last and by itself. This is still better than marking
+every test `CONFLICTS`, but it is worth knowing before you mark hundreds of
+tests as sharing one name.
+
+NOTE: This directive does not alter the category of your test. You are free
+to mark the test with LONG or MEDIUM in addition to this marker.
+
+### HARNESS-JOB-SLOTS 2
+
+### HARNESS-JOB-SLOTS 1 10
+
+Specify a range of job slots needed for the test to run. If set to a single
+value then the test will only run if it can have the specified number of slots.
+If given a range the test will require at least the lower number of slots, and
+use up to the maximum number of slots.
 
 ### HARNESS-RETRY-n
 

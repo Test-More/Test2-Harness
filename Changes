@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000175  2026-08-20 11:31:30-07:00 America/Los_Angeles
+
     - Add the # HARNESS-SHARES-XXX directive, a shared claim on a name: any number of tests sharing XXX run at once, but none alongside a # HARNESS-CONFLICTS-XXX test, which claims XXX exclusively.
     - Show a shares column alongside conflicts in the pending and running tables of yath status.
     - Add --stall-report, off unless asked for, which prints diagnostics when the scheduler stops starting tests while tests are pending and could run.

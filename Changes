@@ -1,6 +1,7 @@
 {{$NEXT}}
 
-    - Add the # HARNESS-SHARES-XXX directive, a shared claim on a name: any number of tests sharing XXX run at the same time, but none run alongside a # HARNESS-CONFLICTS-XXX test, which claims XXX exclusively.
+    - Add the # HARNESS-SHARES-XXX directive, a shared claim on a name: any number of tests sharing XXX run at once, but none alongside a # HARNESS-CONFLICTS-XXX test, which claims XXX exclusively.
+    - Show a shares column alongside conflicts in the pending and running tables of yath status.
     - Add --stall-report, off unless asked for, which prints diagnostics when the scheduler stops starting tests while tests are pending and could run.
     - When --stall-report is enabled, yath processes install a SIGUSR1 handler that prints a stack trace instead of exiting, so a stalled run can be diagnosed.
     - Add --stall-report-dir to say where --stall-report writes its JSON bundle; it defaults to the directory yath was run from, and a copy also goes to the log.

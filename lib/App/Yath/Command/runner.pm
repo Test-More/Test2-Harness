@@ -88,6 +88,8 @@ use Test2::Harness::Util qw/mod2file write_file_atomic open_file clean_path proc
 use Test2::Harness::Util::IPC qw/swap_io/;
 
 use Test2::Harness::Runner::Preloader();
+use Test2::Harness::Stall::Detector();
+use Test2::Harness::Stall::Trace qw/install_trace_handler/;
 
 my @SIGNALS = grep { $_ ne 'ZERO' } split /\s+/, $Config{sig_name};
 
@@ -128,6 +130,20 @@ sub generate_run_sub {
         local $.;
 
         my %orig_sig = %SIG;
+
+        # After the snapshot on purpose: the scheduler and stage forks inherit
+        # this, and a test job sheds it when the guard below restores
+        # %orig_sig. A job process must not keep it -- see the trace module.
+        # Only when the feature is on: installing it changes what SIGUSR1 does
+        # to a running yath process.
+        # List context on purpose: parse_spec returns a list, so a boolean
+        # test would see only its last value and miss STRONG:0.
+        my %stall =
+            $settings->check_prefix('runner')
+            ? Test2::Harness::Stall::Detector->parse_spec($settings->runner->stall_report)
+            : ();
+        install_trace_handler(File::Spec->catdir($dir, 'stall')) if %stall;
+
         my $guard = Scope::Guard->new(sub {
             my %seen;
             for my $sig (@SIGNALS) {

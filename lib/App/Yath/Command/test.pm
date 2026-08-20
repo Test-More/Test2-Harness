@@ -15,6 +15,10 @@ use Test2::Harness::Util::IPC qw/USE_P_GROUPS/;
 
 use Test2::Harness::Runner::State;
 
+use Test2::Harness::Stall::Capture();
+use Test2::Harness::Stall::Detector();
+use Test2::Harness::Stall::Report();
+
 use Test2::Harness::Util::JSON qw/encode_json decode_json JSON/;
 use Test2::Harness::Util qw/mod2file open_file chmod_tmp/;
 use Test2::Util::Table qw/table/;
@@ -23,6 +27,7 @@ use Test2::Harness::Util::Term qw/USE_ANSI_COLOR/;
 
 use File::Spec;
 use Fcntl();
+use Errno();
 
 use Time::HiRes qw/sleep time/;
 use List::Util qw/sum max min/;
@@ -49,6 +54,8 @@ use Test2::Harness::Util::HashBase qw/
     +run_queue
     +tasks_queue
     +state
+
+    +stall_detector
 
     <cleanup_subs
 
@@ -283,6 +290,10 @@ sub start {
 
     $self->ipc->start();
     $self->parse_args;
+
+    # Before anything is spawned: an unparseable value croaks, and dying out of
+    # start_auditor would leave the runner and collector already running.
+    $self->stall_detector;
     $self->write_settings_to($self->workdir, 'settings.json');
 
     $self->write_test_info();
@@ -320,9 +331,19 @@ sub render {
     while (1) {
         return if $self->{+SIGNAL};
         $_->step for @{$renderers};
+        $self->check_stall();
 
+        # A non-blocking handle returns undef both when no data has arrived
+        # yet and when the writers are all gone; only errno tells them apart.
+        # Clear it first: a read answered from PerlIO's cached EOF flag issues
+        # no syscall and leaves whatever errno step() or wait() above set.
+        # Do not use eof(), it reports true for an empty pipe whose writer is
+        # still alive.
+        $! = 0;
         my $line = <$reader>;
         unless(defined $line) {
+            last unless $!{EAGAIN} || $!{EWOULDBLOCK} || $!{EINTR};
+
             $ipc->wait() if $ipc;
             sleep 0.02;
             next;
@@ -397,6 +418,18 @@ sub render {
 
         $ipc->wait() if $ipc;
     }
+
+    # Anything still buffered at EOF is a fragment of an event that was never
+    # completed, so it cannot be parsed. Report it, do not feed it to the JSON
+    # parser, which dies on invalid input.
+    if (defined($buffer) && length($buffer)) {
+        # An event can carry a whole test's output, so an incomplete one can
+        # be large. Show enough to identify it.
+        my $partial = length($buffer) > 200 ? substr($buffer, 0, 200) . "... (truncated)" : $buffer;
+        print STDERR "\nyath: Incomplete event discarded when the event stream ended: $partial\n";
+    }
+
+    return;
 }
 
 sub get_job_pid {
@@ -884,10 +917,87 @@ sub start_auditor {
             auditor => 'Test2::Harness::Auditor',
             $run->run_id,
             procname_prefix => $settings->debug->procname_prefix,
+            $self->stall_detector ? (stall_dir => File::Spec->catdir($self->workdir, 'stall')) : (),
         ],
     );
 
     close($self->auditor_writer());
+}
+
+# Off unless --stall-report was given. Only 'yath test' and the commands that
+# own their runner get one; App::Yath::Command::run overrides this, since its
+# runner is a persistent one it did not start and may be shared with other
+# sessions.
+sub stall_reporting { 1 }
+
+sub stall_detector {
+    my $self = shift;
+
+    return $self->{+STALL_DETECTOR} if exists $self->{+STALL_DETECTOR};
+
+    $self->{+STALL_DETECTOR} = undef;
+
+    return undef unless $self->stall_reporting;
+
+    my $settings = $self->settings;
+    return undef unless $settings->check_prefix('runner');
+
+    my %spec = Test2::Harness::Stall::Detector->parse_spec($settings->runner->stall_report)
+        or return undef;
+
+    return $self->{+STALL_DETECTOR} = Test2::Harness::Stall::Detector->new(
+        %spec,
+        workdir   => $self->workdir,
+        job_count => $self->job_count,
+    );
+}
+
+sub check_stall {
+    my $self = shift;
+
+    my $detector = $self->stall_detector or return;
+
+    # Diagnostics must never be able to end a healthy run, so nothing here is
+    # allowed to escape.
+    my $ok = eval { $self->report_stall($detector); 1 };
+    warn $@ unless $ok;
+
+    return;
+}
+
+sub report_stall {
+    my $self = shift;
+    my ($detector) = @_;
+
+    my $found = $detector->check or return;
+
+    # Rooted at this process, so the tree covers the runner and its children
+    # plus the collector and auditor, which are children of this process.
+    my $capture = Test2::Harness::Stall::Capture->new(
+        workdir  => $self->workdir,
+        root_pid => $$,
+    );
+
+    my @pids = grep { $_ } $self->runner_pid, $found->{scheduler_pid}, values %{$found->{stage_pids} // {}};
+    push @pids => keys %{$self->ipc->procs // {}} if $self->ipc;
+
+    my %seen;
+    my $bundle = $capture->collect({
+        %$found,
+        state        => undef,
+        tasks        => undef,
+        harness_pids => [grep { $_ > 0 && !$seen{$_}++ } @pids],
+    });
+
+    my $report = Test2::Harness::Stall::Report->new(
+        workdir    => $self->workdir,
+        run_id     => $self->{+RUN_ID},
+        report_dir => $self->settings->runner->stall_report_dir,
+    );
+    $bundle->{state_summary} = $report->state_summary($found->{state}, $found->{tasks});
+    $report->emit($bundle);
+
+    return;
 }
 
 sub collector_options { () }

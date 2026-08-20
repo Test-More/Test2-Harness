@@ -54,6 +54,12 @@ the start command for details on how to launch a persistent instance.
 }
 
 sub terminate_queue {}
+
+# The runner here is a persistent one this process did not start. It is not a
+# descendant, so /proc gives nothing useful, its dispatch queue is shared with
+# every other run that runner has served, and signalling it would reach a
+# process other sessions are using.
+sub stall_reporting { 0 }
 sub write_settings_to {}
 sub setup_plugins {}
 sub setup_resources {}

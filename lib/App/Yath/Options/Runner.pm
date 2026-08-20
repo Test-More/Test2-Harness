@@ -213,6 +213,22 @@ option_group {prefix => 'runner', category => "Runner Options"} => sub {
         description    => 'Abort the test run if no tests have been able to start for SECONDS seconds while there are pending tests and none running. This is useful when a resource class is broken and always claims a resource will become available, preventing yath from ever finishing. (Default: 0, meaning no timeout)',
     );
 
+    option stall_report => (
+        type     => 'd',
+        default  => 0,
+        autofill => '600:1200',
+
+        long_examples => ['', '=STRONG:LOOSE', '=SECONDS'],
+        description   => 'Print diagnostics when the scheduler appears to have stopped starting tests. Give it alone for sensible waits, or set them: STRONG is the wait, in seconds, before reporting when tests are pending and none are running; LOOSE is the wait when tests are pending and others are still running. A single number sets both, and a zero in either field turns off that tier alone, so 600:0 reports only when nothing is running. This only prints a report, it never ends the run, and a report may be benign. Enabling it sends SIGUSR1 to yath\'s own processes to collect stack traces, pauses output for a few seconds per report, stops after 5 reports, and writes a yath-stall-report-*.json bundle both into the run log and to a file (see --stall-report-dir). (Default: off; --stall-report alone means 600:1200)',
+    );
+
+    option stall_report_dir => (
+        type => 's',
+
+        long_examples => [' path/to/dir'],
+        description   => 'Directory for the JSON bundle --stall-report writes. Defaults to the directory yath was run from. Use this when that directory is not writable, or to collect bundles somewhere durable.',
+    );
+
     option event_timeout => (
         alt => ['et'],
 

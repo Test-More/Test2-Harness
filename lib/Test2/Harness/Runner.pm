@@ -13,7 +13,7 @@ use Long::Jump qw/setjump longjump/;
 use Time::HiRes qw/sleep time/;
 use Scope::Guard;
 
-use Test2::Harness::Util qw/clean_path file2mod mod2file open_file parse_exit write_file_atomic process_includes chmod_tmp write_file/;
+use Test2::Harness::Util qw/clean_path file2mod lock_file mod2file open_file parse_exit unlock_file write_file_atomic process_includes chmod_tmp write_file/;
 use Test2::Harness::Util::Queue();
 use Test2::Harness::Util::JSON(qw/encode_json/);
 
@@ -319,14 +319,17 @@ sub spawn_scheduler {
         my $ok = eval {
             $state->poll;
 
-            flock($lock, LOCK_EX) or die "Could not get scheduler lock: $!";
+            # Retrying form: a stall report sends SIGUSR1, and flock is not
+            # restarted after a handler runs, so a plain 'or die' here would
+            # report a scheduler error that never happened.
+            lock_file($lock);
 
             while (1) {
                 next if $state->advance;
                 last;
             }
 
-            flock($lock, LOCK_UN) or die "Could not release scheduler lock: $!";
+            unlock_file($lock);
 
             if (my $idle = $state->resource_timeout($self->{+RESOURCE_TIMEOUT})) {
                 print STDERR "\n\nyath: Resource timeout after ${idle}s with no tests able to start. Aborting.\n";

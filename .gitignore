@@ -39,3 +39,5 @@ AI_DOCS/
 nytprof.out
 scratch
 /xxx/
+yath-stall-report-*.json
+yath-stall-report-*.json.pend

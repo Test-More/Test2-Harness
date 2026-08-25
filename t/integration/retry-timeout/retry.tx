@@ -1,4 +1,8 @@
-# HARNESS-TIMEOUT-EVENT 5
+# HARNESS-TIMEOUT-EVENT 20
+# The first try hangs and has to be killed by that timeout, so it is the floor
+# on how long this test takes. It still has to be long enough that a loaded
+# machine cannot trip it while perl is loading Test2::V0 on the retry, which is
+# a stretch of silence this test does not control.
 use strict;
 use warnings;
 

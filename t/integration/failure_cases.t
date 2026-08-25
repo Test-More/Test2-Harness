@@ -8,6 +8,10 @@ my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
 
+# Timeouts short enough that the failing run does not sit out the default
+# ones. These apply to the failing run only: the passing run has nothing to
+# wait for, and a slow or loaded machine can easily take longer than 2 seconds
+# to get a test started, which would kill a test that was going to pass.
 my %CUSTOM = (
     "timeout.tx"           => ['--et',  2],
     "post_exit_timeout.tx" => ['--pet', 2],
@@ -30,18 +34,16 @@ sub run_test {
 
     my $ctx = context();
 
-    my @final_args = (@{$args || []}, $path);
-
     yath(
         command => 'test',
-        args    => \@final_args,
+        args    => [@{$args || []}, $path],
         env     => {FAILURE_DO_PASS => 0},
         exit    => T(),
     );
 
     yath(
         command => 'test',
-        args    => \@final_args,
+        args    => [$path],
         env     => {FAILURE_DO_PASS => 1},
         exit    => F(),
     );

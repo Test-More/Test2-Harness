@@ -26,6 +26,9 @@ $dir =~ s{^\./}{};
 yath(
     command => 'test',
     args    => [$dir, '--ext=tx', '-j2', "-D$dir", '-R+BlockingResource', '--stall-report=3:3', "--stall-report-dir=$BUNDLE_DIR"],
+    # The fixture stops blocking as soon as its stack has been taken, so this
+    # is a ceiling for a machine too slow to get there, not a wait.
+    env     => {BLOCKING_RESOURCE_MAX => 60},
     exit    => 0,
     test    => sub {
         my $out = shift;

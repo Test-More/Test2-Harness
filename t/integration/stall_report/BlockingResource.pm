@@ -6,11 +6,12 @@ use Time::HiRes qw/sleep time/;
 
 use parent 'Test2::Harness::Runner::Resource';
 
-# Seconds to block for. Bounded on purpose: killing a stalled run is out of
+# Longest to block for. Bounded on purpose: killing a stalled run is out of
 # scope, so an unbounded block would leave the run for App::Yath::Tester's own
 # timeout to kill, and that kill lands in stop() -> poll() -> release() and
-# hangs the test process itself.
-use constant BLOCK_FOR => 8;
+# hangs the test process itself. A run that expects a stack trace out of this
+# raises the bound, because it stops blocking the moment the trace is taken.
+sub block_for { $ENV{BLOCKING_RESOURCE_MAX} || 8 }
 
 sub available {
     my $self = shift;
@@ -31,9 +32,22 @@ sub available {
 
     $self->{_blocked_at} //= time;
 
+    # Stop blocking once this process has been asked for its stack, so the
+    # trace is taken while the scheduler really is stuck here however slow the
+    # machine is. The harness installed the handler that writes the trace;
+    # this only notices that it ran.
+    my $traced = 0;
+    my $handler = $SIG{USR1};
+    local $SIG{USR1} = sub {
+        $traced++;
+        return unless $handler && ref($handler) eq 'CODE';
+        $handler->(@_);
+    };
+
     # A loop of short sleeps, not one long one: the detector sends SIGUSR1 and
     # a single sleep would be cut short by it, un-wedging the fixture early.
-    while (time - $self->{_blocked_at} < BLOCK_FOR) {
+    my $block_for = $self->block_for;
+    while (!$traced && time - $self->{_blocked_at} < $block_for) {
         sleep 0.2;
     }
 

@@ -6,6 +6,7 @@ use Test2::Tools::GenTemp qw/gen_temp/;
 use Test2::Harness::Util qw/clean_path/;
 use File::Temp qw/tempfile/;
 use Cwd qw/cwd/;
+use POSIX qw/_exit/;
 
 use File::Spec;
 
@@ -190,7 +191,15 @@ tests isolate_stdout => sub {
         print STDOUT "Should go to STDERR 2\n";
         print STDERR "Should go to STDERR 3\n";
 
-        exit 0;
+        # Flush and _exit() instead of exit(): global destruction in this
+        # process can write to these pipes (Math::Random::MT::Auto complains
+        # about a double DESTROY on some systems) and the parent asserts on
+        # exactly what came through.
+        close($fh)     or _exit(255);
+        close(STDOUT)  or _exit(255);
+        close(STDERR)  or _exit(255);
+
+        _exit(0);
     }
 
     close($stdout_w);

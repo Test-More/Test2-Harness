@@ -5,6 +5,7 @@ use Carp;
 use App::Yath;
 
 use Test2::Harness::Util qw/clean_path/;
+use Test2::Tools::GenTemp qw/gen_temp/;
 
 $ENV{'YATH_SELF_TEST'} = 1;
 
@@ -158,6 +159,64 @@ subtest load_options => sub {
     );
 
     ref_is($options, $two->load_options, "Cached options result");
+};
+
+subtest load_options_conflict => sub {
+    # Two plugins, neither of them ours, that lay claim to the same option name.
+    # Nothing can include both, but yath must still run.
+    my $plugin = sub {
+        my ($name) = @_;
+
+        return join "\n" => (
+            "package App::Yath::Plugin::$name;",
+            "use strict;",
+            "use warnings;",
+            "use App::Yath::Options;",
+            "option collide => (prefix => 'conflict', type => 'b');",
+            "1;",
+            "",
+        );
+    };
+
+    my $tmp = gen_temp(
+        App => {
+            Yath => {
+                Plugin => {
+                    'ConflictA.pm' => $plugin->('ConflictA'),
+                    'ConflictB.pm' => $plugin->('ConflictB'),
+                },
+            },
+        },
+    );
+
+    local @INC = ($tmp, @INC);
+
+    my $one = $CLASS->new();
+    $one->settings->harness->field(no_scan_plugins => 0);
+
+    my $options;
+    my $warnings = warnings { $options = $one->load_options() };
+
+    like(
+        $warnings,
+        bag {
+            item match qr/Failed to include options from module .*ConflictB\.pm.*Option 'conflict-collide' was already defined/s;
+            etc;
+        },
+        "Warned about the plugin that could not be included"
+    );
+
+    like(
+        $options->included,
+        {
+            'App::Yath::Options::Debug'      => 1,
+            'App::Yath::Options::PreCommand' => 1,
+            'App::Yath::Plugin::ConflictA'   => 1,
+        },
+        "Included everything up to the conflict"
+    );
+
+    ok(!$options->included->{'App::Yath::Plugin::ConflictB'}, "Did not include the conflicting plugin");
 };
 
 subtest process_argv => sub {

@@ -137,7 +137,14 @@ sub load_options {
         }
 
         next unless $lib->can('options');
-        my $add = $lib->options;
+
+        my $add;
+        $ok = eval { $add = $lib->options; 1 };
+        unless ($ok) {
+            warn "Failed to get options from module '$option_libs->{$lib}': $@";
+            next;
+        }
+
         next unless $add;
 
         unless (blessed($add) && $add->isa('App::Yath::Options')) {
@@ -146,7 +153,14 @@ sub load_options {
             next;
         }
 
-        $options->include_from($lib);
+        # A module found by the scan is not necessarily one we know anything
+        # about, it may conflict with another. That is not a reason to abort
+        # every yath command on the system.
+        $ok = eval { $options->include_from($lib); 1 };
+        unless ($ok) {
+            warn "Failed to include options from module '$option_libs->{$lib}': $@";
+            next;
+        }
     }
 
     return $options;

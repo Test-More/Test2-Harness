@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Stop a conflict between two installed plugins from aborting every yath command; a plugin whose options cannot be included is now reported and skipped.
+
 1.000175  2026-08-20 11:31:30-07:00 America/Los_Angeles
 
     - Add the # HARNESS-SHARES-XXX directive, a shared claim on a name: any number of tests sharing XXX run at once, but none alongside a # HARNESS-CONFLICTS-XXX test, which claims XXX exclusively.

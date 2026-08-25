@@ -119,37 +119,12 @@ sub process {
 
     push @out => $event;
 
-    # Close any deeper subtests
-    if (my $sts = $self->{+SUBTESTS}) {
-        my @close = sort { $b <=> $a } grep { $_ > $nested } keys %$sts;
-
-        for my $n (@close) {
-            my $st = delete $sts->{$n};
-            my $se = $st->{event} || $event;
-
-            my $fd = $se->{facet_data};
-            delete $fd->{harness_watcher}->{no_render};
-            $fd->{parent}->{hid} ||= $n;
-            $fd->{parent}->{children} ||= $st->{children};
-            $fd->{harness}->{closed_by}     = $event;
-            $fd->{harness}->{closed_by_eid} = $event->{event_id};
-
-            my $pn = $n - 1;
-
-            if ($st->{event}) {
-                if ($pn > $self->{+NESTED}) {
-                    push @{$sts->{$pn}->{children}} => $fd;
-                }
-                elsif ($pn == $self->{+NESTED}) {
-                    $self->subtest_process($fd, $se);
-                    push @out => $se;
-                }
-            }
-            else {
-                push @out => $se if $self->{+NESTED} && $pn == $self->{+NESTED};
-            }
-        }
-    }
+    # Close any deeper subtests, unless this event is nothing but output. A
+    # line the test wrote to STDOUT or STDERR that is not TAP says nothing
+    # about nesting, it just happens to have no indentation, so a warning from
+    # a module must not end a subtest that is still being parsed.
+    push @out => $self->close_deeper_subtests($nested, $event)
+        unless $self->output_only($f);
 
     unless ($is_ours) {
         my $st = $self->{+SUBTESTS}->{$nested} ||= {};
@@ -160,6 +135,56 @@ sub process {
 
     $self->subtest_process($f, $event);
     return @out;
+}
+
+sub close_deeper_subtests {
+    my $self = shift;
+    my ($nested, $event) = @_;
+
+    my $sts = $self->{+SUBTESTS} or return;
+
+    my @out;
+    for my $n (sort { $b <=> $a } grep { $_ > $nested } keys %$sts) {
+        my $st = delete $sts->{$n};
+        my $se = $st->{event} || $event;
+
+        my $fd = $se->{facet_data};
+        delete $fd->{harness_watcher}->{no_render};
+        $fd->{parent}->{hid}      ||= $n;
+        $fd->{parent}->{children} ||= $st->{children};
+        $fd->{harness}->{closed_by}     = $event;
+        $fd->{harness}->{closed_by_eid} = $event->{event_id};
+
+        my $pn = $n - 1;
+
+        if ($st->{event}) {
+            if ($pn > $self->{+NESTED}) {
+                push @{$sts->{$pn}->{children}} => $fd;
+            }
+            elsif ($pn == $self->{+NESTED}) {
+                $self->subtest_process($fd, $se);
+                push @out => $se;
+            }
+        }
+        else {
+            push @out => $se if $self->{+NESTED} && $pn == $self->{+NESTED};
+        }
+    }
+
+    return @out;
+}
+
+sub output_only {
+    my $self = shift;
+    my ($f) = @_;
+
+    # TAP tells us about nesting, even when all it holds is a comment.
+    return 0 if $f->{from_tap};
+
+    return 0 if $f->{assert} || $f->{plan} || $f->{parent} || $f->{control} || $f->{errors};
+    return 0 if $f->{harness} && ($f->{harness}->{subtest_start} || $f->{harness}->{subtest_end});
+
+    return $f->{info} ? 1 : 0;
 }
 
 sub subtest_process {
@@ -426,6 +451,17 @@ the top-level test is 0.
 
 This is an internal state tracking what test numbers have been seen. This is
 really only applicable in tests that produced TAP.
+
+=item @events = $watcher->close_deeper_subtests($nested, $event)
+
+Closes every subtest open below the given nesting level, as the given event
+ends them. Returns the events the renderer still needs.
+
+=item $bool = $watcher->output_only($facet_data)
+
+True if the facet data holds nothing but output the test wrote to STDOUT or
+STDERR. Such an event says nothing about where the test is in a subtest, so it
+does not close one.
 
 =item $bool = $watcher->pass
 

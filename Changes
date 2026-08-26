@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000177  2026-08-26 09:41:18-07:00 America/Los_Angeles
+
     - Print a note every ten seconds while App::Yath::Tester waits on a yath run, so a slow run does not look like a hung test to the harness running it.
     - Stop t/integration/resource.t from failing when the scheduler does not hand the same number of tests to each resource slot.
 

@@ -49,51 +49,57 @@ yath(
             }
         }
 
-        is(
-            $msgs{"yath-nested-runner"},
-            {
-                1 => [
-                    'Record',
-                    'Release',
-                    'Record',
-                    'Release',
-                    'RESOURCE CLEANUP',
-                ],
-                2 => [
-                    'Record',
-                    'Release',
-                    'Record',
-                    'Release',
-                    'RESOURCE CLEANUP',
-                ],
-            },
-            "The nested runner saw the records and releases, and then cleaned up at the end."
-        );
+        # Which slot serves which test is up to timing: a machine where one
+        # test finishes early lets its slot take the next two, and nothing is
+        # wrong with that. What has to hold is that each slot is used and
+        # freed in order, that all four tests went through, and that the
+        # scheduler noticed when it ran out of slots.
+        my $cycle = sub {
+            my ($actions, @pattern) = @_;
 
-        is(
-            $msgs{'yath-nested-scheduler'},
-            {
-                1 => [
-                    'Assigned',
-                    'Record',
-                    'No Slots',
-                    'Release',
-                    'Assigned',
-                    'Record',
-                    'Release',
-                ],
-                2 => [
-                    'Assigned',
-                    'Record',
-                    'No Slots',
-                    'Release',
-                    'Assigned',
-                    'Record',
-                    'Release',
-                ],
-            },
-            "The scheduler handled assigning slots, knew when it was out, then knew when more were ready",
-        );
+            my $i = 0;
+            for my $action (@$actions) {
+                return "expected $pattern[$i], got $action" unless $action eq $pattern[$i];
+                $i = ($i + 1) % @pattern;
+            }
+
+            return "ended mid-cycle, expected $pattern[$i]" if $i;
+            return undef;
+        };
+
+        my $runner = $msgs{'yath-nested-runner'};
+        is([sort keys %$runner], [1, 2], "The runner saw both slots");
+
+        my %runner_counts;
+        for my $slot (sort keys %$runner) {
+            my @actions = @{$runner->{$slot}};
+
+            is(pop(@actions), 'RESOURCE CLEANUP', "Slot $slot was cleaned up at the end of the run");
+            $runner_counts{$_}++ for @actions;
+
+            is($cycle->(\@actions, 'Record', 'Release'), undef, "Slot $slot was recorded and released in turn by the runner")
+                or diag(join(', ' => @{$runner->{$slot}}));
+        }
+
+        is(\%runner_counts, {Record => 4, Release => 4}, "The runner ran all 4 tests");
+
+        my $scheduler = $msgs{'yath-nested-scheduler'};
+        is([sort keys %$scheduler], [1, 2], "The scheduler saw both slots");
+
+        my %scheduler_counts;
+        my $no_slots = 0;
+        for my $slot (sort keys %$scheduler) {
+            my @actions = grep { $_ ne 'No Slots' } @{$scheduler->{$slot}};
+
+            $no_slots++ if @actions != @{$scheduler->{$slot}};
+            $scheduler_counts{$_}++ for @actions;
+
+            is($cycle->(\@actions, 'Assigned', 'Record', 'Release'), undef, "Slot $slot was assigned, recorded and released in turn")
+                or diag(join(', ' => @{$scheduler->{$slot}}));
+        }
+
+        is(\%scheduler_counts, {Assigned => 4, Record => 4, Release => 4}, "The scheduler assigned all 4 tests");
+        ok($no_slots, "The scheduler ran out of slots at some point");
     },
 );
 

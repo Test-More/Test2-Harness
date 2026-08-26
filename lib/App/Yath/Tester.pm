@@ -124,6 +124,14 @@ sub yath {
         $rh->blocking(0);
         my $start = time();
         my $timeout = $ENV{YATH_TESTER_TIMEOUT} // 120;
+
+        # Everything this run prints is captured, so a test that spends a
+        # couple of minutes in here says nothing at all to whatever harness is
+        # running it, and a harness that sees nothing assumes a hang and kills
+        # the test. Say something now and then instead.
+        my $heartbeat = $ENV{YATH_TESTER_HEARTBEAT} // 10;
+        my $last_beat = $start;
+
         while (1) {
             seek($rh, 0, SEEK_CUR); # CLEAR EOF
             my @new = <$rh>;
@@ -138,6 +146,12 @@ sub yath {
                     push @lines => "yath tester timeout after ${timeout}s\n";
                     last;
                 }
+
+                if ($heartbeat && time() - $last_beat >= $heartbeat) {
+                    $last_beat = time();
+                    $ctx->note("Still waiting on yath, " . int($last_beat - $start) . "s so far");
+                }
+
                 sleep 0.02;
                 next;
             };

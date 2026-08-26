@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Print a note every ten seconds while App::Yath::Tester waits on a yath run, so a slow run does not look like a hung test to the harness running it.
+
 1.000176  2026-08-25 11:05:26-07:00 America/Los_Angeles
 
     - Stop a conflict between two installed plugins from aborting every yath command; a plugin whose options cannot be included is now reported and skipped.

@@ -1,6 +1,7 @@
 use Test2::V0;
 use Test2::Harness::Util::JSON qw/encode_json decode_json/;
 use Test2::Require::Module 'Test2::Plugin::Cover' => '0.000022';
+use Test2::Require::AuthorTesting;
 
 use App::Yath::Tester qw/yath/;
 

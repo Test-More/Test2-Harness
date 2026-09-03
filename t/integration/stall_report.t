@@ -1,4 +1,5 @@
 use Test2::V0;
+use Test2::Require::AuthorTesting;
 
 use App::Yath::Tester qw/yath/;
 use Test2::Harness::Util::JSON qw/decode_json/;

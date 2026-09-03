@@ -83,6 +83,9 @@ yath(
 yath(
     command => 'test',
     args    => [$dir, '--ext=tx', '-j2', "-D$dir", '-R+BlockingResource', "--stall-report-dir=$BUNDLE_DIR"],
+    # No detector runs at all here, so the length of the block has no bearing
+    # on the assertion. Keep it short instead of sitting out the fixture default.
+    env     => {BLOCKING_RESOURCE_MAX => 2},
     exit    => 0,
     test    => sub {
         my $out = shift;

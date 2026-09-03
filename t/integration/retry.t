@@ -1,5 +1,6 @@
 use Test2::V0;
 # HARNESS-DURATION-LONG
+use Test2::Require::AuthorTesting;
 
 use App::Yath::Tester qw/yath/;
 
@@ -12,18 +13,16 @@ run_test_command_only_cases();
 
 my $project = "asgadfgds";
 
-unless ($ENV{AUTOMATED_TESTING}) {
-    my $out = yath(
-        command => 'start',
-        pre     => ['--project', $project],
-        args    => [],
-        exit    => 0,
-        test    => sub {
-            run_tests('run');
-            yath(command => 'stop', args => [], exit => 0);
-        }
-    );
-}
+yath(
+    command => 'start',
+    pre     => ['--project', $project],
+    args    => [],
+    exit    => 0,
+    test    => sub {
+        run_tests('run');
+        yath(command => 'stop', args => [], exit => 0);
+    }
+);
 
 sub run_tests {
     my ($cmd) = @_;

@@ -8,6 +8,7 @@ $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
 
 run_tests('test');
+run_test_command_only_cases();
 
 my $project = "asgadfgds";
 
@@ -77,7 +78,12 @@ sub run_tests {
             is($status, 'NO', "Never passed");
         },
     );
+}
 
+# Both cases below always use the "test" command, so the "run" pass of
+# run_tests() used to repeat them unchanged -- including a full 20 second
+# event timeout -- and assert the same things about the same run.
+sub run_test_command_only_cases {
     {
         note q[Retrying a symlink];
 
@@ -134,6 +140,6 @@ sub run_tests {
             },
         );
     }
-};
+}
 
 done_testing;

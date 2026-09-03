@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Make the wait loop in App::Yath::Tester sleep the fraction of a second it asks for instead of not sleeping at all, so it stops spinning while a yath run is in progress.
+
 1.000177  2026-08-26 09:41:18-07:00 America/Los_Angeles
 
     - Print a note every ten seconds while App::Yath::Tester waits on a yath run, so a slow run does not look like a hung test to the harness running it.

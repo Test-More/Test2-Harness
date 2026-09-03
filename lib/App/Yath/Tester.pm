@@ -12,6 +12,7 @@ use File::Spec;
 use File::Temp qw/tempfile tempdir/;
 use POSIX;
 use Fcntl qw/SEEK_CUR/;
+use Time::HiRes qw/sleep/;
 
 use App::Yath::Util qw/find_yath/;
 use Test2::Harness::Util qw/clean_path apply_encoding/;

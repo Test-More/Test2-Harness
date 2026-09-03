@@ -1,4 +1,5 @@
 use Test2::V0;
+use Test2::Require::AuthorTesting;
 
 use File::Temp qw/tempdir/;
 use File::Spec;
@@ -9,9 +10,6 @@ use Test2::Harness::Util::File::JSONL;
 use Test2::Harness::Util qw/clean_path/;
 
 use Test2::Harness::Util::JSON qw/decode_json/;
-
-skip_all "This test is not run under automated testing"
-    if $ENV{AUTOMATED_TESTING};
 
 my $dir = __FILE__;
 $dir =~ s{\.t$}{}g;

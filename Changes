@@ -1,6 +1,7 @@
 {{$NEXT}}
 
     - Make the wait loop in App::Yath::Tester sleep the fraction of a second it asks for instead of not sleeping at all, so it stops spinning while a yath run is in progress.
+    - Escalate to KILL when App::Yath::Tester gives up waiting on a yath run, so a run that ignores TERM no longer hangs the test file that started it.
 
 1.000177  2026-08-26 09:41:18-07:00 America/Los_Angeles
 

@@ -2,6 +2,7 @@ use Test2::V0;
 
 use File::Temp qw/tempdir/;
 use File::Spec;
+use Time::HiRes qw/sleep/;
 
 use App::Yath::Tester qw/yath/;
 use Test2::Harness::Util::File::JSONL;
@@ -22,6 +23,23 @@ $pdir =~ s{\W{0,2}t\W{1,2}integration\W{1,2}reload$}{}g;
 my $tmpdir = tempdir(CLEANUP => 1);
 mkdir("$tmpdir/Preload") or die "($tmpdir/Preload) $!";
 
+# The runner has to see each touch as its own change, so the gap between them
+# cannot be closed entirely. What sets it:
+#
+#   1. The preloader does not check for changes more than once a second.
+#   2. The stage has to finish reloading before the next file changes, or two
+#      changes collapse into one reload.
+#
+# Whole-second mtimes used to be a third constraint: stat reports seconds, so
+# two touches landing in the same second looked identical and the gap had to
+# clear a second boundary with margin. Giving each touch an mtime past what
+# the file already had removes that, so the gap only has to cover 1 and 2.
+sub bump_mtime {
+    my ($path) = @_;
+    my $stamp = (stat($path))[9] + 1;
+    utime($stamp, $stamp, $path) or die "Could not set mtime on '$path': $!";
+}
+
 sub touch_files {
     note "About to touch files with a delay between each, this will take a while";
 
@@ -29,7 +47,7 @@ sub touch_files {
         my $path = "$dir/lib/Preload/${file}";
         $path .= '.pm' unless $file =~ m/nonperl/;
         note "Touching $file...";
-        sleep 2;
+        sleep 1.25;
 
         if ($file eq 'IncChange') {
             open(my $fh, '>', "$tmpdir/Preload/IncChange.pm") or die $!;
@@ -49,10 +67,10 @@ BEGIN {
             close($fh);
         }
 
-        utime(undef, undef, $path);
+        bump_mtime($path);
     }
 
-    sleep 2;
+    sleep 1.25;
 }
 
 sub parse_output {

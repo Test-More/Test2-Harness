@@ -1,8 +1,11 @@
 use Test2::V0;
 # HARNESS-SHARES-DB
+use TestBarrier qw/barrier_wait/;
 
-sleep 1;
+# Neither of the two shared tests finishes until both are live, so the log is
+# guaranteed to show them overlapping rather than merely likely to.
+barrier_wait();
+
 ok(1, "pass");
-sleep 1;
 
 done_testing;

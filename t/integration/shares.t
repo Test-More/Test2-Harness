@@ -1,6 +1,7 @@
 use Test2::V0;
 
 use File::Spec;
+use File::Temp qw/tempdir/;
 
 use App::Yath::Tester qw/yath/;
 use Test2::Harness::Util::File::JSONL;
@@ -12,9 +13,16 @@ $dir =~ s{^\./}{};
 # HARNESS-SHARES-DB tests may run alongside each other, but never alongside a
 # HARNESS-CONFLICTS-DB test. Read the window each test was live for out of the
 # log and check which windows were allowed to overlap.
+my $barrier = tempdir(CLEANUP => 1);
+
 yath(
     command => 'test',
-    args    => [$dir, '--ext=tx', '-j4'],
+    args    => [
+        $dir, '--ext=tx', '-j4',
+        '-It/lib',
+        '--env-var' => "TEST_BARRIER_DIR=$barrier",
+        '--env-var' => "TEST_BARRIER_COUNT=2",
+    ],
     log     => 1,
     exit    => 0,
     test    => sub {

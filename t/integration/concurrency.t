@@ -14,8 +14,9 @@ $dir =~ s{^\./}{};
 
 # The order jobs start and stop in is not fixed: a machine slow enough to take
 # longer starting a job than a job takes to run will interleave them
-# differently every time. What is fixed is that the scheduler never runs more
-# jobs at once than it was told to, and that it does run more than one.
+# differently every time. What is fixed is how many the scheduler allows at
+# once, and the fixtures hold each other until that many are live so the log
+# is guaranteed to show it rather than merely likely to.
 sub concurrency {
     my ($log) = @_;
 
@@ -58,38 +59,39 @@ sub concurrency {
     return {max => $max, starts => $starts, exits => $exits};
 }
 
-yath(
-    command => 'test',
-    args    => [$dir, '--ext=tx', '-j4'],
-    log     => 1,
-    exit    => 0,
-    test    => sub {
-        my $out = shift;
-        my $stats = concurrency($out->{log});
+# Each run gets its own barrier directory: markers left by an earlier run
+# would let a later one satisfy its barrier without ever overlapping.
+run_at(4);
+run_at(2);
 
-        is($stats->{starts}, 5, "All 5 tests started");
-        is($stats->{exits},  5, "All 5 tests exited");
+sub run_at {
+    my ($jobs) = @_;
 
-        ok($stats->{max} <= 4, "Never ran more than 4 jobs at once") or diag("max: $stats->{max}");
-        ok($stats->{max} > 1,  "Ran more than one job at once")      or diag("max: $stats->{max}");
-    },
-);
+    my $barrier = tempdir(CLEANUP => 1);
 
-yath(
-    command => 'test',
-    args    => [$dir, '--ext=tx', '-j2'],
-    log     => 1,
-    exit    => 0,
-    test    => sub {
-        my $out = shift;
-        my $stats = concurrency($out->{log});
+    yath(
+        command => 'test',
+        args    => [
+            $dir, '--ext=tx', "-j$jobs",
+            '-It/lib',
+            '--env-var' => "TEST_BARRIER_DIR=$barrier",
+            '--env-var' => "TEST_BARRIER_COUNT=$jobs",
+        ],
+        log     => 1,
+        exit    => 0,
+        test    => sub {
+            my $out = shift;
+            my $stats = concurrency($out->{log});
 
-        is($stats->{starts}, 5, "All 5 tests started");
-        is($stats->{exits},  5, "All 5 tests exited");
+            is($stats->{starts}, 5, "All 5 tests started");
+            is($stats->{exits},  5, "All 5 tests exited");
 
-        ok($stats->{max} <= 2, "Never ran more than 2 jobs at once") or diag("max: $stats->{max}");
-        ok($stats->{max} > 1,  "Ran more than one job at once")      or diag("max: $stats->{max}");
-    },
-);
+            # The barrier holds every job in the wave until the full $jobs of them
+            # are live, so this is exact now, not a range: fewer means the limiter
+            # or the barrier failed, more means the limiter did.
+            is($stats->{max}, $jobs, "Ran exactly $jobs jobs at once, never more");
+        },
+    );
+}
 
 done_testing;

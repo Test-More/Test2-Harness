@@ -12,6 +12,7 @@ use File::Spec;
 use File::Temp qw/tempfile tempdir/;
 use POSIX;
 use Fcntl qw/SEEK_CUR/;
+use Time::HiRes qw/sleep/;
 
 use App::Yath::Util qw/find_yath/;
 use Test2::Harness::Util qw/clean_path apply_encoding/;
@@ -140,10 +141,8 @@ sub yath {
 
             waitpid($pid, WNOHANG) or do {
                 if ($timeout && time() - $start > $timeout) {
-                    kill('TERM', $pid);
-                    waitpid($pid, 0);
-                    $exit = $?;
                     push @lines => "yath tester timeout after ${timeout}s\n";
+                    $exit = _reap_stuck_yath($pid);
                     last;
                 }
 
@@ -219,6 +218,31 @@ sub yath {
     $ctx->release;
 
     return $out;
+}
+
+# A yath wedged badly enough to hit the timeout above may also be wedged badly
+# enough to ignore TERM, and a blocking waitpid on one that does hangs the test
+# file with no ceiling of its own -- turning a slow suite into one that never
+# finishes. Escalate instead, and only to this process: the tester deliberately
+# leaves yath in its own process group, so signalling the group would take the
+# test process with it.
+sub _reap_stuck_yath {
+    my ($pid) = @_;
+
+    for my $sig (qw/TERM TERM KILL/) {
+        kill($sig, $pid);
+
+        my $deadline = time() + 5;
+        while (time() < $deadline) {
+            return $? if waitpid($pid, WNOHANG) > 0;
+            sleep 0.05;
+        }
+    }
+
+    # It outlived a KILL, so it is unkillable (stuck in the kernel) and there
+    # is nothing else to try. Block, and let the caller see what it gets.
+    waitpid($pid, 0);
+    return $?;
 }
 
 sub _gen_passing_test {

@@ -1,6 +1,11 @@
 use Test2::V0;
 # HARNESS-CONFLICTS-DB
 
+# This one keeps a real duration on purpose. The assertions about it are
+# negative -- that nothing ran alongside it -- and a test that finishes
+# instantly would satisfy them without ever giving the scheduler a window in
+# which it could have got them wrong.
+
 sleep 1;
 ok(1, "pass");
 sleep 1;

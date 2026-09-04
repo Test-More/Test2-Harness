@@ -1,5 +1,6 @@
 use Test2::V0;
 # HARNESS-DURATION-LONG
+use Test2::Require::AuthorTesting;
 
 use App::Yath::Tester qw/yath/;
 
@@ -8,21 +9,20 @@ $dir =~ s{\.t$}{}g;
 $dir =~ s{^\./}{};
 
 run_tests('test');
+run_test_command_only_cases();
 
 my $project = "asgadfgds";
 
-unless ($ENV{AUTOMATED_TESTING}) {
-    my $out = yath(
-        command => 'start',
-        pre     => ['--project', $project],
-        args    => [],
-        exit    => 0,
-        test    => sub {
-            run_tests('run');
-            yath(command => 'stop', args => [], exit => 0);
-        }
-    );
-}
+yath(
+    command => 'start',
+    pre     => ['--project', $project],
+    args    => [],
+    exit    => 0,
+    test    => sub {
+        run_tests('run');
+        yath(command => 'stop', args => [], exit => 0);
+    }
+);
 
 sub run_tests {
     my ($cmd) = @_;
@@ -77,7 +77,12 @@ sub run_tests {
             is($status, 'NO', "Never passed");
         },
     );
+}
 
+# Both cases below always use the "test" command, so the "run" pass of
+# run_tests() used to repeat them unchanged -- including a full 20 second
+# event timeout -- and assert the same things about the same run.
+sub run_test_command_only_cases {
     {
         note q[Retrying a symlink];
 
@@ -134,6 +139,6 @@ sub run_tests {
             },
         );
     }
-};
+}
 
 done_testing;

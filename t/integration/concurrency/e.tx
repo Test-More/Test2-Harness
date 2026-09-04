@@ -1,7 +1,10 @@
 use Test2::V0;
+use TestBarrier qw/barrier_wait/;
 
-sleep 1;
+# Do not finish until the run has as many of these going at once as it was
+# told to allow, so the log has a real overlap to measure.
+barrier_wait();
+
 ok(1, "pass");
-sleep 1;
 
 done_testing;

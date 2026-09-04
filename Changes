@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000178  2026-09-04 13:37:49-07:00 America/Los_Angeles
+
     - Cut the time `make test` takes by roughly five times, by removing fixed waits from the test suite and moving its slowest tests behind AUTHOR_TESTING.
     - Make the wait loop in App::Yath::Tester sleep the fraction of a second it asks for instead of not sleeping at all, so it stops spinning while a yath run is in progress.
     - Escalate to KILL when App::Yath::Tester gives up waiting on a yath run, so a run that ignores TERM no longer hangs the test file that started it.

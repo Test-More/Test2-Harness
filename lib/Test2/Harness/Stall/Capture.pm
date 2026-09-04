@@ -2,7 +2,7 @@ package Test2::Harness::Stall::Capture;
 use strict;
 use warnings;
 
-our $VERSION = '1.000178';
+our $VERSION = '1.000179';
 
 use Carp qw/croak/;
 use Config qw/%Config/;

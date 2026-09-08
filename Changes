@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000179  2026-09-08 14:40:06-07:00 America/Los_Angeles
+
     - Add --cover-exclude-dirs to leave a directory, and everything under it, out of file coverage and coverage metrics; useful when a dependency tree is installed inside the working directory.
     - File coverage and coverage metrics now require Test2::Plugin::Cover 0.000029 or newer.
 

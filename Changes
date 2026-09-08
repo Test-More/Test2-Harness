@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+    - Add --cover-exclude-dirs to leave a directory, and everything under it, out of file coverage and coverage metrics; useful when a dependency tree is installed inside the working directory.
+    - File coverage and coverage metrics now require Test2::Plugin::Cover 0.000029 or newer.
+
 1.000178  2026-09-04 13:37:49-07:00 America/Los_Angeles
 
     - Cut the time `make test` takes by roughly five times, by removing fixed waits from the test suite and moving its slowest tests behind AUTHOR_TESTING.

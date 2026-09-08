@@ -5,6 +5,7 @@ use warnings;
 our $VERSION = '1.000179';
 
 use File::Find qw/find/;
+use Test2::Harness::Util qw/clean_path/;
 use Test2::Harness::Util::HashBase qw/<touched <job_map +can_touch +can_start_test +can_stop_test +can_record_coverage <file +io <encode/;
 
 sub init {
@@ -109,9 +110,10 @@ sub build_metrics {
 
     my $private = $params{exclude_private};
 
-    my $dirs     = $params{dirs}  // ['lib'];
-    my $types    = $params{types} // ['pm', 'pl'];
-    my $touched  = $self->{+TOUCHED} //= {};
+    my $dirs    = $params{dirs}  // ['lib'];
+    my $types   = $params{types} // ['pm', 'pl'];
+    my $touched = $self->{+TOUCHED} //= {};
+    my $exclude = [map { clean_path($_) } @{$params{exclude_dirs} // []}];
 
     my $metrics = {
         files    => {total => 0,  tested => 0},
@@ -128,6 +130,11 @@ sub build_metrics {
         {
             no_chdir => 1,
             wanted   => sub {
+                if ($self->_excluded($File::Find::name, $exclude)) {
+                    $File::Find::prune = 1;
+                    return;
+                }
+
                 my $type = lc($_);
                 $type =~ s/^.*\.([^\.]+)$/$1/;
                 return unless $type_check{$type};
@@ -180,6 +187,24 @@ sub build_metrics {
     $self->record_metrics($metrics);
 
     return $metrics;
+}
+
+# File coverage drops these paths before the event is sent, so counting them
+# here would report an excluded tree as untested source.
+sub _excluded {
+    my $self = shift;
+    my ($file, $exclude) = @_;
+
+    return 0 unless @$exclude;
+
+    my $path = clean_path($file);
+
+    for my $root (@$exclude) {
+        return 1 if $path eq $root;
+        return 1 if index($path, "$root/") == 0;
+    }
+
+    return 0;
 }
 
 sub scan_subs {
@@ -349,11 +374,18 @@ subroutine".
 
 =item $metrics = $agg->build_metrics(exclude_private => $BOOL)
 
+=item $metrics = $agg->build_metrics(exclude_dirs => \@paths)
+
 Will build metrics, and include them in the output from C<< $agg->coverage() >>
 next time it is called.
 
 The C<exclude_private> option, when set to true, will exclude any method that
-beings with an underscore from the coverage metrics and untested sub list.
+begins with an underscore from the coverage metrics and untested sub list.
+
+The C<exclude_dirs> option takes an arrayref of directories to leave out. A
+file at one of those paths, or under one at any depth, is counted in neither
+the totals nor the untested lists. Paths are resolved before they are
+compared, so they may be given relative to the current directory.
 
 Metrics:
 

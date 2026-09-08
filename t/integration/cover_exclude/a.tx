@@ -1,0 +1,22 @@
+use Test2::V0;
+
+use File::Basename qw/dirname/;
+
+BEGIN {
+    my $dir = dirname(__FILE__);
+    unshift @INC => "$dir/deps/lib", "$dir/deps2", "$dir/vendor";
+}
+
+use Keep;
+use Dep;
+use Dep2;
+use Vendor;
+
+print "PRELOAD: " . ($INC{'CoverExcludePreload.pm'} ? 1 : 0) . "\n";
+
+is(Keep->keep,     'keep',   "Got keep");
+is(Dep->dep,       'dep',    "Got dep");
+is(Dep2->dep2,     'dep2',   "Got dep2");
+is(Vendor->vendor, 'vendor', "Got vendor");
+
+done_testing;

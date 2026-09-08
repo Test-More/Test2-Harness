@@ -17,14 +17,14 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
     post \&post_process;
 
     option types => (
-        alt => ['cover-type'],
-        type => 'm',
+        alt     => ['cover-type'],
+        type    => 'm',
         default => sub { [qw/pl pm/] },
     );
 
     option dirs => (
-        alt => ['cover-dir'],
-        type => 'm',
+        alt     => ['cover-dir'],
+        type    => 'm',
         default => sub { ['lib'] },
 
         action => sub {
@@ -33,28 +33,49 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
         },
     );
 
+    option exclude_dirs => (
+        alt         => ['cover-exclude-dir'],
+        type        => 'm',
+        description => "Directory to leave out of file coverage and coverage metrics, along with everything under it at any depth. May be specified multiple times. Wildcards are expanded when the option is parsed, so a pattern matching nothing excludes nothing. Values are word-split first, so a path containing whitespace must be quoted or backslash-escaped. A resolved path may not contain a comma.",
+
+        action => sub {
+            my ($prefix, $field, $raw, $norm, $slot, $settings, $handler) = @_;
+
+            for my $path (map { clean_path($_) } glob($norm)) {
+                # The resolved path is what gets transmitted, so a comma in an
+                # ancestor directory breaks a value that had none of its own.
+                if ($path =~ m/,/) {
+                    my $from = $path eq $raw ? "" : " (from '$raw')";
+                    die "--cover-exclude-dirs cannot use a path containing a comma. '$path'$from has one. Coverage plugin arguments reach each test as a comma separated list, so such a path cannot survive.\n";
+                }
+
+                $handler->($slot, $path);
+            }
+        },
+    );
+
     option exclude_private => (
-        type => 'b',
-        default => 0,
+        type        => 'b',
+        default     => 0,
         description => "",
     );
 
     option files => (
-        type => 'b',
+        type        => 'b',
         description => "Use Test2::Plugin::Cover to collect coverage data for what files are touched by what tests. Unlike Devel::Cover this has very little performance impact (About 4% difference)",
     );
 
     option metrics => (
-        type => 'b',
+        type        => 'b',
         description => '',
     );
 
     option write => (
-        type => 'd',
-        normalize => \&clean_path,
+        type          => 'd',
+        normalize     => \&clean_path,
         long_examples => ['', '=coverage.jsonl', '=coverage.json'],
-        description => "Create a json or jsonl file of all coverage data seen during the run (This implies --cover-files).",
-        action      => sub {
+        description   => "Create a json or jsonl file of all coverage data seen during the run (This implies --cover-files).",
+        action        => sub {
             my ($prefix, $field, $raw, $norm, $slot, $settings) = @_;
 
             return $$slot = clean_path("coverage.jsonl") if $raw eq '1';
@@ -63,11 +84,11 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
     );
 
     option aggregator => (
-        alt => ['cover-agg'],
-        type => 's',
+        alt           => ['cover-agg'],
+        type          => 's',
         long_examples => [' ByTest', ' ByRun', ' +Custom::Aggregator'],
-        description => 'Choose a custom aggregator subclass',
-        normalize => sub {
+        description   => 'Choose a custom aggregator subclass',
+        normalize     => sub {
             my ($agg) = @_;
             return $agg if $agg =~ s/^\+//;
             return "Test2::Harness::Log::CoverageAggregator::$agg";
@@ -75,39 +96,39 @@ option_group {prefix => 'cover', category => "Cover Options"} => sub {
     );
 
     option class => (
-        type => 's',
+        type        => 's',
         description => 'Choose a Test2::Plugin::Cover subclass',
-        default => 'Test2::Plugin::Cover',
+        default     => 'Test2::Plugin::Cover',
     );
 
     option manager => (
-        type => 's',
-        description => "Coverage 'from' manager to use when coverage data does not provide one",
-        long_examples => [ ' My::Coverage::Manager'],
-        applicable => \&changes_applicable,
+        type          => 's',
+        description   => "Coverage 'from' manager to use when coverage data does not provide one",
+        long_examples => [' My::Coverage::Manager'],
+        applicable    => \&changes_applicable,
     );
 
     option from_type => (
-        type => 's',
-        description => 'File type for coverage source. Usually it can be detected, but when it cannot be you should specify. "json" is old style single-blob coverage data, "jsonl" is the new by-test style, "log" is a logfile from a previous run.',
-        long_examples => [' json', ' jsonl', ' log' ],
+        type          => 's',
+        description   => 'File type for coverage source. Usually it can be detected, but when it cannot be you should specify. "json" is old style single-blob coverage data, "jsonl" is the new by-test style, "log" is a logfile from a previous run.',
+        long_examples => [' json', ' jsonl', ' log'],
     );
 
     option maybe_from_type => (
-        type => 's',
+        type          => 's',
         'description' => 'Same as "from_type" but for "maybe_from". Defaults to "from_type" if that is specified, otherwise auto-detect',
-        long_examples => [' json', ' jsonl', ' log' ],
+        long_examples => [' json', ' jsonl', ' log'],
     );
 
     option from => (
-        type => 's',
-        description => "This can be a test log, a coverage dump (old style json or new jsonl format), or a url to any of the previous. Tests will not be run if the file/url is invalid.",
+        type          => 's',
+        description   => "This can be a test log, a coverage dump (old style json or new jsonl format), or a url to any of the previous. Tests will not be run if the file/url is invalid.",
         long_examples => [' path/to/log.jsonl', ' http://example.com/coverage', ' path/to/coverage.jsonl']
     );
 
     option maybe_from => (
-        type => 's',
-        description => "This can be a test log, a coverage dump (old style json or new jsonl format), or a url to any of the previous. Tests will continue even if the coverage file/url is invalid.",
+        type          => 's',
+        description   => "This can be a test log, a coverage dump (old style json or new jsonl format), or a url to any of the previous. Tests will continue even if the coverage file/url is invalid.",
         long_examples => [' path/to/log.jsonl', ' http://example.com/coverage', ' path/to/coverage.jsonl']
     );
 };
@@ -140,8 +161,16 @@ sub post_process {
         my $cover_class = $cover->class // 'Test2::Plugin::Cover';
 
         eval { require(mod2file($cover_class)); 1 } or die "Could not enable file coverage, could not load '$cover_class': $@";
+
+        # Older versions accept the 'exclude' parameter and ignore it, which
+        # would record an excluded tree while reporting success.
+        eval { $cover_class->VERSION('0.000029'); 1 } or die "Could not enable file coverage: $@";
+
         push @{$settings->run->load_import->{'@'}} => $cover_class;
-        $settings->run->load_import->{$cover_class} = [];
+
+        # Repeated pairs, not a single arrayref: this list is joined with
+        # commas into a -M argument for tests that do not run under a preload.
+        $settings->run->load_import->{$cover_class} = [map { (exclude => $_) } @{$cover->exclude_dirs // []}];
     }
 }
 
@@ -152,8 +181,8 @@ sub annotate_event {
 
     unless ($self->{+AGGREGATOR}) {
         my $do_cover = $settings->cover->files;
-        my $file = $settings->cover->write;
-        my $metrics = $settings->cover->metrics;
+        my $file     = $settings->cover->write;
+        my $metrics  = $settings->cover->metrics;
 
         unless ($file || $metrics || $do_cover) {
             $self->{+NO_AGGREGATE} = 1;
@@ -197,7 +226,7 @@ sub annotate_event {
     if ($fd->{coverage} || $fd->{harness_job_end} || $fd->{harness_job_start}) {
         if (my $list = $self->{+AGGREGATOR}->process_event($e)) {
             die "Aggregator flushed without a job end!" unless $fd->{harness_job_end};
-            die "Aggregator flushed more than 1 job!" unless @$list == 1;
+            die "Aggregator flushed more than 1 job!"   unless @$list == 1;
             push @out => (job_coverage => {details => 'Job Coverage', manager => $list->[0]->{manager}, files => $list->[0]->{files}, test => $list->[0]->{test}});
         }
     }
@@ -247,6 +276,7 @@ sub metrics {
         dirs            => $cover->dirs,
         types           => $cover->types,
         exclude_private => $cover->exclude_private,
+        exclude_dirs    => $cover->exclude_dirs,
     );
 }
 
@@ -350,7 +380,7 @@ sub get_coverage_tests {
         my $type_data = $self->_deduce_content_type($maybe, $cover->maybe_from_type);
 
         my @out;
-        my $ok = eval { @out = $self->_get_coverage_tests($settings, $changes, $maybe, $type_data); 1 };
+        my $ok  = eval { @out = $self->_get_coverage_tests($settings, $changes, $maybe, $type_data); 1 };
         my $err = $@;
         return @out if $ok;
         warn "Could not get coverage from '$maybe', continuing anyway... error was: $err";
@@ -388,7 +418,7 @@ sub coverage_handler {
             require 'Test2/Harness/Log/CoverageAggregator/ByTest.pm' unless $INC{'Test2/Harness/Log/CoverageAggregator/ByTest.pm'};
             $agg = 'Test2::Harness::Log::CoverageAggregator::ByTest';
         }
-        elsif($data = $fd->{run_coverage}) {
+        elsif ($data = $fd->{run_coverage}) {
             require 'Test2/Harness/Log/CoverageAggregator/ByRun.pm' unless $INC{'Test2/Harness/Log/CoverageAggregator/ByRun.pm'};
             $agg = 'Test2::Harness::Log::CoverageAggregator::ByRun';
         }

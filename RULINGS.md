@@ -18,6 +18,150 @@ see `~/projects/Agents/AGENTS.md` under "What earns a place in `RULINGS.md`".
 
 ---
 
+## 2026-09-08 — `--cover-exclude-dirs` globs, the same as `--cover-dirs`
+
+**Ruling: the exclusion option expands its argument with `glob()` in its
+option action, exactly as `--cover-dirs` does. Both halves of a project layout
+are then expressible the same way: `--cover-dirs 'cmp/*/lib'` and
+`--cover-exclude-dirs 'cmp/*/t'`.**
+
+Coverage and its metrics are meant to cover source files: modules under
+`lib/`, per-project libraries under paths like `cmp/*/lib`, and config files
+anywhere, but not tests under `t/`, not test libraries under `t/lib` or
+`cmp/*/t`, not system libraries, and not other projects linked or checked out
+into the working directory. `cmp/*/t` cannot be written as a literal path, and
+the matching include side already globs, so a literal-only exclusion option
+would leave half the layout inexpressible.
+
+`glob()` runs at option-parse time, so a pattern matching nothing excludes
+nothing while the user believes it is configured. That hazard is accepted
+rather than solved: the trees this option exists for are checkouts that exist
+before the run, the effective exclusion list appears in verbose and debug
+output, and the option description says expansion happens when the option is
+parsed.
+
+Inherited with `glob()`: a path containing whitespace is split. That is
+pre-existing behavior of `--cover-dirs` and is shared deliberately rather than
+diverging between the two options.
+
+---
+
+## 2026-09-08 — coverage metrics honor the exclusion list
+
+**Ruling: `Test2::Harness::Log::CoverageAggregator::build_metrics` skips
+excluded paths during its directory walk. An excluded file is counted in
+neither `files`/`subs` totals nor `untested`.**
+
+Without this, excluding a tree that sits inside a `--cover-dirs` directory made
+the reported numbers worse rather than neutral: the file still incremented the
+totals, and because it was no longer touched it was pushed onto
+`untested.files`, whose paths reach the Test2::Harness::UI database through the
+run's coverage field. Excluding a tree lowered the coverage percentage and put
+the excluded paths in the database by another route.
+
+`--cover-dirs` keeps its existing meaning as the metrics selector. This does
+not make it a file-coverage allowlist; it subtracts an explicit exclusion from
+the metrics walk so the two agree.
+
+Metrics and file coverage are not the same set and are not meant to be. Metrics
+count typed files under `--cover-dirs`; file coverage records every source and
+config file actually touched under the run root. What must agree is the
+exclusion rules.
+
+---
+
+## 2026-09-08 — excluding `t/` is configuration, not a default
+
+**Ruling: yath does not exclude `t/`, `t/lib`, or any other test directory from
+file coverage by default. A project that wants them out names them in
+`--cover-exclude-dirs`, normally in `.yath.rc`.**
+
+The goal that coverage cover only source files does imply tests should not be
+recorded, but changing the default changes what every existing `--cover-files`
+run records. It also has a concrete cost: coverage-driven test selection maps a
+changed file to the tests that touched it, so dropping `t/lib` means a change
+to a test library selects nothing.
+
+Revisit as its own piece of work if the recipe proves to be what every project
+writes anyway.
+
+---
+
+## 2026-09-08 — coverage requires Test2::Plugin::Cover 0.000029, not just the exclusion option
+
+**Ruling: `App::Yath::Plugin::Cover::post_process` requires version 0.000029
+of the coverage class wherever it loads it. The check is not gated on
+`--cover-exclude-dirs`. `Test2::Plugin::Cover` stays a `RuntimeSuggests`
+prerequisite; only the suggested version moves.**
+
+Do not "optimize" this into a check that fires only when the exclusion option
+is set. One version floor for the whole plugin is the point.
+
+Without a check, `--cover-exclude-dirs` against 0.000025 through 0.000028 does
+nothing at all and says nothing: the option parses, the `exclude` pairs are
+transmitted, the old `import` absorbs them into its parameter hash, the old
+`filter` ignores the key, and the dependency tree is recorded while the run
+reports success. Silent under-exclusion is the failure this option exists to
+prevent, and it would be the state of every machine that has not yet upgraded.
+
+Promoting the prerequisite to `RuntimeRequires` was declined. Coverage is
+optional, and this distribution deliberately installs before the rest of the
+toolchain is trusted.
+
+Consequence to accept: a `--cover-class` subclass must declare a version of at
+least 0.000029, since the check runs against the class actually being loaded.
+
+---
+
+## 2026-09-08 — `--cover-exclude-dirs` rejects paths containing a comma
+
+**Ruling: a `--cover-exclude-dirs` path containing a comma is rejected at
+option-parse time with an error naming the reason. The check applies to each
+resolved absolute path the option produces, after `glob()` expansion and path
+normalization, not to the value as the user typed it. Commas in exclusion
+paths are documented as unsupported. Do not add an encoding layer to
+`load_import` to make them work.**
+
+The resolved path is what gets transmitted, so it is the only thing worth
+checking. This is wider than the typed value in the case that matters — a
+comma in an ancestor directory name breaks a value that has none — and
+narrower in one harmless case: a comma that `realpath` resolves away, such as
+a symlink named `a,b` pointing at `ab`, is deliberately allowed, because
+nothing containing a comma is then transmitted. Do not "restore" a check on
+the typed value; it would reject paths that work.
+
+Exclusions reach test processes through `run->load_import`, which has two
+transports. `Test2::Harness::Runner::Job::cli_options` builds
+`-M$mod=` . join(',', @args) for a fresh process, and perl splits that on
+commas before calling `import`. `App::Yath::Command::runner::do_loads` calls
+`$mod->import(@$args)` directly in the preload/fork path and has no such
+limit.
+
+So a path with a comma does not merely fail, it fails differently depending on
+whether preload is in use, and it fails wrong rather than loudly:
+`-MTest2::Plugin::Cover=exclude,/a/b,c/deps` arrives as
+`('exclude', '/a/b', 'c/deps')`, which sets a truncated exclusion and leaves a
+stray token in the parameter list. Rejecting up front turns a wrong answer
+into a clear one and keeps both transports consistent.
+
+The limit is not new to this option. `App::Yath::Options::Runner` already does
+`split(/,/, $settings->runner->cover)` for Devel::Cover arguments, and every
+plugin riding `load_import` shares it.
+
+Encoding the arguments so any byte survives was considered and declined. It
+would change a mechanism shared by `Devel::Cover`,
+`Test2::Plugin::DBIProfile`, and any plugin using `load_import`, and both
+transports would have to apply and reverse it — a permanent cost on everything
+to serve one option's rare edge case. A separate env-var channel was also
+dropped: it needs its own separator, so it solves nothing and adds a second
+configuration path.
+
+Revisit if: someone reports a real tree they cannot exclude. Supporting commas
+later is backward compatible; withdrawing an encoding after callers rely on it
+is not.
+
+---
+
 ## 2026-08-20 — minor stall-diagnostics findings considered and accepted as-is
 
 **Ruling: the following were each raised by an independent reviewer, judged

@@ -2,7 +2,7 @@ package App::Yath::Command::failed;
 use strict;
 use warnings;
 
-our $VERSION = '1.000179';
+our $VERSION = '1.000180';
 
 use Test2::Util::Table qw/table/;
 use Test2::Harness::Util::File::JSONL;

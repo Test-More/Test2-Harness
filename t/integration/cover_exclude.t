@@ -1,10 +1,11 @@
 use Test2::V0;
 use Test2::Harness::Util::JSON qw/decode_json/;
-use Test2::Require::Module 'Test2::Plugin::Cover' => '0.000029';
+use Test2::Require::Module 'Test2::Plugin::Cover' => '0.000030';
 use Test2::Require::AuthorTesting;
 
 use App::Yath::Tester qw/yath/;
 use Test2::Harness::Util qw/clean_path/;
+use Test2::Util qw/CAN_REALLY_FORK/;
 use File::Spec();
 
 use File::Temp qw/tempfile/;
@@ -31,22 +32,35 @@ sub fixture_files {
     return [sort grep { m{^\Q$dir\E/} && m{\.pm$} } keys %{$files // {}}];
 }
 
+# The coverage facet itself is collapsed before it is logged, so the file map
+# consumers see is what yath adds: job_coverage per job, or run_coverage at
+# the end, depending on the aggregator.
 sub event_files {
     my ($log) = @_;
 
     my %files;
-    my @events = $log->poll();
-    while (@events) {
-        my $event = shift @events;
-        if ($event) {
-            my $cov = $event->{facet_data}->{coverage};
-            @files{keys %{$cov->{files}}} = values %{$cov->{files}} if $cov;
+    for my $event (log_events($log)) {
+        my $fd = $event->{facet_data};
+        for my $cov (grep { $_ } $fd->{job_coverage}, $fd->{run_coverage}) {
+            @files{keys %{$cov->{files}}} = values %{$cov->{files}};
         }
-
-        push @events => $log->poll;
     }
 
     return fixture_files(\%files);
+}
+
+sub log_events {
+    my ($log) = @_;
+
+    my @out;
+    my @events = $log->poll();
+    while (@events) {
+        my $event = shift @events;
+        push @out    => $event if $event;
+        push @events => $log->poll;
+    }
+
+    return @out;
 }
 
 sub written_files {
@@ -129,6 +143,8 @@ subtest wildcard_exclusion => sub {
 };
 
 subtest preload => sub {
+    skip_all "Cannot fork, skipping preload test" if $ENV{T2_NO_FORK} || !CAN_REALLY_FORK;
+
     cover_run(
         preload => 1,
         args    => ['-PCoverExcludePreload', "--cover-exclude-dirs=$dir/deps", "--cover-exclude-dirs=$dir/vendor"],
@@ -171,6 +187,94 @@ subtest exclusions_in_verbose_output => sub {
 
             like($out->{output}, qr{RUN INFO.*"exclude",},          "Verbose output shows the exclusion parameter");
             like($out->{output}, qr{RUN INFO.*"\Q$abs_dir\E/deps"}, "Verbose output shows the normalized exclusion path");
+        },
+    );
+};
+
+# Coverage produced by a process yath did not launch cannot carry the
+# exclusions, so it is filtered again where every coverage event is seen.
+subtest out_of_band_producer => sub {
+    my $oob = "$dir" . "_out_of_band";
+
+    my ($fh, $cfile) = tempfile("cover-exclude-oob-$$-XXXXXXXX", TMPDIR => 1, UNLINK => 1, SUFFIX => '.json');
+    close($fh);
+
+    yath(
+        command => 'test',
+        pre     => ["-D$oob/lib"],
+        log     => 1,
+        args    => [
+            "-I$oob/lib", $oob, '--ext=tx', '-v',
+            '-p+CoverExcludePeek',
+            '--cover-files',
+            "--cover-write=$cfile",
+            "--cover-exclude-dirs=$oob/deps",
+        ],
+        exit => 0,
+        test => sub {
+            my $out = shift;
+
+            open(my $rfh, '<', $cfile) or die "Could not open coverage file '$cfile': $!";
+            my $data  = decode_json(join '' => <$rfh>);
+            my @files = sort keys %{$data->{files} // {}};
+
+            ok(
+                (grep { m{OOBKeep\.pm$} } @files),
+                "Kept a source file the test itself covered",
+            ) or diag(join ", " => @files);
+
+            is(
+                [grep { m{OOBDep\.pm$} } @files],
+                [],
+                "Dropped every descendant's coverage of the excluded tree",
+            ) or diag(join ", " => @files);
+
+            # A producer's keys are relative to its own root and are left as
+            # reported; the root is used only to resolve them for exclusion.
+            ok(
+                (grep { $_ eq 'lib/OOBRekey.pm' } @files),
+                "A descendant with its own root keeps its own keys",
+            ) or diag(join ", " => @files);
+
+            ok(
+                (grep { $_ eq 'OOBOutside.pm' } @files),
+                "A descendant measured outside the project is not dropped",
+            ) or diag(join ", " => @files);
+
+            like(
+                $out->{output},
+                qr{COVERAGE FACET: files=SCALAR file_count=\d+},
+                "Coverage facet reaching consumers carries counts, not the file map",
+            );
+
+            my @raw = grep { $_->{facet_data}->{coverage} } log_events($out->{log});
+            ok(@raw, "Found coverage facets in the log");
+            is(
+                [grep { ref($_->{facet_data}->{coverage}->{files}) } @raw],
+                [],
+                "The logged coverage facets are the collapsed ones",
+            );
+        },
+    );
+
+    # Without this the assertion above could pass because the descendant never
+    # reached the event stream at all.
+    my ($fh2, $cfile2) = tempfile("cover-exclude-oob-$$-XXXXXXXX", TMPDIR => 1, UNLINK => 1, SUFFIX => '.json');
+    close($fh2);
+
+    yath(
+        command => 'test',
+        args    => ["-I$oob/lib", $oob, '--ext=tx', '-v', '--cover-files', "--cover-write=$cfile2"],
+        exit    => 0,
+        test    => sub {
+            open(my $rfh, '<', $cfile2) or die "Could not open coverage file '$cfile2': $!";
+            my $data  = decode_json(join '' => <$rfh>);
+            my @files = sort keys %{$data->{files} // {}};
+
+            ok(
+                (grep { m{OOBDep\.pm$} } @files),
+                "Without the exclusion the descendant's coverage is recorded",
+            ) or diag(join ", " => @files);
         },
     );
 };

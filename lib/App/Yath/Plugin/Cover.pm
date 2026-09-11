@@ -4,12 +4,13 @@ use warnings;
 
 our $VERSION = '1.000180';
 
+use File::Spec();
 use Test2::Harness::Util qw/clean_path mod2file/;
 use Test2::Harness::Util::JSON qw/encode_json stream_json_l/;
 use Test2::Harness::Util::UUID qw/gen_uuid/;
 
 use parent 'App::Yath::Plugin';
-use Test2::Harness::Util::HashBase qw/-aggregator -no_aggregate +metrics +outfile/;
+use Test2::Harness::Util::HashBase qw/-aggregator -no_aggregate +metrics +outfile +exclude_roots +path_cache/;
 
 use App::Yath::Options;
 
@@ -223,6 +224,11 @@ sub annotate_event {
 
     my @out;
 
+    # A process yath did not launch can still emit coverage into a job's event
+    # stream without ever seeing the exclusions. This is the one point every
+    # coverage event passes through, so the exclusions are applied again here.
+    $self->_filter_coverage($fd->{coverage}, $settings) if $fd->{coverage};
+
     if ($fd->{coverage} || $fd->{harness_job_end} || $fd->{harness_job_start}) {
         if (my $list = $self->{+AGGREGATOR}->process_event($e)) {
             die "Aggregator flushed without a job end!" unless $fd->{harness_job_end};
@@ -230,6 +236,11 @@ sub annotate_event {
             push @out => (job_coverage => {details => 'Job Coverage', manager => $list->[0]->{manager}, files => $list->[0]->{files}, test => $list->[0]->{test}});
         }
     }
+
+    # The aggregator has taken what it needs, and the file map is reproduced in
+    # the job or run coverage data it produces, so sending it onward costs
+    # bandwidth and storage for a copy nothing reads.
+    push @out => (-rewrite => 1) if $fd->{coverage} && $self->_collapse_coverage($fd);
 
     if ($fd->{harness_final}) {
         my $cover      = $settings->cover;
@@ -260,6 +271,101 @@ sub annotate_event {
     }
 
     return @out;
+}
+
+sub _exclude_roots {
+    my $self = shift;
+    my ($settings) = @_;
+
+    return $self->{+EXCLUDE_ROOTS} if exists $self->{+EXCLUDE_ROOTS};
+
+    my $dirs = $settings->cover->exclude_dirs;
+
+    return $self->{+EXCLUDE_ROOTS} = ($dirs && @$dirs) ? [map { clean_path($_) } @$dirs] : undef;
+}
+
+# Coverage paths are relative to the root the producer measured against, which
+# it names in the facet. A producer may choose that root deliberately, so the
+# keys are left exactly as reported; the root is used only to work out which
+# file each key names, so an exclusion can be applied without guessing.
+sub _filter_coverage {
+    my $self = shift;
+    my ($coverage, $settings) = @_;
+
+    my $files = $coverage->{files};
+    return unless $files && ref($files) eq 'HASH';
+
+    my $exclude = $self->_exclude_roots($settings) or return;
+
+    my $root = $coverage->{root};
+
+    # Coverage names the same files for every test, so resolving each one once
+    # for the whole run keeps this off the event loop's critical path.
+    my $cache = $self->{+PATH_CACHE} //= {};
+
+    for my $file (keys %$files) {
+        # A custom filter may return an absolute path, which needs no root.
+        my $path = $cache->{($root // '') . "\0" . $file} //=
+            clean_path((defined($root) && !File::Spec->file_name_is_absolute($file)) ? "$root/$file" : $file);
+
+        next unless $self->_excluded($path, $exclude);
+
+        # An older producer that does not name its root has been assumed to
+        # share the run root. Act on that guess only when a file is actually
+        # there.
+        next unless defined($root) || -e $path;
+
+        delete $files->{$file};
+    }
+
+    return;
+}
+
+sub _excluded {
+    my $self = shift;
+    my ($path, $exclude) = @_;
+
+    for my $root (@$exclude) {
+        return 1 if $path eq $root;
+        return 1 if index($path, "$root/") == 0;
+    }
+
+    return 0;
+}
+
+sub _collapse_coverage {
+    my $self = shift;
+    my ($fd) = @_;
+
+    my $coverage = $fd->{coverage};
+    my $files    = $coverage->{files};
+    return 0 unless $files && ref($files) eq 'HASH';
+
+    my $file_count = keys %$files;
+
+    # '*' is code outside any sub and '<>' is a file that was only opened,
+    # neither is a subroutine.
+    my $sub_count = 0;
+    for my $file (keys %$files) {
+        $sub_count += grep { $_ ne '*' && $_ ne '<>' } keys %{$files->{$file} // {}};
+    }
+
+    my $details = "This test covered $file_count source files.";
+
+    $coverage->{file_count} = $file_count;
+    $coverage->{sub_count}  = $sub_count;
+    $coverage->{details}    = $details;
+    $coverage->{files}      = "Removed, reproduced in the aggregated coverage data";
+
+    # These were counted before anything was excluded.
+    $fd->{about}->{details} = $details if $fd->{about} && $fd->{about}->{details};
+
+    for my $info (@{$fd->{info} // []}) {
+        next unless ($info->{tag} // '') eq 'COVERAGE';
+        $info->{details} = $details;
+    }
+
+    return 1;
 }
 
 sub metrics {

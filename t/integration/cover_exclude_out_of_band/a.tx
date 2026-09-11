@@ -1,0 +1,37 @@
+use Test2::V0;
+use File::Temp qw/tempdir/;
+
+require OOBKeep;
+OOBKeep::keep();
+
+my $dir = __FILE__;
+$dir =~ s{[^/]+$}{};
+
+# Descendants yath never launched: each loads the coverage plugin itself, so
+# none of them sees the exclusions, and every report lands in this job's event
+# stream. They must all start before this test's first assertion, since the
+# stream environment they inherit is withdrawn once the test's own formatter
+# initializes.
+my %exit;
+
+# Measured against the run root, like this test.
+$exit{plain} = system($^X, "-I${dir}deps", '-MTest2::Plugin::Cover', '-e', 'require OOBDep; OOBDep::dep(); 1;');
+
+# Measured against the fixture directory, so its paths are relative to that
+# and only the root it names says which files they are.
+$exit{rekey} = system(
+    $^X, '-e',
+    "chdir q{$dir} or die \$!; exec \$^X, '-Ilib', '-Ideps', '-MTest2::Plugin::Cover', '-e', q{require OOBRekey; OOBRekey::rekey(); require OOBDep; OOBDep::dep(); 1;}",
+);
+
+# Measured against a directory outside the project entirely.
+my $tmp = tempdir(CLEANUP => 1);
+open(my $fh, '>', "$tmp/OOBOutside.pm") or die "Could not write '$tmp/OOBOutside.pm': $!";
+print $fh "package OOBOutside; sub out { 1 } 1;\n";
+close($fh) or die "Could not close '$tmp/OOBOutside.pm': $!";
+
+$exit{outside} = system($^X, '-e', "chdir q{$tmp} or die \$!; exec \$^X, '-I.', '-MTest2::Plugin::Cover', '-e', q{require OOBOutside; OOBOutside::out(); 1;}");
+
+is($exit{$_}, 0, "descendant '$_' ran") for sort keys %exit;
+
+done_testing;

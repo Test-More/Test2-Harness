@@ -219,6 +219,17 @@ particularly useful to L<App::Yath::UI>.
         return;
     }
 
+=item %facets = $plugin->annotate_event($event, $settings)
+
+Called for every event after the auditor has processed it, before it is
+logged or rendered. Return facets to add to the event, keyed by facet name;
+an existing facet may only be appended to when it is a list.
+
+A plugin may instead modify facets already on the event. That is tolerated,
+not encouraged, and the plugin must then include C<< -rewrite => 1 >> in what
+it returns so the logged line reflects the change. Without it the log keeps
+the event as it arrived.
+
 =item $plugin->setup($settings)
 
 This is a callback that lets you run setup logic when the runner starts. Note

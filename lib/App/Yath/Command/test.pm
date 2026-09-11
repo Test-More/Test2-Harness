@@ -369,6 +369,11 @@ sub render {
             my $changed = 0;
             for my $p (@$annotate_plugins) {
                 my %inject = $p->annotate_event($e, $settings);
+
+                # A plugin that altered facets already on the event says so,
+                # otherwise the log would keep the line as it arrived.
+                $changed++ if delete $inject{-rewrite};
+
                 next unless keys %inject;
                 $changed++;
 

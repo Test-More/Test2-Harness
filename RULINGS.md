@@ -18,6 +18,62 @@ see `~/projects/Agents/AGENTS.md` under "What earns a place in `RULINGS.md`".
 
 ---
 
+## 2026-09-11 — coverage is filtered and collapsed where yath aggregates it
+
+**Ruling: `App::Yath::Plugin::Cover::annotate_event` applies the exclusion
+roots to every coverage facet before the aggregator sees it, then replaces the
+facet's file map with file and sub counts and a note. Exclusions are resolved
+against the root the facet names; a facet's keys are otherwise left exactly as
+the producer reported them. The logged event is the filtered, collapsed one.**
+
+Producer-side filtering cannot be complete. A process yath did not launch can
+load `Test2::Plugin::Cover` itself and report into the job's event stream: a
+descendant created with `exec`, a service a test starts, anything loaded via
+`PERL5OPT`. It never receives the `-M` arguments that carry the exclusions.
+Reproduced with a nine-line fixture, and the cause of ~64,500 dependency rows
+reaching a real Test2::Harness::UI database.
+
+The descendant can join the stream only while the job's stream environment is
+still present, which is until the test's own formatter initializes on its
+first event. So the leak comes from processes started at the top of a test, a
+server or a browser being the obvious cases. Closing that window was not
+pursued here; it is a separate question about the Stream formatter.
+
+The two goals are bandwidth to the database and the row count in it. The
+aggregation point is the one place with both the data and the configuration,
+and `render_event` runs after annotation, so what the renderer sends to the
+database is the filtered, collapsed event. Nothing downstream reads the raw
+file map: the UI reads `job_coverage`/`run_coverage`, and so does
+`--cover-from`. Propagating exclusions to descendants through the environment
+was considered and declined; it needs cooperation from processes the harness
+does not control, and the aggregation point does not.
+
+**Keys are not rewritten to the run root.** That was tried, and it broke this
+repository's own coverage fixtures: they call `set_root` on a subdirectory so
+their keys are `Ax.pm` rather than `t/integration/coverage/lib/Ax.pm`, and
+`--changed-only` with a coverage manager depends on those keys. A producer that
+chose its root deliberately is indistinguishable from a descendant that merely
+has a different working directory, so the keys stay as reported and the root
+is used only to work out which file a key names. For the same reason a facet
+whose root lies outside the run root is not dropped.
+
+Older producers name no root. For those the run root is assumed, and an
+exclusion is applied only to a key that resolves to a file that exists there.
+A key naming a file elsewhere is then left alone unless a same-named file
+happens to exist under an excluded directory of the run root.
+
+The log records the event as it is sent onward. The core loop re-serializes a
+line only when a plugin injected a facet, so a plugin that alters existing
+facets returns `-rewrite => 1` to say so. Without that, `yath upload` and
+`Test2::Harness::UI::Sync`, which feed a log through the same ingestion, would
+still deliver the unfiltered data.
+
+Revisit if: a consumer is found that needs the raw per-test file map on the
+event, or the Stream formatter's environment window is closed, which would
+make the out-of-band case unreachable.
+
+---
+
 ## 2026-09-08 — `--cover-exclude-dirs` globs, the same as `--cover-dirs`
 
 **Ruling: the exclusion option expands its argument with `glob()` in its

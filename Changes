@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+    - Apply --cover-exclude-dirs to coverage produced by processes yath did not launch, such as a descendant that loads the coverage plugin itself.
+    - Coverage events now carry file and sub counts instead of the full file map, which is already reproduced in the aggregated coverage data.
+    - Resolve exclusions against the root a coverage event names, so a producer measuring against its own directory is filtered correctly rather than by guess.
+    - The log now records coverage events as they are sent onward, with exclusions applied and the file map collapsed.
+
 1.000179  2026-09-08 14:40:06-07:00 America/Los_Angeles
 
     - Add --cover-exclude-dirs to leave a directory, and everything under it, out of file coverage and coverage metrics; useful when a dependency tree is installed inside the working directory.

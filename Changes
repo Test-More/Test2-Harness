@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000180  2026-09-11 10:37:49-07:00 America/Los_Angeles
+
     - Apply --cover-exclude-dirs to coverage produced by processes yath did not launch, such as a descendant that loads the coverage plugin itself.
     - Coverage events now carry file and sub counts instead of the full file map, which is already reproduced in the aggregated coverage data.
     - Resolve exclusions against the root a coverage event names, so a producer measuring against its own directory is filtered correctly rather than by guess.

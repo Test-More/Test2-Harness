@@ -328,6 +328,28 @@ class name.
 
 =back
 
+=head1 ATTACHING FILES
+
+A helper process, such as one started with C<shellcall()>, can attach a file
+to the run by placing it in the C<aux_logs/attachments/> directory under the
+workdir (C<< $settings->workspace->workdir >>). The writer creates
+C<aux_logs/> and C<aux_logs/attachments/> if they do not exist.
+
+The collector attaches each file name once, as a binary on the harness output
+(job 0) along with an C<ARTIFACT> line naming it. Files whose names start with a
+dot are ignored, so write the file as C<.name.tmp> and rename it to its final
+name once it is complete; anything visible is read as soon as the collector
+sees it. Files ending in an image extension are flagged as images.
+
+The file is read whole into memory and sent inline, base64 encoded, as part of
+the event stream and the log. There is no size limit; keeping attachments a
+sensible size is up to the writer.
+
+Like the rest of the runner output, attachments are not collected when
+C<--hide-runner-output> is in effect. With a persistent runner every command
+sees every file already in the directory, unless C<--truncate-runner-output> is
+used, in which case files present when the command starts are skipped.
+
 =head1 SOURCE
 
 The source code repository for Test2-Harness can be found at

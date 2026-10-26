@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+    - Files a helper process places in aux_logs/attachments/ under the workdir are attached to the run as binaries on the harness output.
+
 1.000180  2026-09-11 10:37:49-07:00 America/Los_Angeles
 
     - Apply --cover-exclude-dirs to coverage produced by processes yath did not launch, such as a descendant that loads the coverage plugin itself.

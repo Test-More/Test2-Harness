@@ -18,6 +18,35 @@ see `~/projects/Agents/AGENTS.md` under "What earns a place in `RULINGS.md`".
 
 ---
 
+## 2026-10-26 — aux_logs attachments have no size limit and are read whole
+
+**Ruling: files in `aux_logs/attachments/` are attached whatever their size,
+read whole into memory, and sent as one event with the data inline. The POD
+says so; keeping files a sensible size is the writer's job. No cap, no
+truncation, no chunked reading.**
+
+`MAX_ATTACH` (1 MB, `App::Yath::Command::test` and `start`) stays unused. The
+writer is the site's own helper code, the expected payloads (log bundles, core
+lists) are small, and test-side `binary` facets have no cap either. A cap added
+later only refuses new oversized files; one added now commits to a policy
+nobody has needed.
+
+Chunked reading in the collector was considered and declined. The collector
+holds several full copies of the file at its peak (the raw bytes, the base64
+facet, the encoded event line); reading and encoding in chunks would remove
+only the raw copy. The main `yath` process decodes the whole line (`test.pm`,
+the `decode_json($line)` read loop) and holds at least the line and the decoded
+copy together. Every consumer still holds the whole file. Avoiding the
+in-memory copy for real means a binary facet that carries a path instead of
+data, which every logger, replayer, renderer and the UI uploader would have to
+understand, and which must outlive a workdir that is normally a tempdir.
+
+Revisit if: an oversized attachment is seen in practice. The fix then is
+refusing files over a limit with an `ARTIFACT` line naming the file and its
+size, not streaming.
+
+---
+
 ## 2026-09-11 — coverage is filtered and collapsed where yath aggregates it
 
 **Ruling: `App::Yath::Plugin::Cover::annotate_event` applies the exclusion
@@ -321,6 +350,12 @@ of the info facet with one decode.
 Revisit if: a site needs the bundle somewhere the option cannot reach, the log
 copy proves too large in practice, or someone builds a way for the runner side
 to emit a facet rather than a line.
+
+**2026-10-26 addendum.** That last trigger has fired: a file placed in
+`aux_logs/attachments/` is now sent as a binary facet on job 0 (see the
+2026-10-26 attachments ruling). The bundle was deliberately left as the
+single-line aux log entry; moving it, or also attaching it, is separate work
+for when someone wants it downloadable from the UI as a file.
 
 ---
 

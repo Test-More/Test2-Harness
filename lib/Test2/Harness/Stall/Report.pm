@@ -199,8 +199,7 @@ sub emit {
         # One physical line, so the collector turns the whole bundle into a
         # single info facet rather than one per line. encode_json escapes
         # embedded newlines, so this holds however long the bundle gets. It can
-        # be pulled back out of that facet later; a binary attachment would be
-        # tidier but the aux log carries text only.
+        # be pulled back out of that facet later.
         print $fh $json, "\n";
 
         close($fh);

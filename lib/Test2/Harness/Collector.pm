@@ -12,6 +12,7 @@ use Test2::Harness::Util::UUID qw/gen_uuid/;
 use Test2::Harness::Util::Queue;
 use Time::HiRes qw/sleep time/;
 use File::Spec;
+use MIME::Base64 qw/encode_base64/;
 
 use File::Path qw/remove_tree/;
 
@@ -26,7 +27,7 @@ use Test2::Harness::Util::HashBase qw{
 
     <backed_up
 
-    +runner_stdout +runner_stderr +runner_aux_dir +runner_aux_handles
+    +runner_stdout +runner_stderr +runner_aux_dir +runner_aux_handles +runner_attachments
 
     +task_file +task_queue +tasks_done +tasks
     +jobs_file +jobs_queue +jobs_done  +jobs
@@ -249,6 +250,8 @@ sub process_runner_output {
     }
     closedir($dh);
 
+    $out += $self->process_runner_attachments($auxdir, $action);
+
     for my $file (sort keys %{$self->{+RUNNER_AUX_HANDLES}}) {
         my $data   = $self->{+RUNNER_AUX_HANDLES}->{$file};
         my $stream = $data->{stream};
@@ -259,6 +262,55 @@ sub process_runner_output {
             $action->($e);
             $out++;
         }
+    }
+
+    return $out;
+}
+
+sub process_runner_attachments {
+    my $self = shift;
+    my ($auxdir, $action) = @_;
+
+    my $dir = File::Spec->catdir($auxdir, 'attachments');
+    return 0 unless -d $dir;
+
+    my $sent = $self->{+RUNNER_ATTACHMENTS} //= {};
+
+    opendir(my $dh, $dir) or die "Could not open aux_logs attachments dir: $!";
+    my @names = sort grep { !m/^\./ && !$sent->{$_} } readdir($dh);
+    closedir($dh);
+
+    my $out = 0;
+    for my $name (@names) {
+        my $path = File::Spec->catfile($dir, $name);
+        next unless -f $path;
+
+        # Marked before reading so an unreadable file warns once instead of every poll.
+        $sent->{$name} = 1;
+
+        my $fh;
+        unless (open($fh, '<:raw', $path)) {
+            warn "Could not attach '$path': $!";
+            next;
+        }
+        my $data = do { local $/; <$fh> };
+        unless (defined $data) {
+            warn "Could not read '$path': $!";
+            next;
+        }
+
+        my $e = $self->_harness_event(
+            0, undef, time,
+            info   => [{details => "attached $name", tag => 'ARTIFACT', important => 1}],
+            binary => [{
+                filename => $name,
+                details  => $name,
+                data     => encode_base64($data, ''),
+                is_image => ($name =~ m/\.(a?png|gif|jpe?g|svg|bmp|ico)$/i ? 1 : 0),
+            }],
+        );
+        $action->($e);
+        $out++;
     }
 
     return $out;

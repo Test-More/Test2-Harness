@@ -1,5 +1,7 @@
 {{$NEXT}}
 
+1.000181  2026-10-26 12:51:38-07:00 America/Los_Angeles
+
     - Files a helper process places in aux_logs/attachments/ under the workdir are attached to the run as binaries on the harness output.
     - Lower the collector's peak memory for large events by writing each event line without first copying it.
 

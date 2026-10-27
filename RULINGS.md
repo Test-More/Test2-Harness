@@ -18,6 +18,21 @@ see `~/projects/Agents/AGENTS.md` under "What earns a place in `RULINGS.md`".
 
 ---
 
+## 2026-10-26 — no time spent on Windows failures
+
+**Ruling: test failures on the lab's Windows guest, Strawberry and Cygwin
+alike, are not worked on. The harness is believed to have been broken on
+Windows already.**
+
+Strawberry is refused outright by `Makefile.PL` ("only works on systems that
+support true forking"). Cygwin builds and fails one test in a lab run of
+1.000181: `t/unit/App/Yath/Util.t`, `find_in_updir`, the second case returning
+undef. Neither is investigated or fixed.
+
+Revisit if: the owner decides to support Windows or Cygwin.
+
+---
+
 ## 2026-10-26 — aux_logs attachments have no size limit and are read whole
 
 **Ruling: files in `aux_logs/attachments/` are attached whatever their size,

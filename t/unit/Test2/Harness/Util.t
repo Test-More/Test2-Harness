@@ -81,13 +81,19 @@ open($fh, '>', "$tmp/bar");
 print $fh "\n";
 close($fh);
 
-link("$tmp/foo", "$tmp/foo2") or die "Could not create link: $!";
 symlink("$tmp/foo", "$tmp/foo3") or die "Could not create link: $!";
 
 ok(is_same_file("$tmp/foo", "$tmp/foo"), "Matching filenames");
-ok(is_same_file("$tmp/foo", "$tmp/foo2"), "hard link");
-ok(is_same_file("$tmp/foo", "$tmp/foo3"), "soft link");
-ok(!is_same_file("$tmp/foo", "$tmp/bar"), "Different files");
+
+# Android refuses hard links in app storage, so Termux perl gets EACCES here.
+SKIP: {
+    skip "Android does not permit hard links", 1 if $^O eq 'android';
+    link("$tmp/foo", "$tmp/foo2") or die "Could not create link: $!";
+    ok(is_same_file("$tmp/foo", "$tmp/foo2"), "hard link");
+}
+
+ok(is_same_file("$tmp/foo",  "$tmp/foo3"), "soft link");
+ok(!is_same_file("$tmp/foo", "$tmp/bar"),  "Different files");
 
 # @INC may hold hooks (coderef, arrayref, blessed object) as documented in
 # perlvar "@INC". They are not paths, and clean_path() would turn them into

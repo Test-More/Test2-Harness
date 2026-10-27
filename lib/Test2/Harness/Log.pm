@@ -2,7 +2,7 @@ package Test2::Harness::Log;
 use strict;
 use warnings;
 
-our $VERSION = '1.000182';
+our $VERSION = '1.000183';
 
 1;
 
